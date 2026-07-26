@@ -37,9 +37,17 @@ removes the "used once, then deleted" weakness of a day-of-only tool.
 2. **깔끔하되 핵심은 다 있게** (clean, yet nothing essential missing) —
    fewer things, each complete and polished.
 
+## MVP v1 boundary (decided 2026-07-26)
+
+**Guest list + RSVP collection + headcount estimation.** The preparation-
+phase ledger only; seating and 축의금 come in later increments. RSVP
+collection implies a thin guest-facing response page (a link the couple
+places in their mobile invitation) — guests become a second, minimal user
+type from v1.
+
 ## Still open
 
-- [ ] MVP v1 boundary: which ledger columns ship first (guest list + RSVP
-      vs. including seating vs. including 축의금).
-- [ ] Success criteria for the MVP.
-- [ ] Tech stack — deliberately last, after the above.
+- [ ] Success criteria: deliberately deferred — to be defined after the MVP
+      is built (founder decision 2026-07-26). Focus goes to what must be
+      built to realize the core value.
+- [ ] Tech stack — after the requirement breakdown.
