@@ -1,42 +1,59 @@
 # Donghaeng (동행)
 
-A web service focused on wedding **day-of** coordination — built for couples, not vendors.
+A web service that walks with couples through their **whole wedding
+journey** — from the start of preparation, through the day itself, and
+after. Built for couples, not vendors.
 
 ## Problem
 
-Existing Korean wedding services concentrate almost entirely on the *preparation*
-phase (studio photos, dress fittings, makeup trials, venue booking). Almost none
-of them help couples get through the wedding day itself — the point when things
-are most stressful and least automated.
+Korean wedding preparation runs on scattered tools and manual work. The
+sharpest example: guest management. Couples estimate headcounts and assign
+seats in hand-built spreadsheets, re-enter RSVPs that arrive by email from
+their mobile-invitation vendor, and track 축의금 after the day in yet
+another ledger. Meanwhile the wedding day itself — the most stressful,
+least automated point — is coordinated by phone calls and people physically
+walking messages between parties.
 
 ## Who it's for
 
-Engaged couples (신랑신부), specifically on and around their wedding day. Vendors,
-planners, and guests may become secondary users later, but the MVP is designed
-around the couple only.
+Engaged couples (신랑신부), from early preparation through the wedding day
+and after. Vendors, planners, and guests may become secondary users later,
+but the product is designed around the couple.
 
-## What it aims to do
+## Core: the guest ledger
 
-Directional areas identified so far — exact feature scope will be defined when
-implementation actually starts:
+The heart of the product is one object — a guest ledger that gains columns
+as the journey progresses:
 
-- Day-of contingency checklists and alerts
-- A single contact hub for vendors/staff working the day (photographer, makeup
-  artist, venue coordinator, etc.)
-- Guest-facing communication
-- Seating management (relevant for hotel wedding halls in particular)
+- **Preparation** — guest list, RSVP collection, headcount estimation
+- **Day-of** — seat assignment (hotel weddings especially), reception
+- **After** — 축의금 records, thank-you follow-ups, a durable ledger the
+  couple keeps for years
 
-Brand feeling: a steady, reliable presence for a couple who's overwhelmed on
-their wedding day — trustworthy and calm, not flashy.
+Around that core, the broader journey is in scope long-term (day-of
+checklists and alerts, vendor contact hub, guest communication) — built
+incrementally, never at the cost of quality and accuracy.
+
+## Product values
+
+1. **정직함 · 믿음직함** — honest and trustworthy, befitting a premium
+   wedding service. Money data makes this an engineering requirement
+   (security, privacy), not just brand tone.
+2. **깔끔하되 핵심은 다 있게** — clean, yet nothing essential missing.
+   Fewer things, each complete.
+
+Brand feeling: a steady, reliable presence for a couple who's overwhelmed —
+trustworthy and calm, not flashy.
 
 ## Status
 
-Concept stage — no implementation yet. Platform direction is a web app
-(mobile-first), to be refined once work actually starts.
+Concept stage — vision and core scope agreed (see `notes/`), MVP boundary
+and tech stack not yet chosen. Platform direction is a web app
+(mobile-first).
 
 ## Relationship to prior work
 
 This is a restart of an earlier wedding-related project, archived at
 `archive/experiments/2026-07/wedding-management`. This project intentionally
-does not reuse code, architecture, or design decisions from that archive — see
-AGENTS.md.
+does not reuse code, architecture, or design decisions from that archive —
+see AGENTS.md.
