@@ -29,6 +29,28 @@ Separated frontend and backend, per `notes/2026-07-30-decision-tech-stack.md`:
 - Deployment follows the workspace standard (`../../notes/infra-zones.md`):
   static → Cloudflare Pages, API → VPS docker compose, managed Postgres.
 
+Two standing client rules (`notes/2026-07-30-decision-client-strategy.md`),
+kept so a native couple app stays possible without paying for it now:
+session lookup reads a token from the request rather than a cookie, and
+**all computation stays server-side** — the API returns conclusions, not
+rows to compute over. The guest RSVP page is web forever.
+
+## Security posture (decided 2026-07-30)
+
+Full record in `notes/2026-07-30-decision-network-security.md`. The parts
+that constrain everyday work:
+
+- All tokens (session, shared link, per-guest link, invite): ≥128-bit
+  CSPRNG, **stored SHA-256-hashed**, constant-time compared, masked in
+  logs. Privileges and lifetimes differ per kind — the per-guest link can
+  only respond as that guest, never read.
+- Injection risk lives exactly in the native aggregation queries; column
+  names go through a whitelist, never string concatenation.
+- Parsed vendor email is rendered as text, never as HTML.
+- Rate limits are per link token and per wedding — **never IP-only**
+  (Korean carrier NAT would block real guests).
+- Actuator is never internet-exposed; SSH only via Tailscale.
+
 ## Standing design constraints (from the 2026-07-30 decisions)
 
 - Both RSVP channels converge on one response model and one matching
