@@ -50,4 +50,5 @@ type from v1.
 - [ ] Success criteria: deliberately deferred — to be defined after the MVP
       is built (founder decision 2026-07-26). Focus goes to what must be
       built to realize the core value.
-- [ ] Tech stack — after the requirement breakdown.
+- [x] Tech stack — decided 2026-07-30, see
+      [2026-07-30-decision-tech-stack.md](2026-07-30-decision-tech-stack.md).

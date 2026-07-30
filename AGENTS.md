@@ -6,13 +6,28 @@ ledger (하객·좌석·축의금). See README.md for the product pitch.
 ## Status
 
 Concept stage, aligned (as of 2026-07-30). Vision, core scope, MVP v1
-boundary, product values, and the MVP's three hard design spots are
-decided — see the decision records in `notes/`
+boundary, product values, the MVP's three hard design spots, and the tech
+stack are decided — see the decision records in `notes/`
 (`2026-07-26-decision-core-scope.md`, `2026-07-26-mvp-v1-requirements.md`,
-`2026-07-30-design-guest-ledger-hard-spots.md`). Tech stack and
-architecture are NOT yet chosen; success criteria are deliberately
-deferred until after the MVP is built. Do not pick a stack or start
+`2026-07-30-design-guest-ledger-hard-spots.md`,
+`2026-07-30-decision-tech-stack.md`). There is no code yet: screen/flow
+design and the domain model still come first, and success criteria are
+deliberately deferred until after the MVP is built. Do not start
 implementation without the user.
+
+## Stack (decided 2026-07-30)
+
+Separated frontend and backend, per `notes/2026-07-30-decision-tech-stack.md`:
+
+- `api/` — Kotlin + Spring Boot (JDK 21, Gradle KTS), JSON API only.
+  Spring Data JPA + Flyway, PostgreSQL. JUnit 5 + Testcontainers.
+- `web/` — React + TypeScript + Vite, built to static files, as **two
+  bundles**: the couple app and the guest RSVP page. A guest must never
+  download the couple app's code.
+- Auth: Kakao OAuth for the couple, server-side session behind an
+  HttpOnly cookie. Guests are never authenticated.
+- Deployment follows the workspace standard (`../../notes/infra-zones.md`):
+  static → Cloudflare Pages, API → VPS docker compose, managed Postgres.
 
 ## Standing design constraints (from the 2026-07-30 decisions)
 
