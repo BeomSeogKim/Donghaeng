@@ -5,12 +5,26 @@ ledger (하객·좌석·축의금). See README.md for the product pitch.
 
 ## Status
 
-Concept stage, aligned (as of 2026-07-26). Vision, core scope, MVP v1
-boundary, and product values are decided — see the decision records in
-`notes/` (`2026-07-26-decision-core-scope.md`,
-`2026-07-26-mvp-v1-requirements.md`). Tech stack and architecture are NOT
-yet chosen; success criteria are deliberately deferred until after the MVP
-is built. Do not pick a stack or start implementation without the user.
+Concept stage, aligned (as of 2026-07-30). Vision, core scope, MVP v1
+boundary, product values, and the MVP's three hard design spots are
+decided — see the decision records in `notes/`
+(`2026-07-26-decision-core-scope.md`, `2026-07-26-mvp-v1-requirements.md`,
+`2026-07-30-design-guest-ledger-hard-spots.md`). Tech stack and
+architecture are NOT yet chosen; success criteria are deliberately
+deferred until after the MVP is built. Do not pick a stack or start
+implementation without the user.
+
+## Standing design constraints (from the 2026-07-30 decisions)
+
+- Both RSVP channels converge on one response model and one matching
+  pipeline; responses are immutable and their link to a ledger guest is a
+  separate, reversible, state-carrying thing.
+- Ambiguity is never guessed — 2+ candidates means `needs_review`, an
+  unrecognized email template means `unsupported`.
+- The public RSVP page must never reveal whether a name is on the guest
+  list (enumeration safety).
+- The Wedding, not the user, is the top-level unit; the couple shares full
+  access to one ledger.
 
 ## Product values (apply to every decision)
 

@@ -59,6 +59,9 @@ Two intake channels:
 
 ## Known hard spots (flagged for design)
 
+Resolved 2026-07-30 — see
+[2026-07-30-design-guest-ledger-hard-spots.md](2026-07-30-design-guest-ledger-hard-spots.md).
+
 1. RSVP response ↔ ledger matching (동명이인, guests not on the list).
 2. Couple co-use structure (two accounts, one ledger).
 3. Email template registry + parse pipeline for vendor RSVPs.
