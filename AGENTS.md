@@ -5,14 +5,16 @@ ledger (하객·좌석·축의금). See README.md for the product pitch.
 
 ## Status
 
-Concept stage, aligned (as of 2026-07-30). Vision, core scope, MVP v1
-boundary, product values, the MVP's three hard design spots, and the tech
-stack are decided — see the decision records in `notes/`
-(`2026-07-26-decision-core-scope.md`, `2026-07-26-mvp-v1-requirements.md`,
+Concept stage, aligned (as of 2026-08-05). Vision, core scope, MVP v1
+boundary, product values, the MVP's three hard design spots, the tech
+stack, the domain model, and the headcount aggregation are decided — see
+the decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
+`2026-07-26-mvp-v1-requirements.md`,
 `2026-07-30-design-guest-ledger-hard-spots.md`,
-`2026-07-30-decision-tech-stack.md`). There is no code yet: screen/flow
-design and the domain model still come first, and success criteria are
-deliberately deferred until after the MVP is built. Do not start
+`2026-07-30-decision-tech-stack.md`, `2026-08-03-design-domain-model.md`,
+`2026-08-05-design-meal-headcount.md`). There is no code yet:
+**screen/flow design is the one remaining blocker**, and success criteria
+are deliberately deferred until after the MVP is built. Do not start
 implementation without the user.
 
 ## Stack (decided 2026-07-30)
@@ -51,7 +53,7 @@ that constrain everyday work:
   (Korean carrier NAT would block real guests).
 - Actuator is never internet-exposed; SSH only via Tailscale.
 
-## Standing design constraints (from the 2026-07-30 decisions)
+## Standing design constraints (from the 2026-07-30 / 08-05 decisions)
 
 - Both RSVP channels converge on one response model and one matching
   pipeline; responses are immutable and their link to a ledger guest is a
@@ -62,6 +64,15 @@ that constrain everyday work:
   list (enumeration safety).
 - The Wedding, not the user, is the top-level unit; the couple shares full
   access to one ledger.
+- **보증인원 is the venue's number, never ours.** We never recommend it, and
+  never adjust counts statistically — the headcount sums real responses and
+  the couple's own expected values, nothing else.
+- **Manual entry by the couple is the highest-volume intake path**, not a
+  fallback — attendance normally reaches them via parents and KakaoTalk.
+  Setting attendance in the ledger must stay a one-or-two-tap action.
+- Meal is a party-level boolean on a response but an **integer count** on
+  the ledger; that asymmetry is what makes partial-meal exceptions
+  expressible.
 
 ## Product values (apply to every decision)
 

@@ -45,8 +45,10 @@ Two intake channels:
 - Expected vs. confirmed counts; by side and group; meal counts — the
   screen must ultimately answer the **meal-guarantee headcount (식대 보증
   인원)** decision.
-- Response rate + non-responder list → "who do I need to nudge" at a
-  glance.
+- ~~Response rate + non-responder list~~ → **unknown-attendance count and
+  list** → "who do I need to nudge" at a glance. Revised 2026-08-05:
+  response rate measures our channels, not the couple's problem. See
+  [2026-08-05-design-meal-headcount.md](2026-08-05-design-meal-headcount.md).
 
 ## D. Non-functional requirements from the product values
 

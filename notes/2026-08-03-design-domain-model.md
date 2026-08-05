@@ -176,9 +176,15 @@ Recorded so they don't get re-proposed:
 
 ## Still open
 
-- [ ] Aggregation: the exact 식대 보증 인원 definition over the three pools
+Aggregation and meal granularity resolved 2026-08-05 — see
+[2026-08-05-design-meal-headcount.md](2026-08-05-design-meal-headcount.md).
+Note that it also corrects the framing here: 보증인원 is set by the venue,
+not computed by us, and manual entry is a primary intake channel rather
+than a fallback.
+
+- [x] Aggregation: the exact 식대 보증 인원 definition over the three pools
       (confirmed / needs-review / expected).
-- [ ] Whether one meal answer covers the whole party, or each companion
+- [x] Whether one meal answer covers the whole party, or each companion
       needs their own. v1 assumes the former; the couple fixes exceptions
       from the review queue.
 - [ ] Screen and flow design.
