@@ -3,12 +3,24 @@
 Wedding-journey companion web service for couples — centered on a guest
 ledger (하객·좌석·축의금). See README.md for the product pitch.
 
-## Pick up here (last session: 2026-08-06)
+## Pick up here (last session: 2026-08-07)
 
-Design work resumes at **screen and flow design (③)** — the one thing between
-the model and building. One fixed point is already decided: **the ledger and
-the headcount are one screen.** The next knot is **how the import conflict
-screen behaves when one file brings in dozens of rows at once.**
+The **design system foundations are built** — tokens in
+[`design/tokens.css`](design/tokens.css), reasoning in
+`notes/2026-08-07-design-system.md`. It was built ahead of screen design at
+the founder's call, and the reasoning holds: a design system coordinates
+across *time*, not only across people, and this project has one person but
+many sessions.
+
+Design work resumes at **screen and flow design (③)** — now the only thing
+between the model and building. One fixed point is already decided: **the
+ledger and the headcount are one screen.** The next knot is **how the import
+conflict screen behaves when one file brings in dozens of rows at once.**
+
+One question I asked and the founder has not answered yet, still worth
+having: **how often does the same person actually appear in both sets of
+parents' files?** A handful of relatives makes the conflict screen an edge
+case; a large overlap makes it the main event of import.
 
 Four questions are open and were parked deliberately:
 
@@ -35,9 +47,10 @@ converge. Reserve multiple-choice for operational forks.
 
 ## Status
 
-Concept stage, aligned (as of 2026-08-06). Vision, core scope, product
+Concept stage, aligned (as of 2026-08-07). Vision, core scope, product
 values, the MVP's hard design spots, the tech stack, the domain model, the
-headcount aggregation, and the **v1 scope cut** are decided — see the
+headcount aggregation, the **v1 scope cut**, and the **design system
+foundations** are decided — see the
 decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-07-26-mvp-v1-requirements.md`,
 `2026-07-30-design-guest-ledger-hard-spots.md`,
@@ -46,12 +59,14 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-06-decision-v1-scope-and-meals.md`,
 `2026-08-06-design-ledger-and-import.md`,
 `2026-08-06-decision-drop-response-model.md`,
-`2026-08-06-review-scale-and-extensibility.md`). Read them newest-first: the
+`2026-08-06-review-scale-and-extensibility.md`,
+`2026-08-07-design-system.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
-each other — and every affected note carries a banner saying what changed. There is no code yet:
-**screen/flow design is the one remaining blocker**, and success criteria
-are deliberately deferred until after the MVP is built. Do not start
-implementation without the user.
+each other — and every affected note carries a banner saying what changed.
+There is no application code yet — `design/tokens.css` is substrate, not
+implementation. **Screen/flow design is the one remaining blocker**, and
+success criteria are deliberately deferred until after the MVP is built.
+Do not start implementation without the user.
 
 ## Stack (decided 2026-07-30)
 
@@ -74,6 +89,38 @@ kept so a native couple app stays possible without paying for it now:
 session lookup reads a token from the request rather than a cookie, and
 **all computation stays server-side** — the API returns conclusions, not
 rows to compute over. The guest RSVP page is web forever.
+
+## Design system (decided 2026-08-07)
+
+Tokens are in [`design/tokens.css`](design/tokens.css); the reasoning is in
+`notes/2026-08-07-design-system.md`. The thesis: **동행 is an instrument, not
+a celebration** — the thing to beat is a spreadsheet with a SUM in the next
+column, so we win by being as calm as one and requiring less work, never by
+being prettier. That rules out the wedding-stationery register entirely.
+
+Rules that bind everyday work:
+
+- **Nothing hardcodes a colour, size, radius, or duration.** Everything reads
+  a token. Tailwind consumes them via `@theme` so utilities and tokens cannot
+  disagree.
+- **Every digit that can change in place is tabular** — headcount, meal
+  counts, 축의금 later. This is 정직함·믿음직함 in typography: a number whose
+  width shifts as it counts reads as unstable.
+- **불참 is neutral, never red.** A guest who cannot come is a fact, not an
+  error. Red belongs to destroying data only — and destructive actions always
+  carry a verb, never colour alone, because 홍 and error-red are neighbours.
+- **Ledger rows are flush, hairline-separated — never cards.** Per-row cards
+  cost ~8px of vertical rhythm each and break scanning at 400 rows. Radius is
+  for things genuinely detached: chips, buttons, sheets.
+- **Body text never goes below 15px.** Hangul packs more strokes into the em
+  than Latin. 13px is for metadata fragments, never sentences. Korean running
+  text gets 1.65 leading, not the Latin-typical 1.5. No italics — Korean has
+  no italic tradition and synthesised obliques look broken.
+- **Pretendard** is the app face, for consistent Hangul/Latin metrics on the
+  lines where names and numerals sit together.
+- **Dark theme is defined, not shipped.** v1 is light only; the tokens carry
+  both so it is never a retrofit.
+- Ten components cover v1 — the inventory is in the note.
 
 ## Security posture (decided 2026-07-30)
 

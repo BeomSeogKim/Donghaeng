@@ -1,0 +1,201 @@
+/*
+ * Donghaeng (동행) — design tokens
+ * Decided 2026-08-07. Rationale: notes/2026-08-07-design-system.md
+ *
+ * These are the substrate. Nothing in the app hardcodes a colour, a font size,
+ * a radius, or a duration — everything reads a token from here. Changing a
+ * token restyles the product; that is the point of the file existing before
+ * the screens do.
+ *
+ * Drops into web/src/ as-is when the client is scaffolded. Tailwind reads it
+ * via @theme (v4) so utilities and tokens never disagree.
+ */
+
+:root {
+  /* ────────────────────────────────────────────────────────────
+   * Type — Korean-first
+   * Pretendard is the app face. It carries Hangul and Latin on
+   * consistent metrics, which matters because every screen mixes
+   * 한글 names with Arabic numerals on the same line.
+   * ──────────────────────────────────────────────────────────── */
+  --dh-font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", system-ui, "Malgun Gothic", sans-serif;
+
+  /* Scale. Body floor is 15px: Hangul packs more strokes into the em than
+   * Latin does, so 13–14px running text loses its counters on a phone.
+   * 13px exists for metadata fragments only, never for a sentence. */
+  --dh-text-display: 2.5rem;    /* 40px — the headcount, and nothing else      */
+  --dh-text-title: 1.375rem;    /* 22px — screen title                         */
+  --dh-text-lead: 1.0625rem;    /* 17px — guest name, primary row content      */
+  --dh-text-body: 0.9375rem;    /* 15px — body floor                           */
+  --dh-text-meta: 0.8125rem;    /* 13px — metadata fragments only              */
+  --dh-text-label: 0.75rem;     /* 12px — short labels, letterspaced           */
+
+  --dh-leading-tight: 1.2;      /* display numerals                            */
+  --dh-leading-snug: 1.45;      /* titles, row content                         */
+  --dh-leading-body: 1.65;      /* Korean running text needs more than Latin   */
+
+  --dh-weight-regular: 400;
+  --dh-weight-medium: 500;
+  --dh-weight-semibold: 600;
+  --dh-weight-bold: 700;
+
+  --dh-tracking-display: -0.02em;
+  --dh-tracking-label: 0.06em;
+
+  /* Korean has no italic tradition; a synthesised oblique looks broken.
+   * Emphasis is weight and colour. Never font-style. */
+
+  /* ────────────────────────────────────────────────────────────
+   * Colour — 청실홍실
+   * 靑 (groom's blue) is the primary. 紅 (bride's red) is destructive
+   * only, and appears almost nowhere. 黃 is the undecided state.
+   * Neutrals carry a faint blue bias toward 청 so they read as chosen.
+   * ──────────────────────────────────────────────────────────── */
+  --dh-ground: #f4f5f7;         /* page behind the surfaces                    */
+  --dh-surface: #ffffff;        /* rows, cards, sheets                         */
+  --dh-surface-sunken: #eceef2; /* input wells, empty states                   */
+
+  --dh-ink: #171a21;            /* 16.9:1 on surface                           */
+  --dh-ink-muted: #5a6172;      /*  5.9:1 on surface — AA for 15px body        */
+  --dh-ink-faint: #858c9c;      /*  3.4:1 — disabled and decorative only,      */
+                                /*          never load-bearing text            */
+  --dh-ink-on-accent: #ffffff;
+
+  --dh-line: #e3e5eb;           /* hairline between ledger rows                */
+  --dh-line-strong: #cdd1da;    /* input borders, table header rule            */
+
+  --dh-cheong: #24406b;         /*  9.9:1 on surface — primary                 */
+  --dh-cheong-hover: #1b3154;
+  --dh-cheong-soft: #e8edf6;    /* selected row, soft chip fill                */
+
+  --dh-hwang: #7a5510;          /*  6.5:1 — 미정 / attention                    */
+  --dh-hwang-soft: #fbf0da;
+
+  --dh-hong: #a3283c;           /*  8.0:1 — destructive only                   */
+  --dh-hong-soft: #fae8eb;
+
+  --dh-focus: #3a63a0;          /* focus ring, distinct from every fill        */
+
+  /* Attendance — the app's most-used colour.
+   * 불참 is NEUTRAL, never red. A guest who cannot come is a fact, not an
+   * error, and a red row would make the couple read their own wedding as a
+   * list of failures. Red is reserved for destroying data. */
+  --dh-att-yes-fg: var(--dh-cheong);
+  --dh-att-yes-bg: var(--dh-cheong-soft);
+  --dh-att-maybe-fg: var(--dh-hwang);
+  --dh-att-maybe-bg: var(--dh-hwang-soft);
+  --dh-att-no-fg: var(--dh-ink-muted);
+  --dh-att-no-bg: var(--dh-surface-sunken);
+
+  /* ────────────────────────────────────────────────────────────
+   * Space — 4px grid
+   * ──────────────────────────────────────────────────────────── */
+  --dh-space-1: 0.25rem;
+  --dh-space-2: 0.5rem;
+  --dh-space-3: 0.75rem;
+  --dh-space-4: 1rem;
+  --dh-space-5: 1.25rem;
+  --dh-space-6: 1.5rem;
+  --dh-space-8: 2rem;
+  --dh-space-10: 2.5rem;
+  --dh-space-12: 3rem;
+
+  /* ────────────────────────────────────────────────────────────
+   * Density
+   * The ledger is 200–800 rows scanned on a phone. Row height is a
+   * product decision, not a styling one: too tall and the couple
+   * scrolls instead of scanning, too short and the tap misses.
+   * ──────────────────────────────────────────────────────────── */
+  --dh-row-h-mobile: 3.75rem;   /* 60px — name line + meta line                */
+  --dh-row-h-desktop: 2.75rem;  /* 44px — single-line table row                */
+  --dh-tap-min: 2.75rem;        /* 44px — floor for anything tappable          */
+  --dh-gutter-mobile: var(--dh-space-4);
+  --dh-gutter-desktop: var(--dh-space-6);
+
+  /* ────────────────────────────────────────────────────────────
+   * Radius
+   * Ledger rows are FLUSH — edge to edge, separated by hairlines.
+   * Rounding each row into a card costs ~8px of vertical rhythm per
+   * row and turns a scannable column into a stack of objects.
+   * Radius belongs only to things that are genuinely detached.
+   * ──────────────────────────────────────────────────────────── */
+  --dh-radius-flush: 0;         /* rows, table cells                           */
+  --dh-radius-control: 0.5rem;  /* buttons, inputs                             */
+  --dh-radius-chip: 999px;      /* attendance chips, group tags                */
+  --dh-radius-sheet: 1rem;      /* bottom sheets, dialogs                      */
+
+  /* ────────────────────────────────────────────────────────────
+   * Elevation — one shadow, for overlays only.
+   * Instruments do not float.
+   * ──────────────────────────────────────────────────────────── */
+  --dh-shadow-overlay: 0 8px 32px -8px rgb(16 18 24 / 0.28);
+
+  /* ────────────────────────────────────────────────────────────
+   * Motion
+   * --dh-dur-count is the headcount settling after a tap. It is
+   * deliberately slower than the chip: the couple must see WHICH
+   * number moved, or the screen stops being trustworthy.
+   * ──────────────────────────────────────────────────────────── */
+  --dh-dur-fast: 120ms;
+  --dh-dur-count: 260ms;
+  --dh-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* Dark theme is defined, not shipped. v1 ships light only (깔끔하되 —
+ * cut scope, not quality). Structuring the tokens for it now costs
+ * nothing; retrofitting it later costs every component. */
+:root[data-theme="dark"] {
+  --dh-ground: #12141a;
+  --dh-surface: #1b1e26;
+  --dh-surface-sunken: #23262f;
+
+  --dh-ink: #edeef2;
+  --dh-ink-muted: #a2a9b8;
+  --dh-ink-faint: #6e7686;
+  --dh-ink-on-accent: #12141a;
+
+  --dh-line: #2c3039;
+  --dh-line-strong: #3a3f4b;
+
+  --dh-cheong: #8caee0;
+  --dh-cheong-hover: #a8c4ea;
+  --dh-cheong-soft: #1e2c44;
+
+  --dh-hwang: #e0b563;
+  --dh-hwang-soft: #33291a;
+
+  --dh-hong: #e88a98;
+  --dh-hong-soft: #38222a;
+
+  --dh-focus: #8caee0;
+
+  --dh-shadow-overlay: 0 8px 32px -8px rgb(0 0 0 / 0.6);
+}
+
+/* ────────────────────────────────────────────────────────────
+ * Base rules that are part of the system, not of any component
+ * ──────────────────────────────────────────────────────────── */
+
+/* Every digit that can change in place is tabular. A headcount whose
+ * width shifts as it counts reads as unstable, and this product's
+ * entire claim is that its numbers are not. */
+.dh-num,
+[data-dh-num] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--dh-focus);
+  outline-offset: 2px;
+  border-radius: var(--dh-radius-control);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dh-dur-fast: 1ms;
+    --dh-dur-count: 1ms;
+  }
+}
