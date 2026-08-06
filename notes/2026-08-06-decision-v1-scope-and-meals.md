@@ -104,11 +104,16 @@ statistical adjustment of non-responders, no floor/ceiling band.
 
 ## Still open
 
+Most of these were closed later the same day — see
+[2026-08-06-design-ledger-and-import.md](2026-08-06-design-ledger-and-import.md),
+which also corrects the "review queue disappears" claim above: matching still runs
+in v1 for vendor-email paste **and for CSV import**, it just never queues.
+
 - [ ] **Screen and flow design** — still the only blocker before building.
-- [ ] Whether the same person arriving via a second login provider is merged by
+- [x] Whether the same person arriving via a second login provider is merged by
       email or kept as a separate account.
 - [ ] Whether 유아식 counts toward the venue's 보증인원 (likely venue-dependent).
 - [ ] When the couple configures meal types — onboarding, or on demand.
-- [ ] Whether `Guest.group` is free text or a fixed list.
-- [ ] Two 2026-08-05 defaults still unconfirmed: expected attendance defaults to
+- [x] Whether `Guest.group` is free text or a fixed list.
+- [x] Two 2026-08-05 defaults still unconfirmed: expected attendance defaults to
       attending, and expected meal count defaults to expected party size.

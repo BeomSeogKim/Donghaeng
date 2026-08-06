@@ -13,7 +13,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-07-30-design-guest-ledger-hard-spots.md`,
 `2026-07-30-decision-tech-stack.md`, `2026-08-03-design-domain-model.md`,
 `2026-08-05-design-meal-headcount.md`,
-`2026-08-06-decision-v1-scope-and-meals.md`). Read them newest-first: the
+`2026-08-06-decision-v1-scope-and-meals.md`,
+`2026-08-06-design-ledger-and-import.md`). Read them newest-first: the
 2026-08-06 cut supersedes parts of nearly every earlier note, and each
 affected note carries a banner saying what changed. There is no code yet:
 **screen/flow design is the one remaining blocker**, and success criteria
@@ -73,9 +74,15 @@ from the ledger. No guest meets the product in v1. Full record in
 `notes/2026-08-06-decision-v1-scope-and-meals.md`.
 
 Consequence worth remembering: the review *queue* has nothing to fill it in
-v1. Vendor-email matches are confirmed inline and direct entry targets a
-specific guest, so the only leftover case — attendance confirmed, companion
-count blank — is a ledger filter, not a screen.
+v1 — but **matching still runs**, in two places: vendor-email paste and CSV
+import. Both resolve on a screen the couple is already looking at rather
+than queuing. Direct entry targets a specific guest, so it needs no matching
+at all.
+
+**The ledger and the headcount are one screen** (decided 2026-08-06). Tapping
+attendance moves the number in place. Splitting them turns one action into
+tap → navigate → check → return, which is exactly what a spreadsheet with a
+SUM already does. This is the first fixed point of the screen design.
 
 ## Standing design constraints (2026-07-30 → 08-06 decisions)
 
@@ -104,6 +111,17 @@ count blank — is a ledger filter, not a screen.
   types. That asymmetry is where all meal detail lives.
 - Accessibility needs (휠체어 etc.) are a **guest attribute**, free text —
   they belong to the person and carry forward to seat assignment later.
+- **Guest groups are seven fixed categories plus a free label**: 가족 · 친척 ·
+  사촌 · 혼주 손님 · 친구 · 직장동료 · 기타. Aggregation splits by category
+  only — free labels fracture on typing variants. Family is one bucket
+  deliberately: a finer list keeps producing members that fit nowhere
+  (조부모 was the first), and every family category is single digits while
+  혼주 손님 / 친구 / 직장동료 run to a hundred.
+- **Import is a workflow, not an upload.** We hand the couple a template,
+  they distribute it to both sets of parents, and files come back several at
+  a time — so the same person arrives twice. Conflicts go to one review
+  screen (never a modal per row), and **"not sure" imports as a separate
+  guest rather than blocking**, because merging is lossless.
 
 ## Product values (apply to every decision)
 
