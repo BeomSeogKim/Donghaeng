@@ -132,6 +132,15 @@ SUM already does. This is the first fixed point of the screen design.
   backwards is not.
 - **Import matching loads the wedding's guests once and matches in memory.**
   It is the only v1 operation that is easy to get badly wrong.
+- **Every wedding-scoped aggregate root carries `wedding_id`**; anything
+  reached only through its root does not. So `GuestChange` has it (queried
+  independently) and `GuestMealCount` does not (lives inside `Guest`). This
+  binds tables that don't exist yet — seating and 축의금 arrive as roots and
+  carry it from the start. It is what makes "every wedding-scoped root
+  filters on `wedding_id`" mechanically checkable instead of a per-query
+  judgement, and a cross-wedding leak is not an ordinary bug here.
+- **The session never knows the wedding.** Each request resolves
+  user → membership → wedding; one person may belong to several.
 - **Guest groups are seven fixed categories plus a free label**: 가족 · 친척 ·
   사촌 · 혼주 손님 · 친구 · 직장동료 · 기타. Aggregation splits by category
   only — free labels fracture on typing variants. Family is one bucket

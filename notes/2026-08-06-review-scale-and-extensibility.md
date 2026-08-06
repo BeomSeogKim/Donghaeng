@@ -68,19 +68,34 @@ enum, every added value is an `ALTER TYPE` migration.
 
 Adding a value should be a code deploy, not a schema migration.
 
-**2. Carry `wedding_id` on every wedding-scoped table** *(proposed; see Still open)*
+**2. Carry `wedding_id` on every wedding-scoped aggregate root** *(decided 2026-08-06)*
 
-Of the 13 tables, only two lack it: `GuestMealCount` and `GuestChange`, both of
-which currently reach the wedding through `guest_id`.
+The criterion is the **aggregate boundary**, not blanket denormalisation — an
+aggregate root carries `wedding_id`; anything reached only through its root does
+not.
 
-Four tables are legitimately outside a wedding — `User`, `OauthIdentity`, `Session`
-(they belong to a person) and `VendorTemplate` (ours, not a wedding's).
+Of the 13 tables, two lacked it, and the criterion splits them:
 
-The argument for denormalising: without the column, "does this query respect the
-wedding boundary?" is a judgement made per query. With it, "every wedding-scoped
-query filters on `wedding_id`" becomes mechanically checkable. In a product holding
-guest contacts today and money later, a cross-wedding leak is not an ordinary bug —
-it is the failure of 정직함·믿음직함. Worth the redundancy.
+- **`GuestChange` gets it.** It is its own root: change rows are never loaded with
+  a `Guest` (thousands of them) and are queried independently — "this wedding's
+  history", "who changed this number".
+- **`GuestMealCount` does not.** It lives inside the `Guest` aggregate, read and
+  written with it. The aggregation query does touch it directly, but the
+  `confirmed_attending IS NOT FALSE` filter forces a join to `Guest` regardless, so
+  a `wedding_id` here would remove nothing.
+
+Four tables are legitimately outside any wedding — `User`, `OauthIdentity`,
+`Session` (they belong to a person) and `VendorTemplate` (ours, not a wedding's).
+
+Why it matters: without the column on a root, "does this query respect the wedding
+boundary?" is a judgement made per query. With it, "every wedding-scoped root
+filters on `wedding_id`" is mechanically checkable. In a product holding guest
+contacts today and money later, a cross-wedding leak is not an ordinary bug — it is
+the failure of 정직함·믿음직함.
+
+**This is the standing rule for tables that don't exist yet.** Seat assignment and
+축의금 both arrive as aggregate roots referencing `Guest`, so both carry
+`wedding_id` from the start rather than re-litigating it.
 
 Note that **the session does not know the wedding.** Each request resolves
 user → membership → wedding, and that is where the boundary is actually enforced.
@@ -106,8 +121,6 @@ arrives.
 
 ## Still open
 
-- [ ] Whether to carry `wedding_id` on `GuestMealCount` and `GuestChange`
-      (recommendation above; founder's call pending).
 - [ ] Screen and flow design, including the import conflict screen at scale.
 - [ ] Whether 유아식 counts toward the venue's 보증인원.
 - [ ] When the couple configures meal types.
