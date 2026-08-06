@@ -19,6 +19,11 @@ field kept for auditability.
 
 ## 1. RSVP response ↔ ledger matching
 
+> **The object split below is out of v1 as of 2026-08-06** — see
+> [2026-08-06-decision-drop-response-model.md](2026-08-06-decision-drop-response-model.md).
+> The **matching rules** in this section are fully in force; only the persistence of
+> responses and match states is deferred, along with the links that justified it.
+
 **Responses and ledger entries are separate objects.** An `RsvpResponse`
 is an immutable record of what someone actually submitted. The link to a
 `Guest` is a separate, reversible thing carrying a state:

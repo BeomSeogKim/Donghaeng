@@ -14,9 +14,10 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-07-30-decision-tech-stack.md`, `2026-08-03-design-domain-model.md`,
 `2026-08-05-design-meal-headcount.md`,
 `2026-08-06-decision-v1-scope-and-meals.md`,
-`2026-08-06-design-ledger-and-import.md`). Read them newest-first: the
-2026-08-06 cut supersedes parts of nearly every earlier note, and each
-affected note carries a banner saying what changed. There is no code yet:
+`2026-08-06-design-ledger-and-import.md`,
+`2026-08-06-decision-drop-response-model.md`). Read them newest-first: the
+2026-08-06 records supersede parts of nearly every earlier note — including
+each other — and every affected note carries a banner saying what changed. There is no code yet:
 **screen/flow design is the one remaining blocker**, and success criteria
 are deliberately deferred until after the MVP is built. Do not start
 implementation without the user.
@@ -68,9 +69,9 @@ that constrain everyday work:
 > vendor-email parser that saves them typing.**
 
 Intake in v1 is exactly two paths — the couple entering it directly, and a
-parsed vendor RSVP email. **Our own RSVP links (shared and per-guest) are
-deferred, not cancelled**, which is why responses stay a separate object
-from the ledger. No guest meets the product in v1. Full record in
+parsed vendor RSVP email — plus CSV import, which builds the ledger rather
+than answering it. **Our own RSVP links (shared and per-guest) are deferred,
+not cancelled.** No guest meets the product in v1. Full record in
 `notes/2026-08-06-decision-v1-scope-and-meals.md`.
 
 Consequence worth remembering: the review *queue* has nothing to fill it in
@@ -86,9 +87,17 @@ SUM already does. This is the first fixed point of the screen design.
 
 ## Standing design constraints (2026-07-30 → 08-06 decisions)
 
-- Every intake channel converges on one response model and one matching
-  pipeline; responses are immutable and their link to a ledger guest is a
-  separate, reversible, state-carrying thing.
+- Every intake channel converges on **one matching pipeline**. v1 has no
+  `RsvpResponse` / `ResponseMatch` (dropped 2026-08-06): confirmed values are
+  written straight onto `Guest`, and matching runs as logic whose results are
+  consumed on screen, never persisted. The response model returns when the
+  RSVP links do — the condition is **writes that happen while nobody is
+  watching**, which v1 has none of.
+- **`GuestChange` is the audit log**: one row per changed field with old
+  value, new value, who, when, and the source (`MANUAL` / `VENDOR_EMAIL` /
+  `IMPORT` plus a nullable FK to the ingest or import that caused it). It is
+  what makes "이 숫자 누가 바꿨어?" answerable, and it covers fields the
+  response model never reached — meal-type distribution among them.
 - Ambiguity is never guessed — 2+ candidates means `needs_review`, an
   unrecognized email template means `unsupported`.
 - The public RSVP page must never reveal whether a name is on the guest

@@ -1,5 +1,12 @@
 # Design — guest ledger domain model (2026-08-03)
 
+> **`RsvpResponse` and `ResponseMatch` are out of v1 as of 2026-08-06** — see
+> [2026-08-06-decision-drop-response-model.md](2026-08-06-decision-drop-response-model.md).
+> Sections 1 and 2 below describe machinery v1 does not build: confirmed values are
+> written straight onto `Guest`, traceability lives in a `GuestChange` audit log,
+> and matching survives as logic rather than as tables. The design stands for when
+> the RSVP links return — that is the stated condition for reviving it.
+>
 > **Narrowed 2026-08-06** — see
 > [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
 > `SharedLink` and `GuestLink` are deferred out of v1, so in v1 only `manual` and

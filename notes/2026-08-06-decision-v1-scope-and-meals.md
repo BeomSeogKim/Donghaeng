@@ -20,9 +20,15 @@ Two intake paths remain:
 1. **The couple enters it directly.**
 2. **A vendor RSVP email**, parsed from a known template.
 
-The shared link and the per-guest link are **deferred, not cancelled**. Keeping
-`RsvpResponse` split from `Guest` is what lets them return later without a
-rewrite, so that split stays even though only two origins feed it today.
+The shared link and the per-guest link are **deferred, not cancelled**.
+
+> **Superseded later the same day** — see
+> [2026-08-06-decision-drop-response-model.md](2026-08-06-decision-drop-response-model.md).
+> This note argued that keeping `RsvpResponse` split from `Guest` was what let the
+> links return without a rewrite. That turned out not to justify the cost: adding
+> the tables back is an additive migration with no backfill, and the split was
+> already failing its own invariant. v1 writes confirmed values straight onto
+> `Guest` and keeps traceability in a `GuestChange` audit log.
 
 ### What the cut removes
 

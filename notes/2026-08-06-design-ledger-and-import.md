@@ -54,7 +54,9 @@ parents know. So import has to deduplicate.
 - Conflicting rows are collected onto **one review screen**, not a modal per row.
   Ten modals in sequence is punishment.
 - The **existing matching pipeline** (side → normalized name → phone) is reused, so
-  identity is still judged in exactly one place.
+  identity is still judged in exactly one place. It survives as logic; see
+  [2026-08-06-decision-drop-response-model.md](2026-08-06-decision-drop-response-model.md)
+  — the pipeline runs, its results are consumed on screen, and nothing is persisted.
 - **"Not sure" must never block.** An undecided row imports as a separate guest and
   is flagged. Merging is lossless in this model, so deciding later costs nothing —
   whereas forcing a decision stalls the whole import.
