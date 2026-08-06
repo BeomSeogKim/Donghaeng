@@ -60,7 +60,12 @@ matching happens server-side and is visible only to the couple.
 All responses are kept. The latest response from the same person is the
 effective value; earlier ones remain visible as history.
 
-### Two link types (decided 2026-07-30)
+### Two link types (decided 2026-07-30, both deferred out of v1 on 2026-08-06)
+
+> Neither link ships in v1 — see
+> [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
+> The design below stands for when they return; the matching pipeline it feeds
+> runs in v1 only for vendor-email responses, resolved inline rather than queued.
 
 - **Shared link** — required. One link the couple drops into their mobile
   invitation. Responses go through the matching rules above.

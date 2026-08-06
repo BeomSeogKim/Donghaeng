@@ -1,5 +1,11 @@
 # Decision — tech stack (2026-07-30)
 
+> **Partly superseded 2026-08-06** — see
+> [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
+> Our own RSVP links are out of v1, so `web/` ships **one** bundle (couple app),
+> not two; the guest bundle returns with the links. Login widens from Kakao-only
+> to 네이버 · 카카오 · 구글. Everything else here stands.
+
 Resolves the "tech stack" item left open in
 [2026-07-26-decision-core-scope.md](2026-07-26-decision-core-scope.md).
 Decided after the MVP v1 requirement breakdown and the hard-spot design

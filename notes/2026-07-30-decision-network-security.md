@@ -1,5 +1,13 @@
 # Decision — network and attack-surface security (2026-07-30)
 
+> **Partly out of scope for v1 as of 2026-08-06** — see
+> [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
+> With our own RSVP links deferred, the shared-link and per-guest-link tokens,
+> their per-link rate limits, and the enumeration-safety requirement have no
+> surface in v1. They come back with the links, so nothing here is retracted.
+> Session and invite tokens, hashing, log masking, per-wedding rate limits, the
+> aggregation-query whitelist, and the deployment rules all still apply.
+
 Scope, as set by the founder: **security against attack — network
 exposure, DDoS, token safety, application attack surface.** Data-privacy
 and legal obligations are a separate concern and are listed at the bottom

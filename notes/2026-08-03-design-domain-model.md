@@ -1,5 +1,13 @@
 # Design — guest ledger domain model (2026-08-03)
 
+> **Narrowed 2026-08-06** — see
+> [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
+> `SharedLink` and `GuestLink` are deferred out of v1, so in v1 only `manual` and
+> vendor-email origins produce responses, and the duplicate-defense and
+> review-queue machinery below has no shared-link traffic to defend against. The
+> model itself is unchanged — that is the point of keeping responses separate from
+> the ledger. `Guest` additionally gains per-meal-type counts and a 배려사항 field.
+
 Builds the domain model on top of the decisions in
 [2026-07-26-mvp-v1-requirements.md](2026-07-26-mvp-v1-requirements.md) and
 [2026-07-30-design-guest-ledger-hard-spots.md](2026-07-30-design-guest-ledger-hard-spots.md).

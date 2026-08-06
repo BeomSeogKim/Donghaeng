@@ -18,6 +18,12 @@ guest list + RSVP collection + headcount estimation (per
 
 ## B. RSVP collection (guest-facing, thin)
 
+> **Channel 1 is deferred out of v1 as of 2026-08-06** — see
+> [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
+> v1 intake is the couple's own entry plus vendor-email parsing; no guest ever
+> meets the product, so the "brand's first impression" framing below applies to
+> the release that brings the links back, not to v1.
+
 Two intake channels:
 
 1. **Own RSVP link** — couple creates a link, places it in their mobile

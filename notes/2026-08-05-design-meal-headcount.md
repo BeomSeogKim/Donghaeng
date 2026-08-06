@@ -1,5 +1,12 @@
 # Design — meal headcount and the 보증인원 decision (2026-08-05)
 
+> **Extended 2026-08-06** — see
+> [2026-08-06-decision-v1-scope-and-meals.md](2026-08-06-decision-v1-scope-and-meals.md).
+> The ledger's meal slot is no longer one integer but **one integer per meal
+> type**, from a type list the couple configures on the Wedding. With a single
+> type configured — the default — it behaves exactly as described here. The
+> `Wedding` now also carries the contracted 보증인원, closing the open item below.
+
 Closes two of the three items left open by
 [2026-08-03-design-domain-model.md](2026-08-03-design-domain-model.md): the
 식대 보증 인원 definition and meal granularity. Along the way it corrects two
