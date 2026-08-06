@@ -3,6 +3,36 @@
 Wedding-journey companion web service for couples — centered on a guest
 ledger (하객·좌석·축의금). See README.md for the product pitch.
 
+## Pick up here (last session: 2026-08-06)
+
+Design work resumes at **screen and flow design (③)** — the one thing between
+the model and building. One fixed point is already decided: **the ledger and
+the headcount are one screen.** The next knot is **how the import conflict
+screen behaves when one file brings in dozens of rows at once.**
+
+Four questions are open and were parked deliberately:
+
+1. **Does 유아식 count toward the venue's 보증인원?** Likely venue-dependent.
+   If it is, `MealType` needs a `counts_toward_guarantee` flag and the screen
+   shows two numbers ("총 식사 45개 / 보증인원 기준 42명"). Needs the founder
+   to check a real contract.
+2. **When does the couple configure meal types** — onboarding, or on demand?
+3. **Retention policy for `GuestChange`.** It holds old values of personal
+   data (phone numbers), which sits badly beside deleting raw vendor email
+   after a bounded window.
+4. **Five proposals of mine still unconfirmed** — 배려사항 as free text;
+   meal types defaulting to a single type; a type in use being undeletable;
+   the import conflict screen being a list rather than a modal per row; and
+   "not sure" importing as a separate guest rather than blocking. All five
+   are cheap and most will settle naturally during ③.
+
+Working style for this project: **talk design through, don't hand over option
+menus.** The founder is the domain owner, and every large decision on
+2026-08-06 came from a domain fact that could not be derived from these notes
+— 보증인원 is the venue's number, attendance arrives via parents and KakaoTalk,
+the guest list is collected from parents. State a read, ask one open question,
+converge. Reserve multiple-choice for operational forks.
+
 ## Status
 
 Concept stage, aligned (as of 2026-08-06). Vision, core scope, product
