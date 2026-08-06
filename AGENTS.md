@@ -15,7 +15,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-05-design-meal-headcount.md`,
 `2026-08-06-decision-v1-scope-and-meals.md`,
 `2026-08-06-design-ledger-and-import.md`,
-`2026-08-06-decision-drop-response-model.md`). Read them newest-first: the
+`2026-08-06-decision-drop-response-model.md`,
+`2026-08-06-review-scale-and-extensibility.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed. There is no code yet:
 **screen/flow design is the one remaining blocker**, and success criteria
@@ -120,6 +121,17 @@ SUM already does. This is the first fixed point of the screen design.
   types. That asymmetry is where all meal detail lives.
 - Accessibility needs (휠체어 etc.) are a **guest attribute**, free text —
   they belong to the person and carry forward to seat assignment later.
+- **Postgres enum types only where the value set is closed forever** — `side`
+  qualifies; `group_category`, `lifecycle`, `source`, `status`, `provider` do
+  not. Use varchar plus application-level validation, so adding a value is a
+  deploy and not an `ALTER TYPE`. The guest-group list changed twice in one
+  day; assume it changes again.
+- **Every mutation response carries the recomputed aggregate**, and the client
+  handles out-of-order responses. Forced by "one screen" + "all computation
+  server-side": a number lagging the tap by 100ms is fine, a number moving
+  backwards is not.
+- **Import matching loads the wedding's guests once and matches in memory.**
+  It is the only v1 operation that is easy to get badly wrong.
 - **Guest groups are seven fixed categories plus a free label**: 가족 · 친척 ·
   사촌 · 혼주 손님 · 친구 · 직장동료 · 기타. Aggregation splits by category
   only — free labels fracture on typing variants. Family is one bucket
