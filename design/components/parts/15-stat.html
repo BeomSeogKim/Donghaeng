@@ -1,0 +1,72 @@
+<!-- @dsCard group="Components" name="06 Stat" subtitle="인원수 × 보증인원 — 원장과 같은 화면에 산다" width="760" height="600" -->
+<style>
+.stat-card { border: 1px solid var(--dh-line); background: var(--dh-surface); padding: var(--dh-space-4); max-width: 22rem; }
+.stat-eyebrow { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
+.stat-line { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.stat-n {
+  font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold);
+  letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight);
+  color: var(--dh-cheong); font-variant-numeric: tabular-nums;
+}
+.stat-unit { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); color: var(--dh-ink-muted); }
+.stat-sub { display: flex; flex-wrap: wrap; gap: 0 var(--dh-space-3); margin-top: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
+.stat-sub b { font-weight: var(--dh-weight-semibold); color: var(--dh-ink); font-variant-numeric: tabular-nums; }
+.stat-sub .over { color: var(--dh-hwang); }
+.meter { margin-top: var(--dh-space-3); height: 4px; background: var(--dh-surface-sunken); border-radius: var(--dh-radius-chip); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--dh-cheong); transition: width var(--dh-dur-count) var(--dh-ease); }
+.meter i.over { background: var(--dh-hwang); }
+.stat-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--dh-space-4); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">기본 — 보증인원 아래</div>
+    <div class="stat-card">
+      <div class="stat-eyebrow">2026년 11월 8일 · 예상 인원</div>
+      <div class="stat-line"><span class="stat-n">245</span><span class="stat-unit">명</span></div>
+      <div class="stat-sub">
+        <span>확정 <b>181</b></span><span>미정 <b>64</b></span>
+        <span>보증 <b>250</b></span><span>여유 <b>5</b></span>
+      </div>
+      <div class="meter"><i style="width:98%"></i></div>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">보증인원 초과 — 경고는 이게 전부</div>
+    <div class="stat-card">
+      <div class="stat-eyebrow">2026년 11월 8일 · 예상 인원</div>
+      <div class="stat-line"><span class="stat-n">268</span><span class="stat-unit">명</span></div>
+      <div class="stat-sub">
+        <span>확정 <b>204</b></span><span>미정 <b>64</b></span>
+        <span>보증 <b>250</b></span><span class="over">초과 <b>18</b></span>
+      </div>
+      <div class="meter"><i class="over" style="width:100%"></i></div>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">식사 종류별 — 웨딩마다 다르게 설정됨</div>
+    <div class="stat-2">
+      <div class="stat-card">
+        <div class="stat-eyebrow">식사</div>
+        <div class="stat-line"><span class="stat-n" style="font-size:var(--dh-text-title)">238</span><span class="stat-unit">일반</span></div>
+        <div class="stat-sub"><span>유아식 <b>5</b></span><span>채식 <b>2</b></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>보증인원은 식장의 숫자입니다.</b> 우리는 추천하지도, 통계로 보정하지도 않습니다.
+    계약된 값을 옆에 놓고 비교만 보여줍니다.
+  </div>
+  <div class="pv-note">
+    <b>숫자는 뒤로 가지 않습니다.</b> 모든 변경 응답이 재계산된 집계를 싣고 오고, 클라이언트는
+    순서가 뒤바뀐 응답을 견딥니다. 숫자는 260ms에 걸쳐 정착하고 칩은 120ms에 반응합니다 —
+    부부가 <b>어느</b> 숫자가 움직였는지 볼 수 있어야 하니까요. 탭보다 살짝 늦는 숫자는 괜찮습니다.
+    이유 없이 튀는 숫자는 안 됩니다.
+  </div>
+  <div class="pv-note">
+    <b>예상 인원 = 확정 참석 + 아직 미정.</b> 불참만 빠집니다. 부부가 직접 넣은 예상값도 같이 셉니다.
+  </div>
+</div>

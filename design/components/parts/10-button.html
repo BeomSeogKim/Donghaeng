@@ -1,0 +1,78 @@
+<!-- @dsCard group="Components" name="01 Button" subtitle="primary / secondary / ghost / destructive · 2 사이즈" width="720" height="560" -->
+<style>
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: inherit;
+  font-size: var(--dh-text-body);
+  font-weight: var(--dh-weight-semibold);
+  line-height: 1;
+  min-height: var(--dh-tap-min);
+  padding: 0 var(--dh-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--dh-radius-control);
+  cursor: pointer;
+  transition: background var(--dh-dur-fast) var(--dh-ease), border-color var(--dh-dur-fast) var(--dh-ease);
+}
+.btn-sm { min-height: 2rem; padding: 0 var(--dh-space-3); font-size: var(--dh-text-meta); }
+
+.btn-primary { background: var(--dh-cheong); color: var(--dh-ink-on-accent); }
+.btn-primary:hover { background: var(--dh-cheong-hover); }
+
+.btn-secondary { background: var(--dh-surface); color: var(--dh-ink); border-color: var(--dh-line-strong); }
+.btn-secondary:hover { border-color: var(--dh-ink-faint); }
+
+.btn-ghost { background: transparent; color: var(--dh-cheong); }
+.btn-ghost:hover { background: var(--dh-cheong-soft); }
+
+.btn-destructive { background: var(--dh-surface); color: var(--dh-hong); border-color: var(--dh-hong); }
+.btn-destructive:hover { background: var(--dh-hong-soft); }
+
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-block { width: 100%; }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">기본 — 44px</div>
+    <div class="pv-row">
+      <button class="btn btn-primary" type="button">저장</button>
+      <button class="btn btn-secondary" type="button">취소</button>
+      <button class="btn btn-ghost" type="button">양식 내려받기</button>
+      <button class="btn btn-destructive" type="button">하객 삭제</button>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">작게 — 32px · 행 안쪽과 도구 막대에서만</div>
+    <div class="pv-row">
+      <button class="btn btn-sm btn-primary" type="button">추가</button>
+      <button class="btn btn-sm btn-secondary" type="button">되돌리기</button>
+      <button class="btn btn-sm btn-ghost" type="button">전체 보기</button>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">비활성</div>
+    <div class="pv-row">
+      <button class="btn btn-primary" type="button" disabled>저장</button>
+      <button class="btn btn-secondary" type="button" disabled>취소</button>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">전체 폭 — 모바일 시트의 확정 동작</div>
+    <div style="max-width: 20rem">
+      <button class="btn btn-primary btn-block" type="button">45명으로 저장</button>
+    </div>
+  </div>
+
+  <div class="pv-note warn">
+    <b>파괴적 버튼은 항상 동사를 답니다.</b> "삭제"가 쓰여 있지 않으면 삭제 버튼이 아닙니다.
+    홍색은 통상적인 오류 빨강과 색상환에서 이웃이라, 색만으로 뜻을 지게 하지 않습니다.
+    또 파괴적 동작은 채운 배경이 아니라 <b>테두리</b>로 둡니다 — 실수로 누르기 가장 쉬운 버튼이
+    화면에서 가장 무거워 보이면 안 됩니다.
+  </div>
+  <div class="pv-note">
+    <b>최소 높이 44px.</b> 손가락 탭 하한이고, 원장에서 버튼은 대개 스크롤 중에 눌립니다.
+  </div>
+</div>

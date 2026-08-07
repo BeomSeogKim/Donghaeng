@@ -1,0 +1,86 @@
+<!-- @dsCard group="Foundations" name="간격 · 밀도 · 반경" subtitle="4px 격자 · 행은 카드가 아니다" width="760" height="640" -->
+<style>
+.sp-row { display: flex; align-items: center; gap: var(--dh-space-4); padding: 6px 0; }
+.sp-key { width: 6rem; font-size: 11px; font-family: ui-monospace, Menlo, monospace; color: var(--dh-ink-faint); font-variant-numeric: tabular-nums; }
+.sp-bar { height: 12px; background: var(--dh-cheong-soft); border-left: 2px solid var(--dh-cheong); }
+
+.dens { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--dh-space-5); align-items: start; }
+.dens h4 { margin: 0 0 var(--dh-space-2) 0; font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); text-transform: uppercase; font-weight: var(--dh-weight-semibold); }
+.dens .keep h4, h4.keep { color: var(--dh-cheong); }
+.dens .drop h4, h4.drop { color: var(--dh-hong); }
+
+.m-flush { border: 1px solid var(--dh-line); background: var(--dh-surface); }
+.m-flush .m { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--dh-line); }
+.m-flush .m:last-child { border-bottom: 0; }
+
+.m-card { display: flex; flex-direction: column; gap: 8px; }
+.m-card .m { display: flex; justify-content: space-between; padding: 12px 14px; background: var(--dh-surface); border: 1px solid var(--dh-line); border-radius: 10px; box-shadow: 0 1px 2px rgb(16 18 24 / .06); }
+
+.m .n { color: var(--dh-ink-muted); font-variant-numeric: tabular-nums; }
+.cap { margin-top: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: 1.55; }
+
+.rad { display: flex; gap: var(--dh-space-4); flex-wrap: wrap; }
+.rad figure { margin: 0; text-align: center; }
+.rad .box { width: 5rem; height: 3rem; background: var(--dh-cheong-soft); border: 1px solid var(--dh-cheong); }
+.rad figcaption { margin-top: 6px; font-size: 11px; color: var(--dh-ink-faint); font-family: ui-monospace, Menlo, monospace; }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">간격 — 4px 격자</div>
+    <div class="pv-stage" style="padding: var(--dh-space-4)">
+      <div class="sp-row"><span class="sp-key">space-1 · 4</span><span class="sp-bar" style="width:4px"></span></div>
+      <div class="sp-row"><span class="sp-key">space-2 · 8</span><span class="sp-bar" style="width:8px"></span></div>
+      <div class="sp-row"><span class="sp-key">space-3 · 12</span><span class="sp-bar" style="width:12px"></span></div>
+      <div class="sp-row"><span class="sp-key">space-4 · 16</span><span class="sp-bar" style="width:16px"></span></div>
+      <div class="sp-row"><span class="sp-key">space-6 · 24</span><span class="sp-bar" style="width:24px"></span></div>
+      <div class="sp-row"><span class="sp-key">space-8 · 32</span><span class="sp-bar" style="width:32px"></span></div>
+      <div class="sp-row"><span class="sp-key">space-12 · 48</span><span class="sp-bar" style="width:48px"></span></div>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">밀도 — 같은 6행, 같은 글자 크기</div>
+    <div class="dens">
+      <div class="keep">
+        <h4 class="keep">채택 — 헤어라인으로 붙인 행</h4>
+        <div class="m-flush">
+          <div class="m"><span>김영수</span><span class="n">2</span></div>
+          <div class="m"><span>박지민</span><span class="n">1</span></div>
+          <div class="m"><span>이서연</span><span class="n">4</span></div>
+          <div class="m"><span>최민준</span><span class="n">2</span></div>
+          <div class="m"><span>정하은</span><span class="n">1</span></div>
+          <div class="m"><span>강도윤</span><span class="n">3</span></div>
+        </div>
+        <p class="cap">가장자리까지 꽉 차고 구분은 1px 선 하나. 눈이 이름 열을 따라 수직으로 내려갑니다.</p>
+      </div>
+      <div class="drop">
+        <h4 class="drop">기각 — 행마다 카드</h4>
+        <div class="m-card">
+          <div class="m"><span>김영수</span><span class="n">2</span></div>
+          <div class="m"><span>박지민</span><span class="n">1</span></div>
+          <div class="m"><span>이서연</span><span class="n">4</span></div>
+          <div class="m"><span>최민준</span><span class="n">2</span></div>
+          <div class="m"><span>정하은</span><span class="n">1</span></div>
+          <div class="m"><span>강도윤</span><span class="n">3</span></div>
+        </div>
+        <p class="cap">같은 6행인데 더 길고, 카드 하나하나가 개별 물체로 읽혀 훑기를 방해합니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">반경 — 실제로 떨어져 있는 것에만</div>
+    <div class="rad">
+      <figure><div class="box" style="border-radius:var(--dh-radius-flush)"></div><figcaption>flush · 0<br>행 · 표</figcaption></figure>
+      <figure><div class="box" style="border-radius:var(--dh-radius-control)"></div><figcaption>control · 8<br>버튼 · 입력</figcaption></figure>
+      <figure><div class="box" style="border-radius:var(--dh-radius-chip)"></div><figcaption>chip · 999<br>칩 · 태그</figcaption></figure>
+      <figure><div class="box" style="border-radius:var(--dh-radius-sheet)"></div><figcaption>sheet · 16<br>시트 · 대화상자</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>치수.</b> 모바일 행 60px(이름 줄 + 메타 줄, 44px 탭 하한 위), PC 표 행 44px.
+    그림자는 오버레이용 하나뿐입니다 — <b>도구는 떠 있지 않습니다.</b>
+  </div>
+</div>

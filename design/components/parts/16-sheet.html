@@ -1,0 +1,90 @@
+<!-- @dsCard group="Components" name="07 Sheet" subtitle="하객 상세 · 식사 수 입력 — 유일하게 떠 있는 것" width="720" height="620" -->
+<style>
+.sh-stage { background: var(--dh-ground); border: 1px solid var(--dh-line); padding: var(--dh-space-6) var(--dh-space-4) 0; display: flex; justify-content: center; }
+.sheet {
+  width: 100%; max-width: 22rem;
+  background: var(--dh-surface);
+  border: 1px solid var(--dh-line);
+  border-bottom: 0;
+  border-radius: var(--dh-radius-sheet) var(--dh-radius-sheet) 0 0;
+  box-shadow: var(--dh-shadow-overlay);
+  overflow: hidden;
+}
+.sh-grip { width: 2.25rem; height: 4px; background: var(--dh-line-strong); border-radius: 999px; margin: var(--dh-space-2) auto 0; }
+.sh-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--dh-space-3); padding: var(--dh-space-3) var(--dh-space-4) var(--dh-space-3); border-bottom: 1px solid var(--dh-line); }
+.sh-head h3 { margin: 0; font-size: var(--dh-text-title); font-weight: var(--dh-weight-bold); letter-spacing: -0.015em; }
+.sh-head span { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
+.sh-body { padding: var(--dh-space-4); display: flex; flex-direction: column; gap: var(--dh-space-4); }
+.sh-foot { padding: var(--dh-space-3) var(--dh-space-4) var(--dh-space-5); border-top: 1px solid var(--dh-line); display: flex; gap: var(--dh-space-2); }
+
+.sh-field { display: flex; flex-direction: column; gap: 6px; }
+.sh-field > label { font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); }
+
+.seg { display: inline-flex; border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-chip); overflow: hidden; }
+.seg button { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); background: var(--dh-surface); color: var(--dh-ink-muted); border: 0; border-right: 1px solid var(--dh-line); cursor: pointer; flex: 1; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
+
+.stepper { display: flex; align-items: center; gap: var(--dh-space-2); }
+.stepper button { font-family: inherit; font-size: var(--dh-text-lead); width: var(--dh-tap-min); height: var(--dh-tap-min); background: var(--dh-surface); border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-control); color: var(--dh-ink); cursor: pointer; }
+.stepper output { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-semibold); font-variant-numeric: tabular-nums; min-width: 2rem; text-align: center; }
+.stepper .lab { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); margin-left: auto; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); border: 1px solid transparent; border-radius: var(--dh-radius-control); cursor: pointer; }
+.btn-primary { background: var(--dh-cheong); color: var(--dh-ink-on-accent); flex: 1; }
+.btn-secondary { background: var(--dh-surface); color: var(--dh-ink); border-color: var(--dh-line-strong); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">하객 상세 — 아래에서 올라오는 시트</div>
+    <div class="sh-stage">
+      <div class="sheet" role="dialog" aria-label="하객 상세">
+        <div class="sh-grip"></div>
+        <div class="sh-head">
+          <h3>이서연</h3>
+          <span>신부 · 가족</span>
+        </div>
+        <div class="sh-body">
+          <div class="sh-field">
+            <label>참석 여부</label>
+            <div class="seg" role="group">
+              <button type="button" aria-pressed="true">참석</button>
+              <button type="button" aria-pressed="false">미정</button>
+              <button type="button" aria-pressed="false">불참</button>
+            </div>
+          </div>
+          <div class="sh-field">
+            <label>식사</label>
+            <div class="stepper">
+              <button type="button" aria-label="일반 줄이기">−</button>
+              <output>3</output>
+              <button type="button" aria-label="일반 늘리기">＋</button>
+              <span class="lab">일반</span>
+            </div>
+            <div class="stepper">
+              <button type="button" aria-label="유아식 줄이기">−</button>
+              <output>1</output>
+              <button type="button" aria-label="유아식 늘리기">＋</button>
+              <span class="lab">유아식</span>
+            </div>
+          </div>
+        </div>
+        <div class="sh-foot">
+          <button class="btn btn-secondary" type="button">취소</button>
+          <button class="btn btn-primary" type="button">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>제품에서 유일하게 떠 있는 것입니다.</b> 그림자는 오버레이 하나만 쓰고, 반경 16px도
+    여기와 대화상자에만 씁니다 — 시트는 실제로 화면에서 떨어져 있는 물체라서요.
+  </div>
+  <div class="pv-note">
+    <b>식사는 종류별 정수입니다.</b> 응답은 파티 단위 참·불참만 주고, 종류별 배분은 부부가 합니다.
+    그 비대칭에 식사 관련 세부가 전부 들어 있습니다. 식사 종류 목록은 웨딩마다 다르게 설정되고,
+    기본값은 한 종류라 단순한 경우엔 아무것도 설정할 게 없습니다.
+  </div>
+</div>

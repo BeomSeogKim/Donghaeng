@@ -1,0 +1,61 @@
+<!-- @dsCard group="Foundations" name="타이포그래피" subtitle="한글 우선 · 6단 스케일 · 본문 하한 15px" width="760" height="620" -->
+<style>
+.ty-row { display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: var(--dh-space-5); align-items: baseline; padding: var(--dh-space-3) 0; border-bottom: 1px solid var(--dh-line); }
+.ty-row:last-child { border-bottom: 0; }
+.ty-spec { font-size: 11px; letter-spacing: .04em; color: var(--dh-ink-faint); font-variant-numeric: tabular-nums; line-height: 1.5; }
+.ty-spec b { display: block; color: var(--dh-ink-muted); font-weight: var(--dh-weight-semibold); letter-spacing: var(--dh-tracking-label); text-transform: uppercase; }
+
+.t-display { font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold); letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight); color: var(--dh-cheong); font-variant-numeric: tabular-nums; }
+.t-title { font-size: var(--dh-text-title); font-weight: var(--dh-weight-bold); letter-spacing: -0.015em; line-height: var(--dh-leading-snug); }
+.t-lead { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); line-height: var(--dh-leading-snug); }
+.t-body { font-size: var(--dh-text-body); line-height: var(--dh-leading-body); color: var(--dh-ink-muted); }
+.t-meta { font-size: var(--dh-text-meta); line-height: var(--dh-leading-snug); color: var(--dh-ink-muted); }
+.t-label { font-size: var(--dh-text-label); font-weight: var(--dh-weight-semibold); letter-spacing: var(--dh-tracking-label); text-transform: uppercase; color: var(--dh-ink-faint); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">타입 스케일</div>
+    <div class="pv-stage" style="padding: var(--dh-space-5)">
+      <div class="ty-row">
+        <div class="ty-spec"><b>Display</b>40px / 1.2<br>700 · -0.02em</div>
+        <div><div class="t-display">245</div></div>
+      </div>
+      <div class="ty-row">
+        <div class="ty-spec"><b>Title</b>22px / 1.45<br>700 · -0.015em</div>
+        <div><div class="t-title">신부측 하객 명단</div></div>
+      </div>
+      <div class="ty-row">
+        <div class="ty-spec"><b>Lead</b>17px / 1.45<br>500</div>
+        <div><div class="t-lead">김영수</div></div>
+      </div>
+      <div class="ty-row">
+        <div class="ty-spec"><b>Body</b>15px / 1.65<br>400 · 하한선</div>
+        <div><div class="t-body">부모님께 나눠드릴 명단 양식을 내려받아 채워 오시면, 겹치는 분은 저희가 찾아 알려드립니다.</div></div>
+      </div>
+      <div class="ty-row">
+        <div class="ty-spec"><b>Meta</b>13px / 1.45<br>400 · 조각만</div>
+        <div><div class="t-meta">직장동료 · 신부 · 2명</div></div>
+      </div>
+      <div class="ty-row">
+        <div class="ty-spec"><b>Label</b>12px / 1.45<br>600 · 0.06em</div>
+        <div><div class="t-label">GUARANTEE</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>본문 하한은 15px입니다.</b> 한글은 같은 em 안에 라틴보다 많은 획을 넣기 때문에 13–14px 본문은
+    휴대폰에서 속공간이 뭉개집니다. 13px은 메타데이터 조각 전용이고 문장에는 쓰지 않습니다.
+    한글 본문 행간도 라틴 표준 1.5가 아니라 <b>1.65</b>입니다.
+  </div>
+  <div class="pv-note">
+    <b>이탤릭은 없습니다.</b> 한글에 이탤릭 전통이 없어 합성된 기울임은 깨져 보입니다.
+    강조는 굵기와 색으로만 합니다.
+  </div>
+  <div class="pv-note">
+    <b>서체는 Pretendard입니다.</b> 한글과 라틴을 같은 메트릭으로 담고 있어, 하객 이름과 아라비아 숫자가
+    한 줄을 공유하는 이 제품의 모든 화면에서 필요합니다. (이 프리뷰는 Pretendard가 설치돼 있지 않으면
+    시스템 한글 서체로 대체 렌더링됩니다 — 카드 13장에 2.7MB 웹폰트를 각각 심지 않기 위한 의도적 선택입니다.)
+  </div>
+</div>

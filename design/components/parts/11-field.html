@@ -1,0 +1,94 @@
+<!-- @dsCard group="Components" name="02 Field" subtitle="텍스트 · 숫자 · 선택 — 레이블, 힌트, 오류" width="720" height="620" -->
+<style>
+.fld { display: flex; flex-direction: column; gap: 6px; max-width: 22rem; }
+.fld > label { font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); color: var(--dh-ink); }
+.fld .opt { color: var(--dh-ink-faint); font-weight: var(--dh-weight-regular); }
+.fld input, .fld select, .fld textarea {
+  font-family: inherit;
+  font-size: var(--dh-text-body);
+  color: var(--dh-ink);
+  background: var(--dh-surface);
+  min-height: var(--dh-tap-min);
+  padding: 0 var(--dh-space-3);
+  border: 1px solid var(--dh-line-strong);
+  border-radius: var(--dh-radius-control);
+  width: 100%;
+}
+.fld textarea { padding: var(--dh-space-2) var(--dh-space-3); line-height: var(--dh-leading-body); resize: vertical; }
+.fld input:focus, .fld select:focus, .fld textarea:focus { outline: 2px solid var(--dh-focus); outline-offset: 1px; border-color: var(--dh-focus); }
+.fld input::placeholder, .fld textarea::placeholder { color: var(--dh-ink-faint); }
+.fld .hint { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: 1.5; }
+.fld .err { font-size: var(--dh-text-meta); color: var(--dh-hong); line-height: 1.5; }
+.fld.invalid input { border-color: var(--dh-hong); }
+.fld input.num { font-variant-numeric: tabular-nums; }
+.fld-2 { display: flex; gap: var(--dh-space-3); flex-wrap: wrap; }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">텍스트</div>
+    <div class="fld">
+      <label for="f1">이름</label>
+      <input id="f1" type="text" value="김영수">
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">선택 항목 · 힌트</div>
+    <div class="fld">
+      <label for="f2">연락처 <span class="opt">선택</span></label>
+      <input id="f2" class="num" type="tel" placeholder="010-0000-0000">
+      <span class="hint">임포트할 때 같은 분을 찾아내는 데 쓰입니다. 없어도 등록됩니다.</span>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">숫자 — 고정폭</div>
+    <div class="fld" style="max-width:9rem">
+      <label for="f3">동반 인원</label>
+      <input id="f3" class="num" type="number" value="2" min="0">
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">선택</div>
+    <div class="fld-2">
+      <div class="fld" style="max-width:11rem">
+        <label for="f4">분류</label>
+        <select id="f4">
+          <option>가족</option><option>친척</option><option>사촌</option>
+          <option selected>혼주 손님</option><option>친구</option>
+          <option>직장동료</option><option>기타</option>
+        </select>
+      </div>
+      <div class="fld" style="max-width:9rem">
+        <label for="f5">측</label>
+        <select id="f5"><option selected>신랑</option><option>신부</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">여러 줄 — 배려사항</div>
+    <div class="fld">
+      <label for="f6">배려사항 <span class="opt">선택</span></label>
+      <textarea id="f6" rows="2" placeholder="휠체어석 필요, 유아 동반 등">휠체어석 필요</textarea>
+      <span class="hint">사람에게 붙는 정보라, 나중에 좌석 배치까지 따라갑니다.</span>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">오류</div>
+    <div class="fld invalid">
+      <label for="f7">이름</label>
+      <input id="f7" type="text" value="" aria-invalid="true">
+      <span class="err">이름을 입력해 주세요. 하객을 찾을 때 쓰는 유일한 필수 항목입니다.</span>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>오류 문구는 무엇이 잘못됐고 어떻게 고치는지 말합니다.</b> 사과하지 않고, "유효하지 않은 입력"처럼
+    모호하게 쓰지 않습니다. 그리고 필수 항목은 <b>이름 하나뿐</b>입니다 — 부모님께 받은 명단에는
+    연락처가 없는 경우가 흔하고, 그것 때문에 등록이 막히면 안 됩니다.
+  </div>
+</div>

@@ -1,0 +1,69 @@
+<!-- @dsCard group="Components" name="08 Toast" subtitle="변경 결과 — 낙관적 탭이 실패했을 때 포함" width="720" height="480" -->
+<style>
+.toast {
+  display: flex; align-items: flex-start; gap: var(--dh-space-3);
+  max-width: 22rem;
+  padding: var(--dh-space-3) var(--dh-space-4);
+  background: var(--dh-surface);
+  border: 1px solid var(--dh-line);
+  border-radius: var(--dh-radius-control);
+  box-shadow: var(--dh-shadow-overlay);
+}
+.toast .bar { width: 3px; align-self: stretch; border-radius: 999px; background: var(--dh-cheong); flex: none; }
+.toast.warn .bar { background: var(--dh-hwang); }
+.toast.fail .bar { background: var(--dh-hong); }
+.toast .txt { flex: 1; min-width: 0; }
+.toast b { display: block; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); line-height: var(--dh-leading-snug); }
+.toast p { margin: 2px 0 0; font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: 1.5; }
+.toast .act {
+  font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
+  background: transparent; border: 0; color: var(--dh-cheong); cursor: pointer;
+  padding: 2px 0; align-self: center; flex: none;
+}
+.toast.fail .act { color: var(--dh-hong); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">성공 — 되돌릴 수 있을 때만 뜬다</div>
+    <div class="toast">
+      <span class="bar"></span>
+      <span class="txt"><b>윤채원 님을 불참으로 바꿨습니다</b></span>
+      <button class="act" type="button">되돌리기</button>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">주의 — 결과는 반영됐지만 알아둘 게 있을 때</div>
+    <div class="toast warn">
+      <span class="bar"></span>
+      <span class="txt">
+        <b>예상 인원이 보증인원을 넘었습니다</b>
+        <p>268명 · 보증 250명. 식장에 확인이 필요할 수 있습니다.</p>
+      </span>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">실패 — 낙관적 탭이 서버에서 거절됐을 때</div>
+    <div class="toast fail">
+      <span class="bar"></span>
+      <span class="txt">
+        <b>저장하지 못했습니다</b>
+        <p>연결이 끊겨 김영수 님의 참석 여부가 이전 상태로 돌아갔습니다.</p>
+      </span>
+      <button class="act" type="button">다시 시도</button>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>실패 토스트는 이 컴포넌트가 존재하는 이유입니다.</b> 원장은 탭에 즉시 반응하고 숫자를 먼저
+    움직입니다. 그 낙관적 갱신이 서버에서 거절되면 화면은 조용히 되돌아가는데 —
+    <b>부부에게 말하지 않고 되돌리면 그 순간 숫자가 거짓말을 한 게 됩니다.</b>
+    되돌림은 언제나 눈에 보여야 합니다.
+  </div>
+  <div class="pv-note">
+    <b>토스트는 아껴 씁니다.</b> 탭마다 뜨면 확인이 아니라 소음입니다. 되돌릴 수 있는 동작,
+    알아야 할 상태 변화, 그리고 실패 — 세 경우에만.
+  </div>
+</div>

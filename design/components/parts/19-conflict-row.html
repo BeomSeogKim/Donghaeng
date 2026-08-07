@@ -1,0 +1,121 @@
+<!-- @dsCard group="Components" name="10 ConflictRow" subtitle="임포트 검토 — 아직 안 풀린 화면의 원자 단위" width="820" height="660" -->
+<style>
+.cf-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--dh-space-4); flex-wrap: wrap; padding: var(--dh-space-3) var(--dh-space-4); background: var(--dh-surface); border: 1px solid var(--dh-line); border-bottom: 0; }
+.cf-head b { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-semibold); }
+.cf-head span { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
+.cf-head .n { font-variant-numeric: tabular-nums; font-weight: var(--dh-weight-semibold); color: var(--dh-ink); }
+
+.cf { border: 1px solid var(--dh-line); background: var(--dh-surface); }
+.cf-row { padding: var(--dh-space-4); border-bottom: 1px solid var(--dh-line); }
+.cf-row:last-child { border-bottom: 0; }
+
+.cf-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--dh-space-3); }
+.cf-side { border: 1px solid var(--dh-line); padding: var(--dh-space-3); }
+.cf-side .src { font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); text-transform: uppercase; color: var(--dh-ink-faint); font-weight: var(--dh-weight-semibold); }
+.cf-side .nm { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); margin-top: 2px; }
+.cf-side dl { display: grid; grid-template-columns: 4rem 1fr; gap: 2px var(--dh-space-2); margin: var(--dh-space-2) 0 0; font-size: var(--dh-text-meta); }
+.cf-side dt { color: var(--dh-ink-faint); }
+.cf-side dd { margin: 0; color: var(--dh-ink-muted); }
+.cf-side dd.diff { color: var(--dh-hwang); font-weight: var(--dh-weight-semibold); }
+.cf-side dd .num { font-variant-numeric: tabular-nums; }
+
+.cf-acts { display: flex; gap: var(--dh-space-2); margin-top: var(--dh-space-3); flex-wrap: wrap; align-items: center; }
+.btn { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); border: 1px solid transparent; border-radius: var(--dh-radius-control); cursor: pointer; }
+.btn-primary { background: var(--dh-cheong); color: var(--dh-ink-on-accent); }
+.btn-secondary { background: var(--dh-surface); color: var(--dh-ink); border-color: var(--dh-line-strong); }
+.cf-acts .why { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); margin-left: auto; }
+
+.cf-done { display: flex; align-items: center; gap: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
+.cf-done .tag { padding: 2px 8px; border-radius: var(--dh-radius-chip); background: var(--dh-cheong-soft); color: var(--dh-cheong); font-weight: var(--dh-weight-semibold); }
+.cf-done button { font-family: inherit; font-size: var(--dh-text-meta); background: transparent; border: 0; color: var(--dh-cheong); cursor: pointer; margin-left: auto; font-weight: var(--dh-weight-semibold); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">검토 화면 — 모달이 아니라 한 장의 목록</div>
+    <div class="cf-head">
+      <b>겹치는 분 <span class="n">7</span>명</b>
+      <span>어머님 명단.xlsx · <span class="n">182</span>행 중 <span class="n">175</span>행은 그대로 등록됐습니다</span>
+    </div>
+    <div class="cf">
+      <div class="cf-row">
+        <div class="cf-pair">
+          <div class="cf-side">
+            <div class="src">이미 있음</div>
+            <div class="nm">김정희</div>
+            <dl>
+              <dt>연락처</dt><dd><span class="num">010-2841-7733</span></dd>
+              <dt>분류</dt><dd>친척 · 신랑</dd>
+              <dt>인원</dt><dd><span class="num">2</span>명</dd>
+            </dl>
+          </div>
+          <div class="cf-side">
+            <div class="src">이번 파일</div>
+            <div class="nm">김정희</div>
+            <dl>
+              <dt>연락처</dt><dd><span class="num">010-2841-7733</span></dd>
+              <dt>분류</dt><dd class="diff">사촌 · 신랑</dd>
+              <dt>인원</dt><dd class="diff"><span class="num">3</span>명</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="cf-acts">
+          <button class="btn btn-primary" type="button">같은 분 — 합치기</button>
+          <button class="btn btn-secondary" type="button">다른 분 — 따로 두기</button>
+          <span class="why">연락처가 완전히 일치</span>
+        </div>
+      </div>
+
+      <div class="cf-row">
+        <div class="cf-pair">
+          <div class="cf-side">
+            <div class="src">이미 있음</div>
+            <div class="nm">박민수</div>
+            <dl>
+              <dt>연락처</dt><dd class="diff">없음</dd>
+              <dt>분류</dt><dd>친구 · 신부</dd>
+              <dt>인원</dt><dd><span class="num">1</span>명</dd>
+            </dl>
+          </div>
+          <div class="cf-side">
+            <div class="src">이번 파일</div>
+            <div class="nm">박민수</div>
+            <dl>
+              <dt>연락처</dt><dd class="diff"><span class="num">010-5520-1194</span></dd>
+              <dt>분류</dt><dd>친구 · 신부</dd>
+              <dt>인원</dt><dd><span class="num">1</span>명</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="cf-acts">
+          <button class="btn btn-primary" type="button">같은 분 — 합치기</button>
+          <button class="btn btn-secondary" type="button">다른 분 — 따로 두기</button>
+          <span class="why">이름과 분류가 일치, 연락처는 한쪽만 있음</span>
+        </div>
+      </div>
+
+      <div class="cf-row">
+        <div class="cf-done">
+          <span class="tag">합쳤습니다</span>
+          <span>이서연 · 가족 · 신부</span>
+          <button type="button">되돌리기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-note warn">
+    <b>이 컴포넌트는 아직 완성이 아닙니다.</b> 원자 단위(한 건의 충돌을 어떻게 보여주고 어떻게 결정하는지)는
+    여기서 정해졌지만, <b>파일 하나가 충돌 수십 건을 한꺼번에 끌고 왔을 때</b> 이 목록이 어떻게 행동하는지는
+    아직 안 풀렸습니다. 40건을 한 건씩 판단하게 두면 리스트 한 장도 결국 또 다른 형태의 벌입니다.
+    확실한 것부터 접어서 남는 게 정말 애매한 소수여야 합니다 — 그게 화면 설계(③)의 다음 매듭입니다.
+  </div>
+  <div class="pv-note">
+    <b>"잘 모르겠다"가 막으면 안 됩니다.</b> 판단하지 않은 행은 <b>별개의 하객으로 등록되고</b> 표시만 남습니다.
+    이 모델에서 합치기는 무손실이라 나중에 정해도 비용이 없지만, 결정을 강요하면 임포트 전체가 멈춥니다.
+  </div>
+  <div class="pv-note">
+    <b>매칭은 기존 파이프라인 하나를 그대로 씁니다</b> (측 → 정규화된 이름 → 연락처).
+    동일인 판정이 제품에서 딱 한 곳에서만 일어나게 하기 위해서입니다.
+  </div>
+</div>

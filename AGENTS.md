@@ -92,8 +92,13 @@ rows to compute over. The guest RSVP page is web forever.
 
 ## Design system (decided 2026-08-07)
 
-Tokens are in [`design/tokens.css`](design/tokens.css); the reasoning is in
-`notes/2026-08-07-design-system.md`. The thesis: **동행 is an instrument, not
+Tokens are in [`design/tokens.css`](design/tokens.css), components in
+`design/components/` (sources in `parts/`, built previews in `dist/` via
+`python3 design/components/build.py`), and the reasoning is in
+`notes/2026-08-07-design-system.md`. The rendered library is mirrored to the
+claude.ai/design project *Donghaeng Design System* — **that is a view, not a
+store**: anything decided there comes back to this repo or it does not
+survive. The thesis: **동행 is an instrument, not
 a celebration** — the thing to beat is a spreadsheet with a SUM in the next
 column, so we win by being as calm as one and requiring less work, never by
 being prettier. That rules out the wedding-stationery register entirely.

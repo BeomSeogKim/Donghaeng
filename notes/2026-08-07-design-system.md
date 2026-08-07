@@ -98,10 +98,35 @@ desktop table. Radius is reserved for things that are genuinely detached:
 chips, buttons, sheets. Elevation is one shadow, for overlays only — instruments
 do not float.
 
+## Where the system lives
+
+Two places, and the split is deliberate:
+
+- **This repo is the source of truth.** `design/tokens.css` is what the app
+  compiles against; `design/components/parts/*.html` are the component sources;
+  `design/components/build.py` inlines the tokens into standalone previews at
+  `design/components/dist/`. Editing a token and rebuilding updates every
+  preview, so the tokens are never transcribed twice.
+- **claude.ai/design holds the rendered library** — project *Donghaeng Design
+  System* (`c6d556a8-41df-418a-b072-64c5db3052da`), 13 cards under Foundations
+  and Components. It is a view, not a store: anything decided there has to come
+  back here or it does not survive.
+
+Re-syncing is `python3 design/components/build.py` followed by a DesignSync
+`finalize_plan` → `write_files` against `design/` as the local dir. Cards are
+registered explicitly via `register_assets` because this bundle is
+hand-authored — without the `/design-sync` skill nothing compiles the
+`_ds_manifest.json` that `@dsCard` markers would otherwise feed.
+
+The previews name Pretendard but fall back to the system Korean face:
+embedding the 2.7MB webfont in each of 13 cards would cost ~30MB for a
+rendering nicety. The published spec page carries the real face.
+
 ## The component inventory
 
-Ten components cover every v1 screen. This is 깔끔하되 핵심은 다 있게 applied to
-the system itself: fewer components, each complete.
+Ten components cover every v1 screen, plus three foundation cards. This is
+깔끔하되 핵심은 다 있게 applied to the system itself: fewer components, each
+complete.
 
 | # | Component | Why v1 needs it |
 |---|---|---|
@@ -115,6 +140,14 @@ the system itself: fewer components, each complete.
 | 8 | `Toast` | mutation feedback, including failure after an optimistic tap |
 | 9 | `EmptyState` | pre-import ledger, filtered-to-nothing |
 | 10 | `ConflictRow` | the import review screen — the one screen still unsolved |
+
+`ConflictRow` is built but deliberately incomplete. Its atom is settled — how
+one conflict is shown, what the two choices are, and why each pair was flagged
+— but **how the list behaves when one file arrives with forty conflicts is
+not.** Judging forty one at a time makes a single list just another shape of
+punishment; the certain ones have to fold away so only the genuinely ambiguous
+few remain. That is the next knot in screen design, and the component carries
+the note saying so.
 
 ## Two rules this system inherits from the architecture
 
@@ -136,5 +169,7 @@ for both now costs nothing; retrofitting a theme later costs every component.
 - [ ] Whether 유아식 counts toward the venue's 보증인원.
 - [ ] When the couple configures meal types.
 - [ ] Retention policy for `GuestChange`.
-- [ ] Whether to push this system to a claude.ai/design project once the
-      components exist as real code. Nothing to sync until then.
+
+Closed the same day: the components now exist as previews and are synced to
+claude.ai/design. What is *not* yet built is any of this as React — that waits
+for `web/`, and for the screens these components have to assemble into.

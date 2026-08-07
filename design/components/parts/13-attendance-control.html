@@ -1,0 +1,78 @@
+<!-- @dsCard group="Components" name="04 AttendanceControl" subtitle="참석 / 미정 / 불참 — 가장 많이 눌리는 컨트롤" width="720" height="560" -->
+<style>
+.att {
+  font-family: inherit;
+  font-size: var(--dh-text-body);
+  font-weight: var(--dh-weight-semibold);
+  line-height: 1;
+  min-width: 3.5rem;
+  min-height: 2.25rem;
+  padding: 0 var(--dh-space-3);
+  border-radius: var(--dh-radius-chip);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--dh-dur-fast) var(--dh-ease), color var(--dh-dur-fast) var(--dh-ease);
+}
+.att[data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
+.att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
+.att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
+.att:hover { border-color: var(--dh-line-strong); }
+
+.seg { display: inline-flex; border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-chip); overflow: hidden; }
+.seg button {
+  font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
+  min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4);
+  background: var(--dh-surface); color: var(--dh-ink-muted);
+  border: 0; border-right: 1px solid var(--dh-line); cursor: pointer;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"][data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
+.seg button[aria-pressed="true"][data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
+.seg button[aria-pressed="true"][data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-ink); }
+
+.rej { display: inline-flex; gap: var(--dh-space-2); }
+.rej span { padding: 4px 10px; border-radius: var(--dh-radius-chip); font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">원장 행 안에서 — 탭하면 순환</div>
+    <div class="pv-row">
+      <button class="att" data-s="yes" type="button">참석</button>
+      <button class="att" data-s="maybe" type="button">미정</button>
+      <button class="att" data-s="no" type="button">불참</button>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">상세 시트 안에서 — 세 갈래를 한 번에</div>
+    <div class="seg" role="group" aria-label="참석 여부">
+      <button type="button" data-s="yes" aria-pressed="true">참석</button>
+      <button type="button" data-s="maybe" aria-pressed="false">미정</button>
+      <button type="button" data-s="no" aria-pressed="false">불참</button>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">기각된 대안</div>
+    <div class="rej">
+      <span style="background:#e3f5e6;color:#1d6b2b">참석</span>
+      <span style="background:#fdeaea;color:#b3261e">불참</span>
+    </div>
+    <p class="pv-note warn" style="margin-top:var(--dh-space-2)">
+      초록/빨강 신호등. <b>못 오시는 하객은 오류가 아니라 사실입니다.</b> 빨강을 칠하면 부부는
+      결혼식 몇 달 전부터 수백 번 열어볼 화면에서 자기 하객 명단을 <b>실패의 목록</b>으로 읽게 됩니다.
+      게다가 고칠 수 있는 것도 아닙니다 — 행동할 수 없는 상태를 문제처럼 칠하는 건
+      사용자가 할 수 있는 일에 대한 거짓말입니다.
+    </p>
+  </div>
+
+  <div class="pv-note">
+    <b>기본값은 참석입니다.</b> 부부는 다르다는 얘기를 들었을 때 불참으로 고칩니다.
+    참석에서 출발하는 쪽이 탭이 덜 듭니다.
+  </div>
+  <div class="pv-note">
+    <b>탭 하나로 끝나야 합니다.</b> 참석 정보는 보통 부모님과 카카오톡을 거쳐 부부에게 도착합니다.
+    그래서 부부의 직접 입력은 예외 처리가 아니라 <b>주 경로</b>입니다.
+  </div>
+</div>

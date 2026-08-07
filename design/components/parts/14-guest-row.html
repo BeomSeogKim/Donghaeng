@@ -1,0 +1,103 @@
+<!-- @dsCard group="Components" name="05 GuestRow" subtitle="모바일 카드 / PC 표 행 — 구조가 갈리는 유일한 컴포넌트" width="820" height="640" -->
+<style>
+.gr-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: var(--dh-space-5); align-items: start; }
+
+/* 모바일 — 60px 카드 행 */
+.gr-m { border: 1px solid var(--dh-line); background: var(--dh-surface); max-width: 22rem; }
+.gr-m .row {
+  display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--dh-space-3);
+  min-height: var(--dh-row-h-mobile);
+  padding: var(--dh-space-2) var(--dh-gutter-mobile);
+  border-bottom: 1px solid var(--dh-line);
+}
+.gr-m .row:last-child { border-bottom: 0; }
+.gr-m .row[aria-selected="true"] { background: var(--dh-cheong-soft); }
+.gr-name { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); line-height: var(--dh-leading-snug); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-meta { display: flex; align-items: center; gap: 6px; font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: var(--dh-leading-snug); }
+
+/* PC — 44px 표 행 */
+.gr-d { border: 1px solid var(--dh-line); background: var(--dh-surface); overflow-x: auto; }
+.gr-d table { border-collapse: collapse; width: 100%; font-size: var(--dh-text-body); }
+.gr-d th {
+  text-align: left; font-size: var(--dh-text-label); font-weight: var(--dh-weight-semibold);
+  letter-spacing: var(--dh-tracking-label); text-transform: uppercase; color: var(--dh-ink-faint);
+  padding: var(--dh-space-2) var(--dh-space-4); border-bottom: 1px solid var(--dh-line-strong); white-space: nowrap;
+}
+.gr-d td { height: var(--dh-row-h-desktop); padding: 0 var(--dh-space-4); border-bottom: 1px solid var(--dh-line); white-space: nowrap; }
+.gr-d tr:last-child td { border-bottom: 0; }
+.gr-d .muted { color: var(--dh-ink-muted); }
+.gr-d .n { font-variant-numeric: tabular-nums; text-align: right; }
+
+.tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--dh-radius-chip); font-size: var(--dh-text-meta); background: var(--dh-surface-sunken); color: var(--dh-ink-muted); white-space: nowrap; }
+.tag-side { background: transparent; border: 1px solid var(--dh-line-strong); }
+
+.att { font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); line-height: 1; min-width: 3.5rem; min-height: 2.25rem; padding: 0 var(--dh-space-3); border-radius: var(--dh-radius-chip); border: 1px solid transparent; cursor: pointer; }
+.att[data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
+.att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
+.att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
+.att-sm { min-height: 1.75rem; min-width: 3rem; font-size: var(--dh-text-meta); }
+</style>
+
+<div class="pv-grid">
+  <div class="gr-wrap">
+    <div class="pv-set">
+      <div class="pv-label">모바일 — 60px · 이름 줄 + 메타 줄</div>
+      <div class="gr-m">
+        <div class="row">
+          <div>
+            <div class="gr-name">김영수</div>
+            <div class="gr-meta"><span class="tag tag-side">신랑</span><span class="tag">혼주 손님</span><span>· <span style="font-variant-numeric:tabular-nums">2</span>명</span></div>
+          </div>
+          <button class="att" data-s="yes" type="button">참석</button>
+        </div>
+        <div class="row" aria-selected="true">
+          <div>
+            <div class="gr-name">박지민</div>
+            <div class="gr-meta"><span class="tag tag-side">신부</span><span class="tag">직장동료</span><span>· <span style="font-variant-numeric:tabular-nums">1</span>명</span></div>
+          </div>
+          <button class="att" data-s="maybe" type="button">미정</button>
+        </div>
+        <div class="row">
+          <div>
+            <div class="gr-name">이서연</div>
+            <div class="gr-meta"><span class="tag tag-side">신부</span><span class="tag">가족</span><span>· <span style="font-variant-numeric:tabular-nums">4</span>명</span></div>
+          </div>
+          <button class="att" data-s="yes" type="button">참석</button>
+        </div>
+        <div class="row">
+          <div>
+            <div class="gr-name">윤채원</div>
+            <div class="gr-meta"><span class="tag tag-side">신부</span><span class="tag">친척</span><span>· <span style="font-variant-numeric:tabular-nums">2</span>명</span></div>
+          </div>
+          <button class="att" data-s="no" type="button">불참</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-set">
+      <div class="pv-label">PC — 44px 표 행</div>
+      <div class="gr-d">
+        <table>
+          <thead>
+            <tr><th>이름</th><th>측</th><th>분류</th><th class="n">인원</th><th>참석</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>김영수</td><td class="muted">신랑</td><td class="muted">혼주 손님</td><td class="n">2</td><td><button class="att att-sm" data-s="yes" type="button">참석</button></td></tr>
+            <tr><td>박지민</td><td class="muted">신부</td><td class="muted">직장동료</td><td class="n">1</td><td><button class="att att-sm" data-s="maybe" type="button">미정</button></td></tr>
+            <tr><td>이서연</td><td class="muted">신부</td><td class="muted">가족</td><td class="n">4</td><td><button class="att att-sm" data-s="yes" type="button">참석</button></td></tr>
+            <tr><td>윤채원</td><td class="muted">신부</td><td class="muted">친척</td><td class="n">2</td><td><button class="att att-sm" data-s="no" type="button">불참</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>구조가 갈리는 유일한 컴포넌트입니다.</b> 2026-07-30에 정한 대로, 화면을 축소해서 맞추는 게 아니라
+    PC는 표·모바일은 카드 목록으로 <b>구조 자체를 나눕니다</b>. 다만 라우트와 데이터 계층은 하나로 공유합니다 —
+    잎이 둘일 뿐 앱이 둘은 아닙니다.
+  </div>
+  <div class="pv-note">
+    <b>800행에서는 가상 스크롤이 필요합니다.</b> 대형 호텔 예식이면 하객이 800명까지 갑니다.
+  </div>
+</div>
