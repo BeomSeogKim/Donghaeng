@@ -6,15 +6,15 @@
 .stat-n {
   font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold);
   letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight);
-  color: var(--dh-cheong); font-variant-numeric: tabular-nums;
+  color: var(--dh-primary); font-variant-numeric: tabular-nums;
 }
 .stat-unit { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); color: var(--dh-ink-muted); }
 .stat-sub { display: flex; flex-wrap: wrap; gap: 0 var(--dh-space-3); margin-top: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
 .stat-sub b { font-weight: var(--dh-weight-semibold); color: var(--dh-ink); font-variant-numeric: tabular-nums; }
-.stat-sub .over { color: var(--dh-hwang); }
+.stat-sub .over { color: var(--dh-attention); }
 .meter { margin-top: var(--dh-space-3); height: 4px; background: var(--dh-surface-sunken); border-radius: var(--dh-radius-chip); overflow: hidden; }
-.meter i { display: block; height: 100%; background: var(--dh-cheong); transition: width var(--dh-dur-count) var(--dh-ease); }
-.meter i.over { background: var(--dh-hwang); }
+.meter i { display: block; height: 100%; background: var(--dh-primary); transition: width var(--dh-dur-count) var(--dh-ease); }
+.meter i.over { background: var(--dh-attention); }
 .stat-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--dh-space-4); }
 </style>
 

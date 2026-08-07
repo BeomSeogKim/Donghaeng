@@ -30,38 +30,92 @@ was wrong.
 
 Warmth therefore lives in the neutrals, not in decoration.
 
-## Colour: 청실홍실
+## Colour: 백자 · 금박, and 나전칠기 for dark
 
-In a traditional Korean wedding the groom's 청 (blue) and the bride's 홍 (red)
-are bound together — 청실홍실, the blue and red threads. It is the same image the
-product's name already reaches for, and it hands us a palette whose origin is
-specific to this product rather than to weddings in general.
+### The first palette was wrong, and the ground is where it showed
 
-- **청 `#24406b` — primary.** Deep, ink-like, slightly desaturated. 9.9:1 on
-  white. Carries the headcount, primary actions, and the 참석 state.
-- **홍 `#a3283c` — destructive only.** Appears almost nowhere in v1 (deleting a
-  guest). Deliberately reserved rather than spent on decoration.
-- **황 `#7a5510` — 미정 / attention.** The third traditional colour, and the one
-  the ledger genuinely needs.
+The first version of this palette was 청실홍실 — the blue and red threads of a
+traditional wedding — on a `#f4f5f7` ground. The founder rejected the
+background, and was right: **the positioning is a high-end service for Korean
+couples, and `#f4f5f7` is the default of every SaaS product ever shipped.**
 
-Neutrals carry a faint blue bias toward 청. A pure grey reads as inherited; a
-grey pulled a few degrees toward the accent reads as chosen.
+The error was not the instrument thesis, which survives intact. It was
+concluding that *restraint* meant *cheapness*. I derived "quiet" correctly and
+then executed it with an inherited grey, which reads as unconsidered rather
+than as chosen.
+
+### What the research changed
+
+Three findings from Joseon court and wedding dress, and each one moved the
+palette:
+
+**1. Colour in royal wedding dress was rank, not decoration.** The 원삼 was
+colour-coded by station — 황원삼 (황후) → 홍원삼 (왕비) → 자적원삼 (비빈) →
+초록원삼 (공주 · 옹주 · 반가부녀). The bride's 활옷 was 대홍색; so was the
+king's 곤룡포 until 1897. So "a luxurious East Asian colour" is not a matter of
+taste — it is a question of which rank's vocabulary to borrow.
+
+**2. Gold was the one constant across every rank.** 금사 embroidery on the
+king's 대홍 곤룡포, on the 황룡포, 금박 on the bride's 활옷. Colour changed with
+station; gold never did. **The first palette had no gold at all** — and in this
+tradition, luxury is carried by the presence of metal, not by saturated colour.
+
+**3. Korea's whites are a family, and none of them is grey.** Joseon porcelain
+moved 유백 → 설백 → 회백 → 청백 across the centuries, and hanji's white had its
+own name, 지백색. All of them are warm or faintly tinted. The cool grey I used
+is nowhere in that lineage — which is precisely what the founder was reacting
+to.
+
+### The palette
+
+**Light — 백자 · 금박.** Ground is 유백색, the milky white of soft-paste
+porcelain. Ink is 먹. Primary is **자적 `#73304e`**, the 비빈 rank colour —
+borrowed rather than 대홍 because 대홍 has to stay available for destroying
+data. Gold `#a8863f` appears as hairlines, the guarantee meter, and the brand
+mark.
+
+**Dark — 나전칠기.** 옻칠 ground `#14100e` with the iridescence of 자개 over it,
+and **gold becomes the primary**. These are not two designs but one system's day
+and night: 백자 and 나전칠기 are objects from the same house, so the vocabulary
+never collides. Defined and shippable; **v1 still launches light-only**, because
+a product scanned outdoors in daylight should not default to a dark ground.
+
+### The gold asymmetry — the one rule a token alone will not tell you
+
+Gold is **3.3:1 on porcelain and 7.8:1 on lacquer**. So in light it may never
+carry text — hairlines and ornament only — and in dark it is the primary text
+accent. The same token, opposite rules per theme. Anyone reading only the token
+name will get this wrong, so it is stated on the colour card and here.
 
 ### 불참 is neutral, never red
 
-The single most consequential colour decision, and it is a product decision
-rather than a styling one.
+The single most consequential colour decision, and a product decision rather
+than a styling one. It survived the repalette unchanged.
 
 Attendance is the most-coloured thing on the busiest screen. The reflex is a
-traffic light — green 참석, red 불참. That is wrong here. **A guest who cannot
-come is a fact, not an error.** Colouring it red makes the couple read their own
-guest list as a column of failures, on a screen they will open a hundred times
-in the months before the wedding.
+traffic light — green 참석, red 불참. **A guest who cannot come is a fact, not an
+error.** Colouring it red makes the couple read their own guest list as a column
+of failures, on a screen they will open a hundred times before the wedding. And
+it cannot be acted on: colouring an unactionable state as a problem is a lie
+about what the user can do.
 
-So: 참석 = 청, 미정 = 황, 불참 = muted neutral. Red is spent on exactly one
-thing — destroying data — which also keeps it unambiguous when it does appear.
-Because 홍 and a conventional error red occupy neighbouring hues, **destructive
-actions always carry a verb and never rely on colour alone.**
+What *did* change: **참석 is now 초록**, the green of 초록원삼 — the robe of a
+공주 or a 반가 bride, which is exactly who this product serves. The earlier
+objection was to red-for-불참, never to green-for-참석, so adopting the
+traditional green costs nothing and contradicts nothing.
+
+So: 참석 = 초록, 미정 = 치자, 불참 = muted neutral, and 대홍 is spent on exactly
+one thing — destroying data. Because 자적 (primary) and 대홍 (danger) are both
+reds, **destructive actions always carry a verb and never rely on colour
+alone**, and they are outlined rather than filled: the button that is easiest to
+hit by accident must not be the heaviest thing on screen.
+
+### Tokens are named for their role, never their colour
+
+The first version used `--dh-cheong` / `--dh-hwang` / `--dh-hong`. One palette
+change turned every one of those names into a lie. They are now `--dh-primary`,
+`--dh-attention`, `--dh-danger`. A role name survives a repalette; a colour name
+does not, and this palette changed within a day of being written.
 
 ## Type: Korean-first, and the numerals are load-bearing
 
@@ -84,6 +138,30 @@ figures are a two-line CSS rule that buys the product's core promise.
 
 No italics. Korean has no italic tradition and synthesised obliques look broken;
 emphasis is weight and colour.
+
+### The display face is an open slot, and the number is why
+
+The palette redesign raised the typeface question, because a gothic-only screen
+does not carry "high-end" the way the porcelain-and-gold palette now asks it to.
+The intended answer is a **pairing**: Pretendard keeps the UI, and a Korean
+serif takes the headcount, screen titles, and the brand mark — a handful of
+places, never the list. Korean serif at 15px in a 400-row column is measurably
+harder to read than gothic, so the serif must stay quiet or it costs the density
+the whole system was built around.
+
+`--dh-font-display` exists as the slot. It currently aliases the sans, and the
+headcount stays on Pretendard, because of one constraint that can veto the whole
+idea: **the number must be tabular.** Free Korean serifs vary a lot in how much
+attention their Latin figures got, and several have no tabular set at all. If
+the chosen serif's digits are not tabular, the serif takes titles and the brand
+mark only and the number stays gothic — **stability outranks elegance on the one
+number this product exists to be trusted about.** That has to be measured, not
+assumed, before the slot is filled.
+
+Two more constraints on the choice, neither aesthetic: the face must be licensed
+for commercial use (this ships to paying couples), and a second Korean family is
+1–4MB, so the serif has to be subset to the glyphs actually used — which is
+cheap here precisely because it appears in so few places.
 
 ## Density: rows are flush, not cards
 

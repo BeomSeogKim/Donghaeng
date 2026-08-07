@@ -103,17 +103,32 @@ a celebration** — the thing to beat is a spreadsheet with a SUM in the next
 column, so we win by being as calm as one and requiring less work, never by
 being prettier. That rules out the wedding-stationery register entirely.
 
-Rules that bind everyday work:
+But **restraint is not cheapness** (learned the hard way 2026-08-07: the first
+ground was `#f4f5f7`, the SaaS default, and it did not carry the high-end
+positioning at all). Premium here is carried by **material, not saturation** —
+which is the same reason 백자 is prized for being *almost* white.
 
+- **Light is 백자 · 금박, dark is 나전칠기.** 유백색 ground, 먹 ink, **자적
+  `#73304e`** primary (the 비빈 rank colour), gold as metal. Dark inverts to
+  옻칠 ground with gold as primary. One system's day and night, not two designs.
+  v1 ships light only.
+- **Gold is 3.3:1 on porcelain and 7.8:1 on lacquer.** So in light it may
+  **never carry text** — hairlines, meter, brand mark only — and in dark it is
+  the primary text accent. The same token, opposite rules per theme; a token
+  name alone will not warn you.
+- **Tokens are named for their role, never their colour.** The first version
+  used `--dh-cheong`/`--dh-hwang`/`--dh-hong` and one palette change made every
+  name a lie. Now `--dh-primary` / `--dh-attention` / `--dh-danger`.
 - **Nothing hardcodes a colour, size, radius, or duration.** Everything reads
   a token. Tailwind consumes them via `@theme` so utilities and tokens cannot
   disagree.
 - **Every digit that can change in place is tabular** — headcount, meal
   counts, 축의금 later. This is 정직함·믿음직함 in typography: a number whose
   width shifts as it counts reads as unstable.
-- **불참 is neutral, never red.** A guest who cannot come is a fact, not an
-  error. Red belongs to destroying data only — and destructive actions always
-  carry a verb, never colour alone, because 홍 and error-red are neighbours.
+- **불참 is neutral, never red; 참석 is 초록** (초록원삼, the robe of a 반가
+  bride). A guest who cannot come is a fact, not an error. Red belongs to
+  destroying data only — and destructive actions always carry a verb and are
+  outlined not filled, because 자적 and 대홍 are both reds.
 - **Ledger rows are flush, hairline-separated — never cards.** Per-row cards
   cost ~8px of vertical rhythm each and break scanning at 400 rows. Radius is
   for things genuinely detached: chips, buttons, sheets.
@@ -122,10 +137,14 @@ Rules that bind everyday work:
   text gets 1.65 leading, not the Latin-typical 1.5. No italics — Korean has
   no italic tradition and synthesised obliques look broken.
 - **Pretendard** is the app face, for consistent Hangul/Latin metrics on the
-  lines where names and numerals sit together.
+  lines where names and numerals sit together. A Korean **serif for display**
+  (headcount, titles, brand mark only — never the list) is intended but **not
+  yet chosen**: `--dh-font-display` is an open slot that currently aliases the
+  sans. It stays that way until a candidate's figures are *measured* tabular —
+  if they are not, the serif takes titles only and the number stays gothic.
 - **Dark theme is defined, not shipped.** v1 is light only; the tokens carry
   both so it is never a retrofit.
-- Ten components cover v1 — the inventory is in the note.
+- Ten components plus four foundation cards cover v1 — inventory in the note.
 
 ## Security posture (decided 2026-07-30)
 

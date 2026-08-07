@@ -1,11 +1,16 @@
 /*
  * Donghaeng (동행) — design tokens
- * Decided 2026-08-07. Rationale: notes/2026-08-07-design-system.md
+ * Palette decided 2026-08-07 (revised same day).
+ * Rationale: notes/2026-08-07-design-system.md
  *
- * These are the substrate. Nothing in the app hardcodes a colour, a font size,
- * a radius, or a duration — everything reads a token from here. Changing a
- * token restyles the product; that is the point of the file existing before
- * the screens do.
+ * Light  = 백자 · 금박   — 유백색 ground, 먹 ink, 자적 primary, gold as metal.
+ * Dark   = 나전칠기      — 옻칠 ground, gold primary, 자개 highlights.
+ * They are one system's day and night, not two themes: 백자 and 나전칠기 are
+ * objects from the same house, so the vocabulary does not collide.
+ *
+ * Tokens are named for their ROLE, never their colour. The first version of
+ * this file used --dh-cheong / --dh-hwang / --dh-hong, and one palette change
+ * turned every one of those names into a lie. A role name survives a repalette.
  *
  * Drops into web/src/ as-is when the client is scaffolded. Tailwind reads it
  * via @theme (v4) so utilities and tokens never disagree.
@@ -14,17 +19,18 @@
 :root {
   /* ────────────────────────────────────────────────────────────
    * Type — Korean-first
-   * Pretendard is the app face. It carries Hangul and Latin on
-   * consistent metrics, which matters because every screen mixes
-   * 한글 names with Arabic numerals on the same line.
    * ──────────────────────────────────────────────────────────── */
   --dh-font-sans:
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", system-ui, "Malgun Gothic", sans-serif;
 
-  /* Scale. Body floor is 15px: Hangul packs more strokes into the em than
-   * Latin does, so 13–14px running text loses its counters on a phone.
-   * 13px exists for metadata fragments only, never for a sentence. */
+  /* Display face for the headcount and screen titles. The concrete Korean
+   * serif is NOT yet chosen — the slot exists so the decision has one place
+   * to land. Until it is chosen and its figures are verified tabular, the
+   * headcount stays on --dh-font-sans: the number's stability outranks its
+   * elegance. See the note's "Type" section. */
+  --dh-font-display: var(--dh-font-sans);
+
   --dh-text-display: 2.5rem;    /* 40px — the headcount, and nothing else      */
   --dh-text-title: 1.375rem;    /* 22px — screen title                         */
   --dh-text-lead: 1.0625rem;    /* 17px — guest name, primary row content      */
@@ -32,8 +38,8 @@
   --dh-text-meta: 0.8125rem;    /* 13px — metadata fragments only              */
   --dh-text-label: 0.75rem;     /* 12px — short labels, letterspaced           */
 
-  --dh-leading-tight: 1.2;      /* display numerals                            */
-  --dh-leading-snug: 1.45;      /* titles, row content                         */
+  --dh-leading-tight: 1.2;
+  --dh-leading-snug: 1.45;
   --dh-leading-body: 1.65;      /* Korean running text needs more than Latin   */
 
   --dh-weight-regular: 400;
@@ -48,44 +54,60 @@
    * Emphasis is weight and colour. Never font-style. */
 
   /* ────────────────────────────────────────────────────────────
-   * Colour — 청실홍실
-   * 靑 (groom's blue) is the primary. 紅 (bride's red) is destructive
-   * only, and appears almost nowhere. 黃 is the undecided state.
-   * Neutrals carry a faint blue bias toward 청 so they read as chosen.
+   * Colour — 백자 · 금박 (light)
+   *
+   * Ground is 유백색, the milky white of soft-paste Joseon porcelain.
+   * Korea's whites — 유백 · 설백 · 회백 · 청백 · 지백 — are all warm or
+   * faintly tinted; none of them is a cool SaaS grey. Premium here is
+   * carried by material, not by saturation: 백자 is prized for being
+   * *almost* white, not for being loud.
    * ──────────────────────────────────────────────────────────── */
-  --dh-ground: #f4f5f7;         /* page behind the surfaces                    */
-  --dh-surface: #ffffff;        /* rows, cards, sheets                         */
-  --dh-surface-sunken: #eceef2; /* input wells, empty states                   */
+  --dh-ground: #f2efe9;         /* 유백 — page behind the surfaces             */
+  --dh-surface: #fbfaf7;        /* rows, cards, sheets                         */
+  --dh-surface-sunken: #eae5db; /* input wells, empty states                   */
 
-  --dh-ink: #171a21;            /* 16.9:1 on surface                           */
-  --dh-ink-muted: #5a6172;      /*  5.9:1 on surface — AA for 15px body        */
-  --dh-ink-faint: #858c9c;      /*  3.4:1 — disabled and decorative only,      */
-                                /*          never load-bearing text            */
-  --dh-ink-on-accent: #ffffff;
+  --dh-ink: #241f1a;            /* 먹 — 15.4:1 on surface                      */
+  --dh-ink-muted: #6b6157;      /*  5.8:1 on surface — AA for 15px body        */
+  --dh-ink-faint: #9a9086;      /*  3.2:1 — disabled and decorative only       */
+  --dh-ink-on-accent: #fbfaf7;
 
-  --dh-line: #e3e5eb;           /* hairline between ledger rows                */
-  --dh-line-strong: #cdd1da;    /* input borders, table header rule            */
+  --dh-line: #e2dbcd;           /* hairline between ledger rows                */
+  --dh-line-strong: #cfc5b2;    /* input borders, table header rule            */
 
-  --dh-cheong: #24406b;         /*  9.9:1 on surface — primary                 */
-  --dh-cheong-hover: #1b3154;
-  --dh-cheong-soft: #e8edf6;    /* selected row, soft chip fill                */
+  --dh-primary: #73304e;        /* 자적 — 8.9:1. The 비빈 rank colour.          */
+  --dh-primary-hover: #5a2440;
+  --dh-primary-soft: #f0e4ea;
 
-  --dh-hwang: #7a5510;          /*  6.5:1 — 미정 / attention                    */
-  --dh-hwang-soft: #fbf0da;
+  /* 금박. Gold was the one constant across every rank of Joseon court dress —
+   * 금사 on the king's 대홍 곤룡포, 금박 on the bride's 활옷. It is what
+   * actually signals "귀함" in this tradition, and the first palette had none.
+   * In LIGHT it is 3.3:1 and therefore NEVER carries text — hairlines, the
+   * guarantee meter, and the brand mark only. (In dark it inverts; see below.) */
+  --dh-gold: #a8863f;
+  --dh-gold-soft: #f2e9d4;
 
-  --dh-hong: #a3283c;           /*  8.0:1 — destructive only                   */
-  --dh-hong-soft: #fae8eb;
+  --dh-attention: #7d5f21;      /* 치자 — 미정 / attention. 5.1:1 on its fill. */
+  --dh-attention-soft: #f6ecd6;
 
-  --dh-focus: #3a63a0;          /* focus ring, distinct from every fill        */
+  --dh-danger: #a62e2e;         /* 대홍 — destructive only. 6.6:1.             */
+  --dh-danger-soft: #f7e6e3;
+
+  --dh-focus: #8d3d61;          /* distinct from every fill                    */
 
   /* Attendance — the app's most-used colour.
+   *
+   * 참석 is 초록, the green of 초록원삼 — the ceremonial robe of a 공주 or a
+   * 반가 bride, which is exactly who this product serves.
+   *
    * 불참 is NEUTRAL, never red. A guest who cannot come is a fact, not an
    * error, and a red row would make the couple read their own wedding as a
-   * list of failures. Red is reserved for destroying data. */
-  --dh-att-yes-fg: var(--dh-cheong);
-  --dh-att-yes-bg: var(--dh-cheong-soft);
-  --dh-att-maybe-fg: var(--dh-hwang);
-  --dh-att-maybe-bg: var(--dh-hwang-soft);
+   * list of failures. This survived the repalette unchanged: the earlier
+   * objection was to red-for-불참, never to green-for-참석, so adopting the
+   * traditional green costs nothing. Red is reserved for destroying data. */
+  --dh-att-yes-fg: #38614f;
+  --dh-att-yes-bg: #e4ece7;
+  --dh-att-maybe-fg: var(--dh-attention);
+  --dh-att-maybe-bg: var(--dh-attention-soft);
   --dh-att-no-fg: var(--dh-ink-muted);
   --dh-att-no-bg: var(--dh-surface-sunken);
 
@@ -105,8 +127,7 @@
   /* ────────────────────────────────────────────────────────────
    * Density
    * The ledger is 200–800 rows scanned on a phone. Row height is a
-   * product decision, not a styling one: too tall and the couple
-   * scrolls instead of scanning, too short and the tap misses.
+   * product decision, not a styling one.
    * ──────────────────────────────────────────────────────────── */
   --dh-row-h-mobile: 3.75rem;   /* 60px — name line + meta line                */
   --dh-row-h-desktop: 2.75rem;  /* 44px — single-line table row                */
@@ -117,61 +138,73 @@
   /* ────────────────────────────────────────────────────────────
    * Radius
    * Ledger rows are FLUSH — edge to edge, separated by hairlines.
-   * Rounding each row into a card costs ~8px of vertical rhythm per
-   * row and turns a scannable column into a stack of objects.
    * Radius belongs only to things that are genuinely detached.
    * ──────────────────────────────────────────────────────────── */
-  --dh-radius-flush: 0;         /* rows, table cells                           */
-  --dh-radius-control: 0.5rem;  /* buttons, inputs                             */
-  --dh-radius-chip: 999px;      /* attendance chips, group tags                */
-  --dh-radius-sheet: 1rem;      /* bottom sheets, dialogs                      */
+  --dh-radius-flush: 0;
+  --dh-radius-control: 0.5rem;
+  --dh-radius-chip: 999px;
+  --dh-radius-sheet: 1rem;
 
-  /* ────────────────────────────────────────────────────────────
-   * Elevation — one shadow, for overlays only.
-   * Instruments do not float.
-   * ──────────────────────────────────────────────────────────── */
-  --dh-shadow-overlay: 0 8px 32px -8px rgb(16 18 24 / 0.28);
+  /* One shadow, for overlays only. Instruments do not float. */
+  --dh-shadow-overlay: 0 8px 32px -8px rgb(36 31 26 / 0.24);
 
   /* ────────────────────────────────────────────────────────────
    * Motion
-   * --dh-dur-count is the headcount settling after a tap. It is
-   * deliberately slower than the chip: the couple must see WHICH
-   * number moved, or the screen stops being trustworthy.
+   * --dh-dur-count is the headcount settling after a tap, deliberately
+   * slower than the chip so the couple can see WHICH number moved.
    * ──────────────────────────────────────────────────────────── */
   --dh-dur-fast: 120ms;
   --dh-dur-count: 260ms;
   --dh-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
-/* Dark theme is defined, not shipped. v1 ships light only (깔끔하되 —
- * cut scope, not quality). Structuring the tokens for it now costs
- * nothing; retrofitting it later costs every component. */
+/* ══════════════════════════════════════════════════════════════
+ * Dark — 나전칠기
+ *
+ * 옻칠 ground with the iridescence of 자개 over it. Gold becomes the
+ * PRIMARY here rather than an ornament, and — the asymmetry worth
+ * knowing — gold is text-legible on lacquer (7.8:1) while it is not on
+ * porcelain (3.3:1). So the same hue carries opposite rules per theme:
+ * in light it may never be text; in dark it is the primary text accent.
+ *
+ * Defined and shippable, but v1 still launches light-only.
+ * ══════════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
-  --dh-ground: #12141a;
-  --dh-surface: #1b1e26;
-  --dh-surface-sunken: #23262f;
+  --dh-ground: #14100e;         /* 옻칠                                        */
+  --dh-surface: #1e1916;
+  --dh-surface-sunken: #2a231f;
 
-  --dh-ink: #edeef2;
-  --dh-ink-muted: #a2a9b8;
-  --dh-ink-faint: #6e7686;
-  --dh-ink-on-accent: #12141a;
+  --dh-ink: #ede7dd;            /* 14.3:1 on surface                           */
+  --dh-ink-muted: #a89c8e;      /*  6.5:1                                      */
+  --dh-ink-faint: #786d61;
+  --dh-ink-on-accent: #14100e;
 
-  --dh-line: #2c3039;
-  --dh-line-strong: #3a3f4b;
+  --dh-line: #2f2823;
+  --dh-line-strong: #443a33;
 
-  --dh-cheong: #8caee0;
-  --dh-cheong-hover: #a8c4ea;
-  --dh-cheong-soft: #1e2c44;
+  --dh-primary: #c9a961;        /* 금박 — 7.8:1, text-safe on lacquer          */
+  --dh-primary-hover: #d9bd7e;
+  --dh-primary-soft: #332a18;
 
-  --dh-hwang: #e0b563;
-  --dh-hwang-soft: #33291a;
+  --dh-gold: #c9a961;
+  --dh-gold-soft: #332a18;
 
-  --dh-hong: #e88a98;
-  --dh-hong-soft: #38222a;
+  --dh-attention: #d6b357;
+  --dh-attention-soft: #332a18;
 
-  --dh-focus: #8caee0;
+  --dh-danger: #d9707a;         /* 5.5:1                                       */
+  --dh-danger-soft: #38222a;
 
-  --dh-shadow-overlay: 0 8px 32px -8px rgb(0 0 0 / 0.6);
+  --dh-focus: #d9bd7e;
+
+  --dh-att-yes-fg: #7fbba6;     /* 비색 — 6.3:1 on its fill                    */
+  --dh-att-yes-bg: #1c2f2a;
+  --dh-att-maybe-fg: var(--dh-attention);
+  --dh-att-maybe-bg: var(--dh-attention-soft);
+  --dh-att-no-fg: var(--dh-ink-muted);
+  --dh-att-no-bg: var(--dh-surface-sunken);
+
+  --dh-shadow-overlay: 0 8px 32px -8px rgb(0 0 0 / 0.7);
 }
 
 /* ────────────────────────────────────────────────────────────

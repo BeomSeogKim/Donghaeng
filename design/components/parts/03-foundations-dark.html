@@ -1,0 +1,104 @@
+<!-- @dsCard group="Foundations" name="다크 — 나전칠기" subtitle="옻칠 바탕 · 금이 주색 · 자개의 빛" width="760" height="640" theme="dark" -->
+<style>
+.ramp { display: flex; border: 1px solid var(--dh-line); }
+.ramp div { flex: 1; height: 3rem; }
+.ramp-keys { display: flex; margin-top: 4px; font-size: 11px; color: var(--dh-ink-faint); }
+.ramp-keys span { flex: 1; }
+
+.led { background: var(--dh-surface); border: 1px solid var(--dh-line); max-width: 22rem; }
+.led-top { padding: var(--dh-space-3) var(--dh-space-3) var(--dh-space-3); border-bottom: 1px solid var(--dh-line); }
+.led-eyebrow { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
+.led-line { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.led-n { font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold); letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight); color: var(--dh-primary); font-variant-numeric: tabular-nums; }
+.led-unit { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); color: var(--dh-ink-muted); }
+.led-sub { display: flex; flex-wrap: wrap; gap: 0 var(--dh-space-3); margin-top: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
+.led-sub b { color: var(--dh-ink); font-weight: var(--dh-weight-semibold); font-variant-numeric: tabular-nums; }
+.led-meter { margin-top: var(--dh-space-2); height: 3px; background: var(--dh-surface-sunken); }
+.led-meter i { display: block; height: 100%; width: 98%; background: var(--dh-gold); }
+.led-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--dh-space-2); min-height: var(--dh-row-h-mobile); padding: var(--dh-space-2) var(--dh-space-3); border-bottom: 1px solid var(--dh-line); }
+.led-row:last-child { border-bottom: 0; }
+.led-name { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); }
+.led-meta { display: flex; gap: 6px; align-items: center; font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
+.tag { padding: 1px 7px; border-radius: var(--dh-radius-chip); background: var(--dh-surface-sunken); color: var(--dh-ink-muted); }
+.tag.side { background: transparent; border: 1px solid var(--dh-line-strong); }
+.att { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-width: 3.2rem; min-height: 2rem; padding: 0 var(--dh-space-2); border-radius: var(--dh-radius-chip); border: 1px solid transparent; }
+.att[data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
+.att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
+.att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
+
+.btnrow { display: flex; gap: var(--dh-space-2); margin-top: var(--dh-space-3); }
+.b { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); border: 1px solid transparent; border-radius: var(--dh-radius-control); }
+.b.pri { background: var(--dh-primary); color: var(--dh-ink-on-accent); }
+.b.des { background: transparent; color: var(--dh-danger); border-color: var(--dh-danger); }
+</style>
+
+<div class="pv-grid">
+  <div class="pv-set">
+    <div class="pv-label">같은 원장, 밤</div>
+    <div class="led">
+      <div class="led-top">
+        <div class="led-eyebrow">2026년 11월 8일 · 예상 인원</div>
+        <div class="led-line"><span class="led-n">245</span><span class="led-unit">명</span></div>
+        <div class="led-sub"><span>확정 <b>181</b></span><span>미정 <b>64</b></span><span>보증 <b>250</b></span></div>
+        <div class="led-meter"><i></i></div>
+      </div>
+      <div class="led-row">
+        <div>
+          <div class="led-name">김영수</div>
+          <div class="led-meta"><span class="tag side">신랑</span><span class="tag">혼주 손님</span></div>
+        </div>
+        <span class="att" data-s="yes">참석</span>
+      </div>
+      <div class="led-row">
+        <div>
+          <div class="led-name">박지민</div>
+          <div class="led-meta"><span class="tag side">신부</span><span class="tag">직장동료</span></div>
+        </div>
+        <span class="att" data-s="maybe">미정</span>
+      </div>
+      <div class="led-row">
+        <div>
+          <div class="led-name">윤채원</div>
+          <div class="led-meta"><span class="tag side">신부</span><span class="tag">친척</span></div>
+        </div>
+        <span class="att" data-s="no">불참</span>
+      </div>
+    </div>
+    <div class="btnrow">
+      <span class="b pri">저장</span>
+      <span class="b des">하객 삭제</span>
+    </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">중성색 — 옻칠에서 자개까지</div>
+    <div class="ramp">
+      <div style="background:var(--dh-ground)"></div>
+      <div style="background:var(--dh-surface)"></div>
+      <div style="background:var(--dh-surface-sunken)"></div>
+      <div style="background:var(--dh-line-strong)"></div>
+      <div style="background:var(--dh-ink-faint)"></div>
+      <div style="background:var(--dh-ink-muted)"></div>
+      <div style="background:var(--dh-ink)"></div>
+    </div>
+    <div class="ramp-keys">
+      <span>ground</span><span>surface</span><span>sunken</span>
+      <span>line-strong</span><span>faint</span><span>muted</span><span>ink</span>
+    </div>
+  </div>
+
+  <div class="pv-note">
+    <b>여기서는 금이 주색입니다.</b> 옻칠 위에서 금은 7.8:1이라 본문 강조로 써도 됩니다 —
+    유백색 위에서 3.3:1이라 글자에 못 쓰던 것과 정반대입니다.
+    <b>같은 색이 테마에 따라 반대 규칙을 갖는 유일한 경우</b>이므로, 금을 쓸 때는 반드시 테마를 확인해야 합니다.
+  </div>
+  <div class="pv-note">
+    <b>백자와 나전칠기는 같은 집 안의 물건입니다.</b> 그래서 두 테마가 서로 다른 언어를 쓰지 않습니다 —
+    두 개의 디자인이 아니라 한 시스템의 낮과 밤입니다.
+  </div>
+  <div class="pv-note warn">
+    <b>정의는 끝났지만 v1은 라이트만 출시합니다.</b> 낮에 야외에서 수백 행을 훑는 제품이라
+    어두운 바탕이 기본값이 되는 건 위험합니다. 지금 토큰을 양쪽으로 짜두는 건 공짜지만,
+    나중에 끼워 넣으면 모든 컴포넌트를 건드려야 합니다.
+  </div>
+</div>

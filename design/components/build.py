@@ -97,7 +97,7 @@ body {{
   max-width: 34rem;
 }}
 .pv-note b {{ color: var(--dh-ink); font-weight: var(--dh-weight-semibold); }}
-.pv-note.warn {{ border-left-color: var(--dh-hong); }}
+.pv-note.warn {{ border-left-color: var(--dh-danger); }}
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {{
   outline: 2px solid var(--dh-focus);
   outline-offset: 2px;

@@ -9,18 +9,18 @@
   border-radius: var(--dh-radius-control);
   box-shadow: var(--dh-shadow-overlay);
 }
-.toast .bar { width: 3px; align-self: stretch; border-radius: 999px; background: var(--dh-cheong); flex: none; }
-.toast.warn .bar { background: var(--dh-hwang); }
-.toast.fail .bar { background: var(--dh-hong); }
+.toast .bar { width: 3px; align-self: stretch; border-radius: 999px; background: var(--dh-primary); flex: none; }
+.toast.warn .bar { background: var(--dh-attention); }
+.toast.fail .bar { background: var(--dh-danger); }
 .toast .txt { flex: 1; min-width: 0; }
 .toast b { display: block; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); line-height: var(--dh-leading-snug); }
 .toast p { margin: 2px 0 0; font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: 1.5; }
 .toast .act {
   font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
-  background: transparent; border: 0; color: var(--dh-cheong); cursor: pointer;
+  background: transparent; border: 0; color: var(--dh-primary); cursor: pointer;
   padding: 2px 0; align-self: center; flex: none;
 }
-.toast.fail .act { color: var(--dh-hong); }
+.toast.fail .act { color: var(--dh-danger); }
 </style>
 
 <div class="pv-grid">

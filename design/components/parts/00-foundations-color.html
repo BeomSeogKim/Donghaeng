@@ -1,4 +1,4 @@
-<!-- @dsCard group="Foundations" name="색 — 청실홍실" subtitle="주색 3 + 중성 램프 · 대비비 표기" width="760" height="640" -->
+<!-- @dsCard group="Foundations" name="색 — 백자 · 금박" subtitle="유백색 바탕, 자적 주색, 금은 금속으로 · 다크는 나전칠기" width="760" height="720" -->
 <style>
 .sw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--dh-space-4); }
 .sw { border: 1px solid var(--dh-line); background: var(--dh-surface); }
@@ -13,59 +13,93 @@
 .ramp div { flex: 1; height: 3rem; }
 .ramp-keys { display: flex; margin-top: 4px; font-size: 11px; color: var(--dh-ink-faint); }
 .ramp-keys span { flex: 1; }
+
+.rank { display: flex; flex-wrap: wrap; gap: var(--dh-space-2); }
+.rank div { flex: 1 1 8rem; border: 1px solid var(--dh-line); }
+.rank .c { height: 2.5rem; }
+.rank .l { padding: 6px 8px; font-size: var(--dh-text-meta); line-height: 1.4; }
+.rank .l b { display: block; font-weight: var(--dh-weight-semibold); }
+.rank .l span { color: var(--dh-ink-faint); font-size: 11px; }
+.rank .mine { outline: 2px solid var(--dh-primary); outline-offset: -1px; }
 </style>
 
 <div class="pv-grid">
   <div class="pv-set">
-    <div class="pv-label">주요 색</div>
+    <div class="pv-label">출처 — 원삼의 색은 신분 그 자체였다</div>
+    <div class="rank">
+      <div><div class="c" style="background:#d8b23f"></div><div class="l"><b>황원삼</b><span>황후</span></div></div>
+      <div><div class="c" style="background:#9e2b2b"></div><div class="l"><b>홍원삼</b><span>왕비</span></div></div>
+      <div class="mine"><div class="c" style="background:#73304e"></div><div class="l"><b>자적원삼</b><span>비빈 · 우리 주색</span></div></div>
+      <div><div class="c" style="background:#46704f"></div><div class="l"><b>초록원삼</b><span>공주 · 반가부녀</span></div></div>
+    </div>
+    <p class="pv-note">조선 왕실 복식에서 색은 장식이 아니라 <b>등급 표기</b>였습니다. 신부 예복인 활옷은
+      대홍색 바탕이었고 왕의 곤룡포도 대홍색이었습니다. 우리는 그 어휘를 빌리되 자적을 씁니다 —
+      대홍은 이 제품에서 <b>데이터를 지우는 동작</b>에 남겨둬야 하기 때문입니다.</p>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">역할 색 — 이름은 색이 아니라 역할이다</div>
     <div class="sw-grid">
       <div class="sw">
-        <div class="sw-chip" style="background:var(--dh-cheong)"><b>靑</b></div>
+        <div class="sw-chip" style="background:var(--dh-primary)"><b>자적</b></div>
         <div class="sw-body">
-          <strong>청 — 주색</strong>
-          <span>인원수, 주요 액션, 참석 상태</span>
-          <code>--dh-cheong · #24406b · 9.9:1</code>
+          <strong>primary</strong>
+          <span>인원수, 주요 액션, 선택된 행</span>
+          <code>--dh-primary · 8.9:1</code>
         </div>
       </div>
       <div class="sw">
-        <div class="sw-chip" style="background:var(--dh-hwang)"><b>黃</b></div>
+        <div class="sw-chip" style="background:var(--dh-att-yes-fg)"><b>초록</b></div>
         <div class="sw-body">
-          <strong>황 — 미정 · 주의</strong>
-          <span>아직 답이 오지 않은 것</span>
-          <code>--dh-hwang · #7a5510 · 6.5:1</code>
+          <strong>참석</strong>
+          <span>초록원삼의 초록</span>
+          <code>--dh-att-yes-fg · 5.8:1</code>
         </div>
       </div>
       <div class="sw">
-        <div class="sw-chip" style="background:var(--dh-hong)"><b>紅</b></div>
+        <div class="sw-chip" style="background:var(--dh-attention)"><b>치자</b></div>
         <div class="sw-body">
-          <strong>홍 — 파괴적 동작 전용</strong>
-          <span>v1에서는 하객 삭제 하나뿐</span>
-          <code>--dh-hong · #a3283c · 8.0:1</code>
+          <strong>attention</strong>
+          <span>미정 — 아직 답이 오지 않은 것</span>
+          <code>--dh-attention · 5.1:1</code>
+        </div>
+      </div>
+      <div class="sw">
+        <div class="sw-chip" style="background:var(--dh-danger)"><b>대홍</b></div>
+        <div class="sw-body">
+          <strong>danger</strong>
+          <span>파괴적 동작 전용 · v1은 하객 삭제뿐</span>
+          <code>--dh-danger · 6.6:1</code>
         </div>
       </div>
     </div>
+    <p class="pv-note"><b>토큰 이름은 역할입니다.</b> 첫 판에서는 <code>--dh-cheong</code>처럼 색 이름을 썼는데,
+      팔레트를 한 번 바꾸자 그 이름들이 전부 거짓말이 됐습니다. 역할 이름은 다시 칠해도 살아남습니다.</p>
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">연한 채움 — 칩과 선택된 행</div>
-    <div class="pv-row">
-      <div class="sw" style="flex:1;min-width:9rem">
-        <div class="sw-chip" style="background:var(--dh-cheong-soft)"><b style="color:var(--dh-cheong)">참석</b></div>
-        <div class="sw-body"><code>--dh-cheong-soft</code></div>
-      </div>
-      <div class="sw" style="flex:1;min-width:9rem">
-        <div class="sw-chip" style="background:var(--dh-hwang-soft)"><b style="color:var(--dh-hwang)">미정</b></div>
-        <div class="sw-body"><code>--dh-hwang-soft</code></div>
-      </div>
-      <div class="sw" style="flex:1;min-width:9rem">
-        <div class="sw-chip" style="background:var(--dh-hong-soft)"><b style="color:var(--dh-hong)">삭제</b></div>
-        <div class="sw-body"><code>--dh-hong-soft</code></div>
+    <div class="pv-label">금박 — 등급을 가리지 않던 유일한 상수</div>
+    <div class="sw-grid">
+      <div class="sw">
+        <div class="sw-chip" style="background:var(--dh-gold)"><b>금</b></div>
+        <div class="sw-body">
+          <strong>gold</strong>
+          <span>실선 · 계기 막대 · 브랜드 표식</span>
+          <code>--dh-gold · 라이트 3.3:1</code>
+        </div>
       </div>
     </div>
+    <p class="pv-note warn"><b>라이트에서 금은 절대 글자에 쓰지 않습니다.</b> 유백색 위에서 3.3:1이라 본문
+      대비에 미달합니다. 그런데 <b>다크에서는 뒤집힙니다</b> — 옻칠 위에서는 7.8:1이라 그때는 금이
+      주색이자 본문 강조색이 됩니다. 같은 색이 테마에 따라 정반대 규칙을 갖는 유일한 경우이고,
+      토큰만 보고 쓰면 틀리는 지점입니다.</p>
+    <p class="pv-note">대홍 곤룡포에도 황룡포에도 금사로 수를 놓았고, 활옷과 스란치마에는 금박이 있었습니다.
+      색은 신분마다 달랐지만 금은 언제나 귀함의 표시였습니다 — 한국 전통에서 고급스러움을 지는 건
+      채도 높은 색이 아니라 <b>금속의 존재감</b>입니다.</p>
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">중성색 — 청 쪽으로 몇 도 당긴 회색</div>
+    <div class="pv-label">중성색 — 유백색에서 먹까지</div>
     <div class="ramp">
       <div style="background:var(--dh-ground)"></div>
       <div style="background:var(--dh-surface-sunken)"></div>
@@ -79,11 +113,16 @@
       <span>ground</span><span>sunken</span><span>line</span>
       <span>line-strong</span><span>faint</span><span>muted</span><span>ink</span>
     </div>
+    <p class="pv-note">바탕은 <b>유백색</b>, 연질백자의 젖빛 흰색입니다. 한국의 흰색은 하나가 아니라
+      유백 · 설백 · 회백 · 청백 · 지백의 계보이고 <b>전부 따뜻하거나 미묘하게 색을 머금었습니다</b>.
+      차가운 SaaS 회색은 이 계보 어디에도 없습니다. 백자가 귀한 이유는 화려해서가 아니라
+      <em>거의</em> 희어서인데, 이 제품의 바탕이 해야 할 일이 정확히 그것입니다 —
+      수백 행을 몇 달 동안 훑어도 지치지 않는 것.</p>
   </div>
 
-  <div class="pv-note warn">
-    <b>홍은 아껴 쓴다.</b> 홍과 통상적인 오류 빨강은 색상환에서 이웃입니다. 그래서 파괴적 동작은
-    <b>항상 동사를 달고, 색에만 기대지 않습니다</b> — "삭제"라고 쓰여 있지 않으면 삭제 버튼이 아닙니다.
-    접근성 규칙이면서, 이 팔레트가 성립하는 조건이기도 합니다.
+  <div class="pv-note">
+    <b>다크 테마는 나전칠기입니다.</b> 옻칠 바탕에 자개의 빛, 금이 주색. 백자와 나전칠기는
+    같은 집 안의 물건이라 두 테마가 서로 다른 언어를 쓰지 않습니다. 정의는 끝났지만
+    <b>v1은 라이트만 출시합니다.</b>
   </div>
 </div>
