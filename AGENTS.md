@@ -5,52 +5,39 @@ ledger (하객·좌석·축의금). See README.md for the product pitch.
 
 ## Pick up here (last session: 2026-08-07)
 
-The **design system foundations are built** — tokens in
-[`design/tokens.css`](design/tokens.css), reasoning in
-`notes/2026-08-07-design-system.md`. It was built ahead of screen design at
-the founder's call, and the reasoning holds: a design system coordinates
-across *time*, not only across people, and this project has one person but
-many sessions.
+**Design is done.** Screen and flow design (③) — the last blocker — is
+complete: `notes/2026-08-07-design-screens-and-flow.md`. The import knot that
+had blocked it dissolved the same day
+(`notes/2026-08-07-decision-import-idempotency.md`), and the design system is
+built (`notes/2026-08-07-design-system.md`).
 
-Design work resumes at **screen and flow design (③)** — now the only thing
-between the model and building. Two fixed points are decided: **the ledger and
-the headcount are one screen**, and **import is idempotent**
-(`notes/2026-08-07-decision-import-idempotency.md`).
+**The next step is scaffolding `web/` and `api/` — do not start it without
+the user.**
 
-The import-conflict knot that had been blocking ③ is **resolved, by turning
-out to be the wrong question.** The founder's worry was never overlap between
-the parents' files — it was **the same Excel being imported twice**, which is
-idempotency, not ambiguity. And the parents' sheet lists attendees, so it
-never states attendance and import never touches it. Of forty apparent
-conflicts, thirty-eight were never conflicts.
+Three calls of mine from the flow design are **unconfirmed**, and the first
+one widens v1:
 
-The 관계 mapping that was next is decided too: the seven categories ship as a
-**dropdown in the template**, and whatever leaks past it is mapped **by
-distinct value, not by row**. Screen design now has no known blocker — it just
-has to be done.
+1. **Search on the ledger.** Filters (side + attendance) narrow a list; they
+   do not find a person. The real trigger is "김영수 못 온대" and that needs
+   two syllables, not a 400-row scroll. Probably the second most-used control
+   after the attendance chip.
+2. **보증인원 is not asked at onboarding** — couples sign up before booking a
+   venue. The ledger works fully without it; only the comparison waits.
+3. **Meal types are not asked at onboarding** — this also answers the question
+   parked on 2026-08-06. A couple first meets meal types when a guest needs
+   유아식, and adding one belongs in the detail sheet at that moment.
 
-Four questions are open and were parked deliberately:
-
-1. **Does 유아식 count toward the venue's 보증인원?** Likely venue-dependent.
-   If it is, `MealType` needs a `counts_toward_guarantee` flag and the screen
-   shows two numbers ("총 식사 45개 / 보증인원 기준 42명"). Needs the founder
-   to check a real contract.
-2. **When does the couple configure meal types** — onboarding, or on demand?
-3. **Retention policy for `GuestChange`.** It holds old values of personal
-   data (phone numbers), which sits badly beside deleting raw vendor email
-   after a bounded window.
-4. **Five proposals of mine still unconfirmed** — 배려사항 as free text;
-   meal types defaulting to a single type; a type in use being undeletable;
-   the import conflict screen being a list rather than a modal per row; and
-   "not sure" importing as a separate guest rather than blocking. All five
-   are cheap and most will settle naturally during ③.
+Also still open, all small: where the import file hash lives, the initial
+contents of the 관계 synonym table, `GuestChange` retention, and whether
+유아식 counts toward 보증인원 (needs a real venue contract).
 
 Working style for this project: **talk design through, don't hand over option
-menus.** The founder is the domain owner, and every large decision on
-2026-08-06 came from a domain fact that could not be derived from these notes
-— 보증인원 is the venue's number, attendance arrives via parents and KakaoTalk,
-the guest list is collected from parents. State a read, ask one open question,
-converge. Reserve multiple-choice for operational forks.
+menus.** The founder is the domain owner, and the biggest corrections have all
+come from domain facts that could not be derived from these notes — 보증인원 is
+the venue's number, attendance arrives via parents and KakaoTalk, the real
+import risk is re-uploading the same file, the parents' sheet lists attendees
+and so never states attendance. State a read, ask one open question, converge.
+Reserve multiple-choice for operational forks.
 
 ## Status
 
@@ -68,13 +55,14 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-06-decision-drop-response-model.md`,
 `2026-08-06-review-scale-and-extensibility.md`,
 `2026-08-07-design-system.md`,
-`2026-08-07-decision-import-idempotency.md`). Read them newest-first: the
+`2026-08-07-decision-import-idempotency.md`,
+`2026-08-07-design-screens-and-flow.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
-There is no application code yet — `design/tokens.css` is substrate, not
-implementation. **Screen/flow design is the one remaining blocker**, and
-success criteria are deliberately deferred until after the MVP is built.
-Do not start implementation without the user.
+There is no application code yet — `design/` is substrate, not
+implementation. **Design has no remaining blocker**: the next step is
+scaffolding `web/` and `api/`. Success criteria are deliberately deferred
+until after the MVP is built. Do not start implementation without the user.
 
 ## Stack (decided 2026-07-30)
 
@@ -86,6 +74,12 @@ Separated frontend and backend, per `notes/2026-07-30-decision-tech-stack.md`:
   bundle** (the couple app); the separate guest RSVP bundle arrives with the
   RSVP links. The rule holds whenever they land: a guest must never download
   the couple app's code.
+- **Web and mobile are two layouts, one codebase** (reaffirmed 2026-08-07).
+  Shared: one route, one data layer, one token set. Split: the layout and
+  `GuestRow`. Hold that line — the moment the same number is computed twice,
+  the two versions can disagree about it. **PC earns its existence through the
+  aggregation rail** (group and meal breakdowns) and the contact column, not
+  through being wider; without them it is a wide phone screen.
 - Auth: **네이버 · 카카오 · 구글** OAuth for the couple (widened 2026-08-06),
   server-side session behind an HttpOnly cookie. Guests are never
   authenticated.
