@@ -12,7 +12,9 @@ had blocked it dissolved the same day
 built (`notes/2026-08-07-design-system.md`).
 
 **The next step is scaffolding `web/` and `api/` — do not start it without
-the user.**
+the user.** The four working agents are already in place (see **Agents**
+below), so the scaffolding is what they have been waiting on, not the other
+way round.
 
 All three calls from the flow design were **confirmed on 2026-08-07**:
 
@@ -310,6 +312,40 @@ rather than inspecting the archive.
 Brand name: 동행 (Donghaeng) — "walking together," chosen to express the
 service acting as a steady companion through the couple's wedding journey.
 Repo/folder slug: `donghaeng`.
+
+## Agents (set up 2026-08-07)
+
+Four subagents in `.claude/agents/`, split by role:
+
+- **`backend-implementor`** — all `api/` code. Sole owner of
+  `docs/api-spec.md`.
+- **`frontend-implementor`** — all `web/` code. Reads the spec, never `api/`
+  source.
+- **`reviewer`** — correctness, the domain question, convention and the
+  refactoring gate. Read-only.
+- **`security-manager`** — audits against
+  `notes/2026-07-30-decision-network-security.md`. Read-only.
+
+Four things bind:
+
+- **Delegation is automatic in this repo.** Route implementation work to the
+  implementors and review work to the reviewers without being asked; explicit
+  invocation also works. This overrides any general default about not spawning
+  agents unprompted.
+- **The API contract is a shared asset, not a backend artifact.**
+  `docs/api-spec.md` is written by the backend **in the same change as the
+  code** — new, changed, and deprecated alike, never as a follow-up — and the
+  frontend builds against it without reading `api/`. When the spec is silent
+  or wrong the frontend stops rather than guessing, and never computes a
+  number client-side to route around it.
+- **The reviewers cannot write.** No `Edit`, no `Write` — that is what makes
+  their verdict worth reading. They report; the implementors fix.
+- **This file and `notes/` stay the single source of truth.** An agent prompt
+  carries a short operative checklist of the rules its own area actually
+  breaks — an auto-delegated agent gets one shot, so the reminder earns its
+  place — but the prompt is never where a rule is decided. Every agent reads
+  this file first, and when a rule changes here, sweep `.claude/agents/` in
+  the same change.
 
 ## Rules
 
