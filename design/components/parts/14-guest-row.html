@@ -36,6 +36,10 @@
 .att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
 .att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
 .att-sm { min-height: 1.75rem; min-width: 3rem; font-size: var(--dh-text-meta); }
+.tools { display: flex; gap: var(--dh-space-2); align-items: center; padding: var(--dh-space-2) var(--dh-gutter-mobile); border-bottom: 1px solid var(--dh-line); }
+.tools .s { flex: 1; min-width: 0; display: flex; align-items: center; min-height: 2rem; padding: 0 var(--dh-space-2); border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-chip); font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
+.tools .f { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-height: 2rem; padding: 0 var(--dh-space-2); border-radius: var(--dh-radius-chip); background: var(--dh-surface-sunken); color: var(--dh-ink-muted); border: 0; white-space: nowrap; }
+.tools .f[aria-pressed="true"] { background: var(--dh-primary); color: var(--dh-ink-on-accent); }
 </style>
 
 <div class="pv-grid">
@@ -43,6 +47,11 @@
     <div class="pv-set">
       <div class="pv-label">모바일 — 60px · 이름 줄 + 메타 줄</div>
       <div class="gr-m">
+        <div class="tools">
+          <span class="s">이름 검색</span>
+          <button class="f" type="button" aria-pressed="true">신부</button>
+          <button class="f" type="button" aria-pressed="false">미정</button>
+        </div>
         <div class="row">
           <div>
             <div class="gr-name">김영수</div>
@@ -96,6 +105,11 @@
     <b>구조가 갈리는 유일한 컴포넌트입니다.</b> 2026-07-30에 정한 대로, 화면을 축소해서 맞추는 게 아니라
     PC는 표·모바일은 카드 목록으로 <b>구조 자체를 나눕니다</b>. 다만 라우트와 데이터 계층은 하나로 공유합니다 —
     잎이 둘일 뿐 앱이 둘은 아닙니다.
+  </div>
+  <div class="pv-note">
+    <b>목록 위 순서는 숫자 → 도구 → 목록입니다.</b> 부부의 실제 순서고요 —
+    숫자를 보고, 사람을 찾고, 탭합니다. 검색이 필터보다 넓은 자리를 차지하는 건
+    <b>찾는 일이 좁히는 일보다 자주</b> 일어나기 때문입니다.
   </div>
   <div class="pv-note">
     <b>800행에서는 가상 스크롤이 필요합니다.</b> 대형 호텔 예식이면 하객이 800명까지 갑니다.

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Components" name="02 Field" subtitle="텍스트 · 숫자 · 선택 — 레이블, 힌트, 오류" width="720" height="620" -->
+<!-- @dsCard group="Components" name="02 Field" subtitle="텍스트 · 숫자 · 선택 · 검색 — 레이블, 힌트, 오류" width="720" height="700" -->
 <style>
 .fld { display: flex; flex-direction: column; gap: 6px; max-width: 22rem; }
 .fld > label { font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); color: var(--dh-ink); }
@@ -22,6 +22,17 @@
 .fld.invalid input { border-color: var(--dh-danger); }
 .fld input.num { font-variant-numeric: tabular-nums; }
 .fld-2 { display: flex; gap: var(--dh-space-3); flex-wrap: wrap; }
+.search { display: flex; align-items: center; gap: var(--dh-space-2); max-width: 22rem;
+  min-height: var(--dh-tap-min); padding: 0 var(--dh-space-3);
+  background: var(--dh-surface); border: 1px solid var(--dh-line-strong);
+  border-radius: var(--dh-radius-chip); }
+.search:focus-within { outline: 2px solid var(--dh-focus); outline-offset: 1px; border-color: var(--dh-focus); }
+.search svg { flex: none; }
+.search input { flex: 1; min-width: 0; font-family: inherit; font-size: var(--dh-text-body);
+  color: var(--dh-ink); background: transparent; border: 0; outline: 0; padding: 0; }
+.search input::placeholder { color: var(--dh-ink-faint); }
+.search .clear { flex: none; font-family: inherit; font-size: var(--dh-text-meta);
+  color: var(--dh-ink-faint); background: transparent; border: 0; cursor: pointer; padding: 4px; }
 </style>
 
 <div class="pv-grid">
@@ -84,6 +95,20 @@
       <input id="f7" type="text" value="" aria-invalid="true">
       <span class="err">이름을 입력해 주세요. 하객을 찾을 때 쓰는 유일한 필수 항목입니다.</span>
     </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">검색 — 원장 상단, 참석 칩 다음으로 많이 눌리는 컨트롤</div>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--dh-ink-faint)" stroke-width="1.6" aria-hidden="true">
+        <circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke-linecap="round"/>
+      </svg>
+      <input type="search" value="김영" aria-label="하객 이름 검색">
+      <button class="clear" type="button" aria-label="검색어 지우기">지우기</button>
+    </div>
+    <p class="pv-note"><b>검색은 새 컴포넌트가 아니라 Field의 변형입니다.</b> 다만 원장에서는
+      레이블 없이 자리끼움말만 두고, 알약 모양으로 필터 칩과 같은 줄에 섭니다.
+      부부의 실제 시작점이 "김영수 못 온대"라서, 400행을 훑는 대신 두 글자를 치는 게 첫 동작입니다.</p>
   </div>
 
   <div class="pv-note">

@@ -80,25 +80,31 @@ Rows carry two tap targets with different destinations — the chip toggles in
 place, the row opens the detail sheet. That is another reason the chip has a
 44px floor.
 
-## Three things drawing the flow exposed
+## Three things drawing the flow exposed — all confirmed
 
-Raised as my calls; **none confirmed by the founder yet.**
+Raised as my calls while drawing; **all three confirmed by the founder the same
+day.**
 
-**1. Search has to exist.** The settled filter set (side + attendance) narrows a
+**1. Search is in v1.** The settled filter set (side + attendance) narrows a
 list; it does not *find a person*. The real trigger is "김영수 못 온대", and what
 that needs is two syllables, not a 400-row scroll. Without search the couple
-scans every time, which is no better than the spreadsheet. This is the only one
-of the three that widens v1 scope — and I think it is the second most-used
-control in the product, after the attendance chip.
+scans every time, which is no better than the spreadsheet. It is the second
+most-used control in the product, after the attendance chip — and the only one
+of these three that widened v1 scope.
 
-**2. 보증인원 does not belong in onboarding.** Couples sign up before booking a
+Search is a **Field variant, not a new component**, and the filter chips are a
+**Tag with a selected state**; the ten-component inventory still holds. The
+ledger toolbar sits between the number and the list: search takes the remaining
+width, filters sit beside it.
+
+**2. 보증인원 is not asked at onboarding.** Couples sign up before booking a
 venue, and at that point the number does not exist. Asking for an unknown on the
-first screen is where people quit. **The ledger must work completely without
-it**, with the comparison (여유 / meter) simply not rendering until it is set.
-Onboarding stops at date and names.
+first screen is where people quit. **The ledger works completely without it**,
+with the comparison (여유 / meter) simply not rendering until it is set — it is
+edited later in 설정 · 웨딩 정보. Onboarding stops at date and names.
 
-**3. Meal types do not belong in onboarding either** — this answers the question
-parked on 2026-08-06. The default is a single type, so the simple case
+**3. Meal types are not asked at onboarding either** — this also closes the
+question parked on 2026-08-06. The default is a single type, so the simple case
 configures nothing, and the moment a couple first meets meal types is when a
 guest needs 유아식. Adding a type belongs *there*, in the detail sheet, not
 behind a settings screen they must go find.
@@ -117,7 +123,6 @@ behind a settings screen they must go find.
 
 ## Still open
 
-- [ ] The three calls above, unconfirmed.
 - [ ] Storing the import file hash: which entity holds it, and whether the
       "already imported" screen offers a force-import escape hatch.
 - [ ] The initial contents of the shipped 관계 synonym table.

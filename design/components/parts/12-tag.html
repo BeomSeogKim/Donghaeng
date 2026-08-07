@@ -1,4 +1,4 @@
-<!-- @dsCard group="Components" name="03 Tag" subtitle="7개 고정 분류 + 자유 라벨 · 신랑/신부측" width="720" height="440" -->
+<!-- @dsCard group="Components" name="03 Tag" subtitle="7개 고정 분류 + 자유 라벨 · 신랑/신부측 · 필터 칩" width="720" height="560" -->
 <style>
 .tag {
   display: inline-flex; align-items: center;
@@ -13,6 +13,12 @@
 .tag-side { background: transparent; border: 1px solid var(--dh-line-strong); }
 .tag-free { background: transparent; color: var(--dh-ink-faint); padding-left: 0; }
 .tag-flag { background: var(--dh-attention-soft); color: var(--dh-attention); }
+.filter { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
+  min-height: 2rem; padding: 0 var(--dh-space-3); border-radius: var(--dh-radius-chip);
+  background: var(--dh-surface-sunken); color: var(--dh-ink-muted);
+  border: 1px solid transparent; cursor: pointer; }
+.filter[aria-pressed="true"] { background: var(--dh-primary); color: var(--dh-ink-on-accent); }
+.filter:hover { border-color: var(--dh-line-strong); }
 </style>
 
 <div class="pv-grid">
@@ -53,6 +59,21 @@
       <span class="tag tag-flag">중복 가능</span>
       <span class="tag tag-flag">확인 필요</span>
     </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">필터 칩 — 같은 모양, 상태를 가짐</div>
+    <div class="pv-row">
+      <button class="filter" type="button" aria-pressed="true">신부</button>
+      <button class="filter" type="button" aria-pressed="false">신랑</button>
+      <button class="filter" type="button" aria-pressed="true">미정</button>
+      <button class="filter" type="button" aria-pressed="false">불참</button>
+    </div>
+    <p class="pv-note"><b>필터는 측과 참석 상태 둘뿐입니다.</b> 그룹 필터는 넣지 않습니다 —
+      그룹은 <b>집계로 읽는 것</b>이지 목록을 좁히는 축이 아닙니다. 그룹별 숫자는 PC 원장의
+      집계 레일에서 봅니다.</p>
+    <p class="pv-note">위쪽 태그와 같은 알약 모양이지만 <b>누를 수 있고 상태를 가집니다.</b>
+      선택된 칩은 주색으로 채웁니다 — 원장에서 색을 채워 쓰는 몇 안 되는 자리입니다.</p>
   </div>
 
   <div class="pv-note">

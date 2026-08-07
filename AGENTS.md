@@ -14,18 +14,22 @@ built (`notes/2026-08-07-design-system.md`).
 **The next step is scaffolding `web/` and `api/` — do not start it without
 the user.**
 
-Three calls of mine from the flow design are **unconfirmed**, and the first
-one widens v1:
+All three calls from the flow design were **confirmed on 2026-08-07**:
 
-1. **Search on the ledger.** Filters (side + attendance) narrow a list; they
-   do not find a person. The real trigger is "김영수 못 온대" and that needs
-   two syllables, not a 400-row scroll. Probably the second most-used control
-   after the attendance chip.
+1. **Search is in v1**, on the ledger. Filters (side + attendance) narrow a
+   list; they do not find a person. The real trigger is "김영수 못 온대" and
+   that needs two syllables, not a 400-row scroll. It is the second most-used
+   control after the attendance chip. Implemented as a **Field variant**, with
+   the filter chips as a **Tag with a selected state** — the ten-component
+   inventory still holds.
 2. **보증인원 is not asked at onboarding** — couples sign up before booking a
-   venue. The ledger works fully without it; only the comparison waits.
-3. **Meal types are not asked at onboarding** — this also answers the question
+   venue. The ledger works fully without it; the comparison simply does not
+   render until it is set in 설정 · 웨딩 정보.
+3. **Meal types are not asked at onboarding** — this also closes the question
    parked on 2026-08-06. A couple first meets meal types when a guest needs
    유아식, and adding one belongs in the detail sheet at that moment.
+
+Onboarding is therefore **date and names only.**
 
 Also still open, all small: where the import file hash lives, the initial
 contents of the 관계 synonym table, `GuestChange` retention, and whether
