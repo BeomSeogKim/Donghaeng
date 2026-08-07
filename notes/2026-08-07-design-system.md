@@ -139,29 +139,61 @@ figures are a two-line CSS rule that buys the product's core promise.
 No italics. Korean has no italic tradition and synthesised obliques look broken;
 emphasis is weight and colour.
 
-### The display face is an open slot, and the number is why
+### The display face: RIDIBatang, chosen by measurement
 
 The palette redesign raised the typeface question, because a gothic-only screen
 does not carry "high-end" the way the porcelain-and-gold palette now asks it to.
-The intended answer is a **pairing**: Pretendard keeps the UI, and a Korean
-serif takes the headcount, screen titles, and the brand mark — a handful of
-places, never the list. Korean serif at 15px in a 400-row column is measurably
-harder to read than gothic, so the serif must stay quiet or it costs the density
-the whole system was built around.
+The answer is a **pairing**: Pretendard keeps the UI, and **RIDIBatang** takes
+the headcount, screen titles, and the brand mark — three places, **never the
+list**. Korean serif at 15px across 400 rows is measurably slower to scan, and
+spending the density this system is built on would be a bad trade for elegance.
 
-`--dh-font-display` exists as the slot. It currently aliases the sans, and the
-headcount stays on Pretendard, because of one constraint that can veto the whole
-idea: **the number must be tabular.** Free Korean serifs vary a lot in how much
-attention their Latin figures got, and several have no tabular set at all. If
-the chosen serif's digits are not tabular, the serif takes titles and the brand
-mark only and the number stays gothic — **stability outranks elegance on the one
-number this product exists to be trusted about.** That has to be measured, not
-assumed, before the slot is filled.
+**The choice was made from font tables, not taste**, because one hard constraint
+could veto any candidate: the headcount must be tabular. Eight faces were
+measured by reading `GSUB` features and `hmtx` advance widths directly:
 
-Two more constraints on the choice, neither aesthetic: the face must be licensed
-for commercial use (this ships to paying couples), and a second Korean family is
-1–4MB, so the serif has to be subset to the glyphs actually used — which is
-cheap here precisely because it appears in so few places.
+| Face | `tnum` | default figures | Hangul | verdict |
+|---|---|---|---|---|
+| Pretendard | yes | proportional (30%) | 11,172 | keeps the UI |
+| **RIDIBatang** | no | **tabular** | 11,172 | **chosen** |
+| Gowun Batang | yes | proportional (17%) | 11,172 | passed |
+| Nanum Myeongjo | no | tabular | 11,172 | passed |
+| Arita Buri | no | proportional (14%) | 11,172 | **number: no** |
+| Noto Serif KR | no | proportional (16%) | 11,172 | **number: no** |
+| Song Myung | no | tabular | 2,350 | **names: no** |
+| Hahmlet | yes | proportional (27%) | 2,788 | **names: no** |
+
+Two findings worth keeping:
+
+**The prose recommendation was wrong, and measuring caught it.** Arita Buri was
+my first pick on provenance — Amorepacific commissioned it over years and gave
+it away — and it has no tabular figures in any of its five weights. Neither does
+Noto Serif KR. Both are *text* faces; nobody designing for long-form reading
+needs digits to stack in a column. The failure is not theirs, it is that this
+product makes an unusual demand.
+
+**Hangul coverage is a second, independent veto**, and I had not thought of it.
+Song Myung (2,350) and Hahmlet (2,788) do not carry the full 11,172-syllable
+set. That is fine for ordinary copy and disqualifying here, because this
+product's content *is* Korean personal names — one uncommon syllable renders as
+tofu and the guest list is broken.
+
+RIDIBatang won on **provenance matched to use**: Sandoll built it for RIDI's
+e-book reader, i.e. for long reading *on a screen*, which is nearer this
+product's condition than a print-oriented brand serif. Its digits are already
+uniform-width, so it does not even depend on `tnum`. Gowun Batang remains a
+sound second — softer, less clerical — and both pass, so the remainder was taste.
+
+The system rule still applies to both faces: anything that changes in place gets
+`font-variant-numeric: tabular-nums`. Keeping it stated is what makes the rule
+survive a future face swap.
+
+Practical constraints that shaped this and are now settled: both faces are
+licensed for commercial use and redistribution (Pretendard SIL OFL; RIDIBatang
+free for commercial use, selling the font itself prohibited), and **subsetting
+makes the pairing nearly free** — 31.8MB of source faces became 467KB for the
+comparison page, and the committed preview subsets are 148KB for both. Using the
+serif in few places is what makes it cheap.
 
 ## Density: rows are flush, not cards
 

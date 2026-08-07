@@ -1,12 +1,12 @@
-<!-- @dsCard group="Foundations" name="타이포그래피" subtitle="한글 우선 · 6단 스케일 · 본문 하한 15px" width="760" height="620" -->
+<!-- @dsCard group="Foundations" name="타이포그래피" subtitle="Pretendard + RIDIBatang · 본문 하한 15px" width="760" height="720" -->
 <style>
 .ty-row { display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: var(--dh-space-5); align-items: baseline; padding: var(--dh-space-3) 0; border-bottom: 1px solid var(--dh-line); }
 .ty-row:last-child { border-bottom: 0; }
 .ty-spec { font-size: 11px; letter-spacing: .04em; color: var(--dh-ink-faint); font-variant-numeric: tabular-nums; line-height: 1.5; }
 .ty-spec b { display: block; color: var(--dh-ink-muted); font-weight: var(--dh-weight-semibold); letter-spacing: var(--dh-tracking-label); text-transform: uppercase; }
 
-.t-display { font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold); letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight); color: var(--dh-primary); font-variant-numeric: tabular-nums; }
-.t-title { font-size: var(--dh-text-title); font-weight: var(--dh-weight-bold); letter-spacing: -0.015em; line-height: var(--dh-leading-snug); }
+.t-display { font-family: var(--dh-font-display); font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold); letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight); color: var(--dh-primary); font-variant-numeric: tabular-nums; }
+.t-title { font-family: var(--dh-font-display); font-size: var(--dh-text-title); font-weight: var(--dh-weight-bold); letter-spacing: -0.015em; line-height: var(--dh-leading-snug); }
 .t-lead { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); line-height: var(--dh-leading-snug); }
 .t-body { font-size: var(--dh-text-body); line-height: var(--dh-leading-body); color: var(--dh-ink-muted); }
 .t-meta { font-size: var(--dh-text-meta); line-height: var(--dh-leading-snug); color: var(--dh-ink-muted); }
@@ -18,15 +18,15 @@
     <div class="pv-label">타입 스케일</div>
     <div class="pv-stage" style="padding: var(--dh-space-5)">
       <div class="ty-row">
-        <div class="ty-spec"><b>Display</b>40px / 1.2<br>700 · -0.02em</div>
+        <div class="ty-spec"><b>Display</b>40px / 1.2<br>700 · -0.02em<br><span style="color:var(--dh-primary)">RIDIBatang</span></div>
         <div><div class="t-display">245</div></div>
       </div>
       <div class="ty-row">
-        <div class="ty-spec"><b>Title</b>22px / 1.45<br>700 · -0.015em</div>
+        <div class="ty-spec"><b>Title</b>22px / 1.45<br>700 · -0.015em<br><span style="color:var(--dh-primary)">RIDIBatang</span></div>
         <div><div class="t-title">신부측 하객 명단</div></div>
       </div>
       <div class="ty-row">
-        <div class="ty-spec"><b>Lead</b>17px / 1.45<br>500</div>
+        <div class="ty-spec"><b>Lead</b>17px / 1.45<br>500<br><span style="color:var(--dh-ink-faint)">Pretendard</span></div>
         <div><div class="t-lead">김영수</div></div>
       </div>
       <div class="ty-row">
@@ -54,8 +54,19 @@
     강조는 굵기와 색으로만 합니다.
   </div>
   <div class="pv-note">
-    <b>서체는 Pretendard입니다.</b> 한글과 라틴을 같은 메트릭으로 담고 있어, 하객 이름과 아라비아 숫자가
-    한 줄을 공유하는 이 제품의 모든 화면에서 필요합니다. (이 프리뷰는 Pretendard가 설치돼 있지 않으면
-    시스템 한글 서체로 대체 렌더링됩니다 — 카드 13장에 2.7MB 웹폰트를 각각 심지 않기 위한 의도적 선택입니다.)
+    <b>서체는 두 벌입니다.</b> 본문과 UI는 <b>Pretendard</b> — 한글과 라틴을 같은 메트릭으로 담고 있어,
+    하객 이름과 아라비아 숫자가 한 줄을 공유하는 이 제품의 모든 화면에서 필요합니다.
+    디스플레이는 <b>RIDIBatang</b>이고, 쓰이는 자리는 <b>인원수 · 화면 제목 · 브랜드 표식</b> 셋뿐입니다.
+  </div>
+  <div class="pv-note warn">
+    <b>명조는 목록에 절대 내려가지 않습니다.</b> 한글 명조를 15px으로 400행에 깔면 훑는 속도가 떨어지고,
+    그건 이 시스템 전체가 지키려던 밀도를 서체가 도로 까먹는 일입니다.
+    위 Lead(이름 줄)가 고딕인 이유가 그것입니다.
+  </div>
+  <div class="pv-note">
+    <b>RIDIBatang을 고른 근거는 취향이 아니라 측정입니다.</b> 산돌이 리디의 전자책 리더용으로 만든 —
+    즉 <b>화면에서 오래 읽히도록</b> 설계된 — 글꼴이고, 숫자가 기본으로 고정폭입니다.
+    아리따 부리와 본명조는 <code>tnum</code>이 없고 기본 숫자가 비례폭이라 인원수를 못 지어
+    탈락했습니다. 폰트 파일의 <code>GSUB</code>·<code>hmtx</code>에서 직접 읽은 값입니다.
   </div>
 </div>

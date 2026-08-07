@@ -136,12 +136,18 @@ which is the same reason 백자 is prized for being *almost* white.
   than Latin. 13px is for metadata fragments, never sentences. Korean running
   text gets 1.65 leading, not the Latin-typical 1.5. No italics — Korean has
   no italic tradition and synthesised obliques look broken.
-- **Pretendard** is the app face, for consistent Hangul/Latin metrics on the
-  lines where names and numerals sit together. A Korean **serif for display**
-  (headcount, titles, brand mark only — never the list) is intended but **not
-  yet chosen**: `--dh-font-display` is an open slot that currently aliases the
-  sans. It stays that way until a candidate's figures are *measured* tabular —
-  if they are not, the serif takes titles only and the number stays gothic.
+- **Two faces: Pretendard for UI, RIDIBatang for display.** RIDIBatang is used
+  in exactly three places — the headcount, screen titles, the brand mark — and
+  **never the list**: Korean serif at 15px across 400 rows is slower to scan.
+  Both are in `design/fonts/` with licences and measurements; regenerate the
+  preview subsets with `design/fonts/subset.sh` when preview text changes
+  (`build.py` warns when a character falls outside the subset).
+- **Typeface candidates are decided by measuring the font, not by taste.**
+  Arita Buri and Noto Serif KR were rejected because they have no `tnum` and
+  default to proportional figures, so they cannot carry the headcount; Song
+  Myung and Hahmlet because they omit most of the 11,172 Hangul syllables and
+  this product's content is people's names. Read `GSUB`/`hmtx` before
+  recommending a face.
 - **Dark theme is defined, not shipped.** v1 is light only; the tokens carry
   both so it is never a retrofit.
 - Ten components plus four foundation cards cover v1 — inventory in the note.

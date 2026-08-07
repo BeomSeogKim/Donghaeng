@@ -24,12 +24,17 @@
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", system-ui, "Malgun Gothic", sans-serif;
 
-  /* Display face for the headcount and screen titles. The concrete Korean
-   * serif is NOT yet chosen — the slot exists so the decision has one place
-   * to land. Until it is chosen and its figures are verified tabular, the
-   * headcount stays on --dh-font-sans: the number's stability outranks its
-   * elegance. See the note's "Type" section. */
-  --dh-font-display: var(--dh-font-sans);
+  /* Display face — decided 2026-08-07: RIDIBatang, Sandoll's serif for RIDI's
+   * e-book reader, i.e. designed for long reading ON A SCREEN. Chosen from
+   * measured font tables, not taste: its digits are tabular by default, while
+   * Arita Buri and Noto Serif KR were measured proportional with no tnum and
+   * therefore cannot carry a headcount.
+   *
+   * Used in exactly three places — the headcount, screen titles, the brand
+   * mark. NEVER the list: Korean serif at 15px across 400 rows is measurably
+   * slower to scan, and that would spend the density this system is built on. */
+  --dh-font-display:
+    "RIDIBatang", var(--dh-font-sans);
 
   --dh-text-display: 2.5rem;    /* 40px — the headcount, and nothing else      */
   --dh-text-title: 1.375rem;    /* 22px — screen title                         */

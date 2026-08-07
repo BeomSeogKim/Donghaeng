@@ -14,11 +14,14 @@ truth: edit design/tokens.css, rebuild, and every preview follows.
 
 Writes dist/*.html and dist/index.json (card metadata for DesignSync).
 
-Note on the typeface: previews name Pretendard first but fall back to the
-system Korean face. Embedding the 2.7MB webfont in all 13 cards would cost
-~30MB for a rendering nicety; the published spec page carries the real face.
+Typefaces are embedded from design/fonts/*.subset.woff2, cut to exactly the
+characters these previews render (~150KB for both), so a card looks the way the
+product will rather than falling back to a system face. Needs no font tooling:
+the subsets are committed. If a part uses a character outside the subset this
+warns and names it — that is the signal to re-run design/fonts/subset.sh.
 """
 
+import base64
 import html
 import io
 import json
@@ -28,8 +31,12 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOKENS = os.path.join(HERE, os.pardir, "tokens.css")
+FONTS = os.path.join(HERE, os.pardir, "fonts")
 PARTS = os.path.join(HERE, "parts")
 DIST = os.path.join(HERE, "dist")
+
+FACES = [("Pretendard", "Pretendard.subset.woff2"),
+         ("RIDIBatang", "RIDIBatang.subset.woff2")]
 
 CARD_RE = re.compile(r"<!--\s*@dsCard\s+(.*?)-->", re.S)
 ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
@@ -41,6 +48,7 @@ SHELL = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} — 동행</title>
 <style>
+{faces}
 {tokens}
 
 /* ── preview chrome — deliberately quiet; the component is the subject ── */
@@ -128,24 +136,61 @@ def parse_part(text):
     return meta, "\n".join(s.strip() for s in styles), body
 
 
+def build_faces():
+    """Inline the committed subsets as @font-face rules."""
+    out = []
+    for family, fname in FACES:
+        path = os.path.join(FONTS, fname)
+        if not os.path.exists(path):
+            print("warning: missing {} — previews fall back to a system face"
+                  .format(fname), file=sys.stderr)
+            continue
+        b64 = base64.b64encode(open(path, "rb").read()).decode("ascii")
+        out.append('@font-face{{font-family:"%s";font-style:normal;'
+                   'font-weight:100 900;font-display:block;'
+                   'src:url(data:font/woff2;base64,%s) format("woff2")}}'
+                   % (family, b64))
+    return "\n".join(out)
+
+
+def check_coverage(texts):
+    """Warn when a part renders a character the committed subsets don't carry."""
+    path = os.path.join(FONTS, "charset.txt")
+    if not os.path.exists(path):
+        return
+    covered = set(io.open(path, encoding="utf-8").read())
+    used = set("".join(texts))
+    missing = sorted(c for c in used - covered
+                     if c.isprintable() and not c.isspace())
+    if missing:
+        print("warning: {} character(s) outside the font subset: {}\n"
+              "         re-run design/fonts/subset.sh"
+              .format(len(missing), "".join(missing)), file=sys.stderr)
+
+
 def main():
     tokens = io.open(TOKENS, encoding="utf-8").read()
+    faces = build_faces()
     os.makedirs(DIST, exist_ok=True)
 
     names = sorted(n for n in os.listdir(PARTS) if n.endswith(".html"))
     if not names:
         raise SystemExit("no parts found")
 
-    cards = []
+    cards, rendered = [], []
     for name in names:
         raw = io.open(os.path.join(PARTS, name), encoding="utf-8").read()
         meta, style, body = parse_part(raw)
+
+        rendered.append(re.sub(r"<[^>]+>", " ", body))
+        rendered.append(meta.get("name", "") + meta.get("subtitle", ""))
 
         out_name = re.sub(r"^\d+-", "", name)
         page = SHELL.format(
             theme=meta.get("theme", "light"),
             title=html.escape(meta.get("name", out_name)),
             subtitle=html.escape(meta.get("subtitle", "")),
+            faces=faces,
             tokens=tokens,
             style=style,
             body=body,
@@ -166,6 +211,7 @@ def main():
     io.open(os.path.join(DIST, "index.json"), "w", encoding="utf-8").write(
         json.dumps(cards, ensure_ascii=False, indent=2)
     )
+    check_coverage(rendered)
     print("built {} previews -> {}".format(len(cards), os.path.relpath(DIST)))
     for c in cards:
         print("  {:<28} {}".format(c["path"], c["group"]))
