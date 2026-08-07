@@ -13,14 +13,20 @@ across *time*, not only across people, and this project has one person but
 many sessions.
 
 Design work resumes at **screen and flow design (③)** — now the only thing
-between the model and building. One fixed point is already decided: **the
-ledger and the headcount are one screen.** The next knot is **how the import
-conflict screen behaves when one file brings in dozens of rows at once.**
+between the model and building. Two fixed points are decided: **the ledger and
+the headcount are one screen**, and **import is idempotent**
+(`notes/2026-08-07-decision-import-idempotency.md`).
 
-One question I asked and the founder has not answered yet, still worth
-having: **how often does the same person actually appear in both sets of
-parents' files?** A handful of relatives makes the conflict screen an edge
-case; a large overlap makes it the main event of import.
+The import-conflict knot that had been blocking ③ is **resolved, by turning
+out to be the wrong question.** The founder's worry was never overlap between
+the parents' files — it was **the same Excel being imported twice**, which is
+idempotency, not ambiguity. And the parents' sheet lists attendees, so it
+never states attendance and import never touches it. Of forty apparent
+conflicts, thirty-eight were never conflicts.
+
+**The next knot is how a parent's free-text 관계 ("이모", "회사 동료") maps
+onto the seven fixed categories.** Without that mapping the couple
+hand-classifies several hundred people and group aggregation dies on arrival.
 
 Four questions are open and were parked deliberately:
 
@@ -60,7 +66,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-06-design-ledger-and-import.md`,
 `2026-08-06-decision-drop-response-model.md`,
 `2026-08-06-review-scale-and-extensibility.md`,
-`2026-08-07-design-system.md`). Read them newest-first: the
+`2026-08-07-design-system.md`,
+`2026-08-07-decision-import-idempotency.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/tokens.css` is substrate, not
@@ -254,11 +261,24 @@ SUM already does. This is the first fixed point of the screen design.
   deliberately: a finer list keeps producing members that fit nowhere
   (조부모 was the first), and every family category is single digits while
   혼주 손님 / 친구 / 직장동료 run to a hundred.
-- **Import is a workflow, not an upload.** We hand the couple a template,
-  they distribute it to both sets of parents, and files come back several at
-  a time — so the same person arrives twice. Conflicts go to one review
-  screen (never a modal per row), and **"not sure" imports as a separate
-  guest rather than blocking**, because merging is lossless.
+- **Import is a workflow, not an upload.** We hand the couple a template
+  (**이름 · 관계 · 참석 인원 · 연락처 선택** — deliberately no attendance
+  column), they distribute it to both sets of parents, and files come back
+  several at a time.
+- **Import is idempotent, and the file has no opinion about attendance.**
+  A matching file hash is not processed at all; rows identical in every field
+  are skipped silently; only 인원수 can actually conflict. **Import never
+  touches an existing guest's attendance** — a returning file is a stale name
+  list, not a fresh claim that everyone on it is coming.
+- **Never overwrite the couple's edits — alert and let them choose**, guarded
+  by two rules that keep it quiet: **silence is not disagreement** (a blank
+  cell or absent column is not a claim, so it raises nothing) and **a resolved
+  question is not asked again**. Comparison is by multiset, not row: two
+  guests may legitimately share a name and a group.
+- Conflicts go to one review screen (never a modal per row), where the
+  **summary is the screen and the conflict list is the appendix**. Each
+  question has exactly two buttons. **"Not sure" imports as a separate guest
+  rather than blocking**, because merging is lossless.
 
 ## Product values (apply to every decision)
 
