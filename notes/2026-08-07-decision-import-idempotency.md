@@ -99,10 +99,57 @@ with two buttons each, and the component shrinks accordingly. The card's own
 warning — that the list's behaviour at scale was unsolved — comes off, because
 the scale never materialises.
 
+## 관계 — constrain at the source, map what leaks through
+
+Decided the same day. The seven fixed categories go into the template **as a
+dropdown** (Excel data validation) on the 관계 column, with the free label as a
+separate, freely-typed column. Classification happens where the knowledge is: a
+parent knows whether 이모 is 친척, and we would only be guessing.
+
+**But data validation is advisory, not enforced.** Pasting over a cell defeats
+it, and opening the file in Google Sheets or a phone viewer can drop it
+entirely. So the dropdown reduces the unmapped case; it never eliminates it, and
+the importer must not assume the column is clean.
+
+### Map by distinct value, not by row
+
+The guard that keeps the fallback from becoming punishment. If 40 rows say
+"이모", the couple answers **once** and all 40 follow:
+
+    "이모"      (40행)  →  [ 친척 ▾ ]
+    "회사 동료"  (28행)  →  [ 직장동료 ▾ ]
+
+A messy 200-row file usually holds 10–20 distinct 관계 values, so this is ~15
+decisions rather than 200. Same shape as the multiset rule above: the unit of
+the question is never the row when a coarser unit will do. Answered mappings are
+remembered for that wedding and not asked again.
+
+### A shipped synonym table, not a learned one
+
+Most of those 15 disappear behind a **static table we author and ship** —
+이모 · 고모 · 삼촌 · 외삼촌 · 조카 → 친척; 회사 · 직장 · 팀 → 직장동료. This is a
+dictionary, not inference, and it is ours rather than derived from anyone's
+data, so it crosses no wedding boundary. When it is wrong the couple corrects
+it, which costs one tap on a value rather than on a row.
+
+### Unmapped never blocks
+
+An unmapped 관계 imports as **기타 with the raw text preserved in the free
+label**, and the question is asked on the review screen afterwards. Holding the
+rows back would contradict the standing rule that "not sure" must never block
+an import (2026-08-06) — reclassification is lossless here, so deciding later
+costs nothing, while stalling the import costs everything.
+
+### Consequence: the template is .xlsx
+
+CSV cannot carry data validation, so **the template we hand out is .xlsx** while
+**the parser accepts both .xlsx and .csv** — someone will inevitably open it in
+Google Sheets and export CSV. Earlier notes say "CSV import"; this supersedes
+that on the export side only.
+
 ## Still open
 
 - [ ] Storing the file hash: which entity holds it, and does the "already
       imported" screen offer a force-import escape hatch (for a couple who
       deleted rows and genuinely wants to re-run)?
-- [ ] How 관계 free text from a parent ("이모", "회사 동료") maps onto the seven
-      fixed categories. A screen problem, and the next one to solve.
+- [ ] The initial contents of the shipped synonym table.

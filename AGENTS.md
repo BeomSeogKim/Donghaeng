@@ -24,9 +24,10 @@ idempotency, not ambiguity. And the parents' sheet lists attendees, so it
 never states attendance and import never touches it. Of forty apparent
 conflicts, thirty-eight were never conflicts.
 
-**The next knot is how a parent's free-text 관계 ("이모", "회사 동료") maps
-onto the seven fixed categories.** Without that mapping the couple
-hand-classifies several hundred people and group aggregation dies on arrival.
+The 관계 mapping that was next is decided too: the seven categories ship as a
+**dropdown in the template**, and whatever leaks past it is mapped **by
+distinct value, not by row**. Screen design now has no known blocker — it just
+has to be done.
 
 Four questions are open and were parked deliberately:
 
@@ -257,7 +258,14 @@ SUM already does. This is the first fixed point of the screen design.
   user → membership → wedding; one person may belong to several.
 - **Guest groups are seven fixed categories plus a free label**: 가족 · 친척 ·
   사촌 · 혼주 손님 · 친구 · 직장동료 · 기타. Aggregation splits by category
-  only — free labels fracture on typing variants. Family is one bucket
+  only — free labels fracture on typing variants. The categories ship as a
+  **dropdown in the .xlsx template** so a parent classifies at the moment they
+  know; but data validation is advisory and gets defeated, so **the importer
+  never assumes the column is clean**. Unmapped values are asked **by distinct
+  value, not by row** ("이모" ×40 is one question), pre-filled from a **static
+  synonym table we author and ship** — a dictionary, not inference, and not
+  learned from anyone's data. Unmapped still imports, as 기타 with the raw text
+  kept in the free label. Family is one bucket
   deliberately: a finer list keeps producing members that fit nowhere
   (조부모 was the first), and every family category is single digits while
   혼주 손님 / 친구 / 직장동료 run to a hundred.

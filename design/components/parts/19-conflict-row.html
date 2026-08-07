@@ -1,4 +1,4 @@
-<!-- @dsCard group="Components" name="10 ConflictRow" subtitle="임포트 검토 — 질문 두 종류, 각각 버튼 둘" width="820" height="700" -->
+<!-- @dsCard group="Components" name="10 ConflictRow" subtitle="임포트 검토 — 요약이 주인공, 질문 셋" width="820" height="820" -->
 <style>
 .sum { background: var(--dh-surface); border: 1px solid var(--dh-line); padding: var(--dh-space-4); }
 .sum-line { display: flex; align-items: baseline; gap: var(--dh-space-2); flex-wrap: wrap; }
@@ -43,6 +43,25 @@
 .done { display: flex; align-items: center; gap: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
 .done .tag { padding: 2px 8px; border-radius: var(--dh-radius-chip); background: var(--dh-primary-soft); color: var(--dh-primary); font-weight: var(--dh-weight-semibold); }
 .done button { font-family: inherit; font-size: var(--dh-text-meta); background: transparent; border: 0; color: var(--dh-primary); cursor: pointer; margin-left: auto; font-weight: var(--dh-weight-semibold); }
+
+.map { display: flex; flex-direction: column; }
+.map-row {
+  display: grid; grid-template-columns: minmax(6rem, 1fr) 3.5rem minmax(7rem, 9rem) auto;
+  align-items: center; gap: var(--dh-space-3);
+  padding: var(--dh-space-2) 0; border-bottom: 1px solid var(--dh-line);
+}
+.map-row:last-child { border-bottom: 0; }
+.map-row .raw { font-size: var(--dh-text-body); font-weight: var(--dh-weight-medium); }
+.map-row .cnt { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); font-variant-numeric: tabular-nums; text-align: right; }
+.map-row select {
+  font-family: inherit; font-size: var(--dh-text-meta); color: var(--dh-ink);
+  background: var(--dh-surface); min-height: var(--dh-tap-min);
+  padding: 0 var(--dh-space-2); border: 1px solid var(--dh-line-strong);
+  border-radius: var(--dh-radius-control); width: 100%;
+}
+.map-row .seed { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); white-space: nowrap; }
+.map-row .seed.ask { color: var(--dh-attention); font-weight: var(--dh-weight-semibold); }
+.map-row.need select { border-color: var(--dh-attention); }
 
 .already { border: 1px solid var(--dh-line-strong); background: var(--dh-surface-sunken); padding: var(--dh-space-4); }
 .already b { display: block; font-size: var(--dh-text-lead); font-weight: var(--dh-weight-semibold); margin-bottom: 2px; }
@@ -124,6 +143,50 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">질문 ③ 관계 매핑 — 행이 아니라 값 단위로 묻습니다</div>
+    <div class="q">
+      <div class="q-row">
+        <div class="map">
+          <div class="map-row">
+            <span class="raw">이모</span>
+            <span class="cnt"><span class="num">40</span>행</span>
+            <select aria-label="&quot;이모&quot;를 어느 분류로">
+              <option selected>친척</option><option>가족</option><option>사촌</option>
+              <option>혼주 손님</option><option>친구</option><option>직장동료</option><option>기타</option>
+            </select>
+            <span class="seed">사전에서 자동</span>
+          </div>
+          <div class="map-row">
+            <span class="raw">회사 동료</span>
+            <span class="cnt"><span class="num">28</span>행</span>
+            <select aria-label="&quot;회사 동료&quot;를 어느 분류로">
+              <option selected>직장동료</option><option>가족</option><option>친척</option>
+              <option>사촌</option><option>혼주 손님</option><option>친구</option><option>기타</option>
+            </select>
+            <span class="seed">사전에서 자동</span>
+          </div>
+          <div class="map-row need">
+            <span class="raw">성당</span>
+            <span class="cnt"><span class="num">12</span>행</span>
+            <select aria-label="&quot;성당&quot;을 어느 분류로">
+              <option selected>기타</option><option>가족</option><option>친척</option><option>사촌</option>
+              <option>혼주 손님</option><option>친구</option><option>직장동료</option>
+            </select>
+            <span class="seed ask">확인해 주세요</span>
+          </div>
+        </div>
+        <div class="acts" style="margin-top:var(--dh-space-3)">
+          <button class="btn btn-primary" type="button">이대로 적용</button>
+        </div>
+      </div>
+    </div>
+    <p class="pv-note"><b>고유값 하나에 한 번만 답합니다.</b> "이모"가 40행이어도 질문은 한 번이고,
+      답하면 40행이 한꺼번에 따라옵니다. 200행짜리 지저분한 파일도 고유값은 보통 10~20개라
+      <b>결정 200번이 15번</b>이 됩니다. 위쪽의 "행이 아니라 개수로 비교한다"와 같은 수순 —
+      더 굵은 단위로 물을 수 있으면 행 단위로 묻지 않습니다.</p>
   </div>
 
   <div class="pv-set">
