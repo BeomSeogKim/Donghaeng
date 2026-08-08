@@ -3,13 +3,21 @@
 Wedding-journey companion web service for couples — centered on a guest
 ledger (하객·좌석·축의금). See README.md for the product pitch.
 
-## Pick up here (last session: 2026-08-07)
+## Pick up here (last session: 2026-08-08)
 
 **Design is done.** Screen and flow design (③) — the last blocker — is
 complete: `notes/2026-08-07-design-screens-and-flow.md`. The import knot that
 had blocked it dissolved the same day
 (`notes/2026-08-07-decision-import-idempotency.md`), and the design system is
 built (`notes/2026-08-07-design-system.md`).
+
+**Both implementors now have a decided build methodology.** Backend got
+TDD/architecture/API-conventions on 2026-08-07; frontend closed the
+methodology gap left open by that note on 2026-08-08 — see **Frontend
+development methodology** and **Frontend architecture** below. The founder
+does not have strong existing frontend instincts, so this was decided
+explicitly as an enforced default rather than left to per-session judgment,
+backed by a same-day 123-source research pass.
 
 **The next step is scaffolding `web/` and `api/` — do not start it without
 the user.** The four working agents are already in place (see **Agents**
@@ -65,7 +73,9 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-07-design-screens-and-flow.md`,
 `2026-08-07-decision-backend-tdd-methodology.md`,
 `2026-08-07-decision-backend-architecture.md`,
-`2026-08-07-decision-backend-api-conventions.md`). Read them newest-first: the
+`2026-08-07-decision-backend-api-conventions.md`,
+`2026-08-08-decision-frontend-testing-methodology.md`,
+`2026-08-08-decision-frontend-architecture.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/` is substrate, not
@@ -159,6 +169,57 @@ Full record: `notes/2026-08-07-decision-backend-api-conventions.md`.
   functions in the domain package. Entities never serialize directly.
 - **No `/v1` prefix** — no second API version planned; free to add later.
 - **ktlint** applied via the standard Gradle plugin, default ruleset.
+
+## Frontend development methodology (decided 2026-08-08)
+
+`frontend-implementor` runs the same three-gate discipline as the backend,
+per `notes/2026-08-08-decision-frontend-testing-methodology.md`, scoped to
+where frontend risk actually concentrates rather than applied to every
+component:
+
+1. **Red Gate** — an integration test written before the component/hook
+   exists, confirmed failing for the right reason.
+2. **Blue Gate** — the minimum implementation that turns it green.
+3. **Green Gate** — refactor with the suite green throughout.
+
+Mandatory for: the ledger/headcount/meal-count display, every mutation
+flow (attendance tap, guest edit, CSV import, vendor-email conflict
+resolution), and anything branching on the API's error `code` field. Not
+mandatory for static layout, one-off screens, or logic-free display
+components — chasing coverage there is cost with no return.
+
+Default to **integration tests** (Vitest + React Testing Library,
+rendering the real component) over isolated unit tests; mock only the
+network boundary, with **MSW** — never the app's own data-layer module or
+hooks. Query by role/label/text first, `data-testid` only when nothing
+semantic works. **Playwright** stays thin: 2-5 true cross-page critical
+flows, never a coverage target.
+
+## Frontend architecture (decided 2026-08-08)
+
+Full record: `notes/2026-08-08-decision-frontend-architecture.md`.
+
+- **Folder structure starts flat** (`src/{components, pages, lib, hooks}`)
+  and escalates to `src/features/<name>/` only once a feature's files are
+  actually scattering — not before. Feature-Sliced Design's full six-layer
+  taxonomy is explicitly rejected for this team size. **No barrel files**,
+  ever; never reach into another feature's internals.
+- **Server state — anything that's a client-side copy of API/DB data —
+  goes through React Query (TanStack Query)**, never a hand-rolled
+  `useEffect` + `fetch` + `useState`. A mutation's `onSuccess` writes the
+  response straight into the query cache — this is the mechanism behind
+  "every mutation response carries the recomputed aggregate."
+- **Client state escalates one rung at a time**: `useState` → lift to the
+  common parent → `useReducer` → Context (wrapped in a custom hook,
+  immediately) → a client-state library, only once Context is provably
+  struggling. Never start at Context or a library.
+- **Hooks, not containers.** No `XContainer`/`XView` split; extract
+  data-fetching/derivation/subscription logic into a custom hook. This is
+  the mechanism "web and mobile are two layouts, one codebase" runs on.
+- **`useEffect` is for external sync only.** Before writing one, name the
+  outside-of-React thing it synchronizes with. A user action (a tap, a
+  submit) belongs in that action's event handler, never an Effect watching
+  a trigger flag.
 
 ## Design system (decided 2026-08-07)
 
