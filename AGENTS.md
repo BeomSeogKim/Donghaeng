@@ -19,10 +19,18 @@ does not have strong existing frontend instincts, so this was decided
 explicitly as an enforced default rather than left to per-session judgment,
 backed by a same-day 123-source research pass.
 
+**The tempo the work runs at is also decided** (2026-08-08, last thing
+before scaffolding): vertical slices by requirement, sized in new concepts,
+each ending in a comprehension document the founder reads and is quizzed on.
+See **Development tempo** below and
+`notes/2026-08-08-decision-development-tempo.md`. It added a fifth agent,
+`explainer`.
+
 **The next step is scaffolding `web/` and `api/` — do not start it without
-the user.** The four working agents are already in place (see **Agents**
-below), so the scaffolding is what they have been waiting on, not the other
-way round.
+the user.** It is the substrate exception in the tempo rule: horizontal,
+once, at the front, then a hard stop. The five working agents are already in
+place (see **Agents** below), so the scaffolding is what they have been
+waiting on, not the other way round.
 
 All three calls from the flow design were **confirmed on 2026-08-07**:
 
@@ -75,7 +83,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-07-decision-backend-architecture.md`,
 `2026-08-07-decision-backend-api-conventions.md`,
 `2026-08-08-decision-frontend-testing-methodology.md`,
-`2026-08-08-decision-frontend-architecture.md`). Read them newest-first: the
+`2026-08-08-decision-frontend-architecture.md`,
+`2026-08-08-decision-development-tempo.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/` is substrate, not
@@ -110,6 +119,44 @@ kept so a native couple app stays possible without paying for it now:
 session lookup reads a token from the request rather than a cookie, and
 **all computation stays server-side** — the API returns conclusions, not
 rows to compute over. The guest RSVP page is web forever.
+
+## Development tempo (decided 2026-08-08)
+
+How every unit of implementation work is cut and accepted, on both sides of
+the seam. Full record: `notes/2026-08-08-decision-development-tempo.md`. The
+goal it serves is the founder's: **minimize the cognitive debt of AI-written
+code** — keep an actual working model of what was built.
+
+- **Cut vertically, by requirement — never horizontally by layer.** One
+  requirement = one Red/Blue/Green cycle = one review = one explanation =
+  one commit = **one stop**. "웨딩 생성" and "웨딩 정보 수정" are separate
+  stops. A layer slice (entity, then API, then service) has no Red Gate test
+  worth writing and hides the domain question until the layers meet — and
+  the seams between separately-approved layers are exactly where an AI
+  silently disagrees with itself.
+- **One honest exception — the substrate.** Scaffolding, the Flyway baseline
+  schema, ProblemDetail/error-handling wiring, and
+  session→membership→wedding resolution are not requirements and are done
+  horizontally, once, at the front. Everything after is vertical.
+- **Slice size is measured in new concepts, not lines: one or two per
+  stop.** The founder reads via the explanation document rather than the raw
+  diff, so the binding constraint is how many unfamiliar ideas land at once,
+  not how many files changed.
+- **Order at every stop:** implementor → `reviewer` + `security-manager` →
+  fix → `explainer` → founder reads and takes the quiz → commit. The
+  explanation is written only after findings are resolved, so it describes
+  verified code.
+- **The comprehension gate is tiered**, so it survives past week two. A stop
+  introducing a new concept gets the full explanation + quiz; a stop
+  repeating an established pattern gets `reviewer`'s report only. The
+  implementor states which tier it thinks its stop is; the founder
+  overrides freely.
+- **Never let the author explain its own work.** An implementor explaining
+  its own change explains its intent, so a bug gets described as the
+  bug-free version it meant to write — turning unknown debt into false
+  confidence, which is worse than no gate. This is why `explainer` exists
+  as a separate agent and why it carries none of the implementation
+  session's context.
 
 ## Backend development methodology (decided 2026-08-07)
 
@@ -436,9 +483,9 @@ Brand name: 동행 (Donghaeng) — "walking together," chosen to express the
 service acting as a steady companion through the couple's wedding journey.
 Repo/folder slug: `donghaeng`.
 
-## Agents (set up 2026-08-07)
+## Agents (set up 2026-08-07, `explainer` added 2026-08-08)
 
-Four subagents in `.claude/agents/`, split by role:
+Five subagents in `.claude/agents/`, split by role:
 
 - **`backend-implementor`** — all `api/` code. Sole owner of
   `docs/api-spec.md`.
@@ -448,8 +495,12 @@ Four subagents in `.claude/agents/`, split by role:
   refactoring gate. Read-only.
 - **`security-manager`** — audits against
   `notes/2026-07-30-decision-network-security.md`. Read-only.
+- **`explainer`** — the comprehension gate at the end of a stop. Writes the
+  Background/Intuition/Code/Quiz document, in Korean, as a self-contained
+  HTML file outside the repo. Never touches repo code, and never carries the
+  implementation session's context.
 
-Four things bind:
+Five things bind:
 
 - **Delegation is automatic in this repo.** Route implementation work to the
   implementors and review work to the reviewers without being asked; explicit
@@ -462,7 +513,14 @@ Four things bind:
   or wrong the frontend stops rather than guessing, and never computes a
   number client-side to route around it.
 - **The reviewers cannot write.** No `Edit`, no `Write` — that is what makes
-  their verdict worth reading. They report; the implementors fix.
+  their verdict worth reading. They report; the implementors fix. `explainer`
+  has `Write` for exactly one purpose — its own HTML file, in the
+  scratchpad — and never for repo code.
+- **`explainer` runs last and cold.** After the review findings are
+  resolved, never before: an explanation of code that is about to change is
+  wasted reading. It gets the diff and `notes/`, never the session that
+  produced the code — see **Development tempo** for why that separation is
+  the whole point.
 - **This file and `notes/` stay the single source of truth.** An agent prompt
   carries a short operative checklist of the rules its own area actually
   breaks — an auto-delegated agent gets one shot, so the reminder earns its

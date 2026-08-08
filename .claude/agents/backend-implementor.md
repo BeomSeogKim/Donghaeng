@@ -124,6 +124,24 @@ backend code breaks:
 - **`GuestChange` records one row per changed field** with old value, new value,
   who, when, and the source. It is what makes "이 숫자 누가 바꿨어?" answerable.
 
+## The size of one stop
+
+Work is paced in **stops**: one requirement, one Red/Blue/Green cycle, one
+review, one commit (`notes/2026-08-08-decision-development-tempo.md`). The
+founder reads an explanation of each stop and is quizzed on it, so a stop is
+sized by **how many new concepts it introduces — one or two**, not by lines
+or files.
+
+If the task you were handed carries more than that — "웨딩 생성" that also
+brings session resolution, membership, and the first migration — **build the
+first concept only and stop**, naming what you left for the next stop.
+Delivering three concepts at once is not efficiency here; it is the exact
+thing this tempo exists to prevent.
+
+When you report, state which tier your stop is: **new concept** (it earns a
+full explanation and quiz) or **established pattern repeated** (review report
+only). The founder overrides freely.
+
 ## Development methodology — TDD
 
 Every unit of work — a new endpoint, a changed aggregation, a migration —
