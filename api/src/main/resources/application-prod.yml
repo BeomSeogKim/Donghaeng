@@ -1,0 +1,40 @@
+# PROD zone: VPS behind the Cloudflare proxy, managed Postgres
+# (../../notes/infra-zones.md). Credentials come from the deploy platform's
+# native store, never from this file.
+server:
+  # Caddy and Cloudflare both sit in front, so the request the app sees is
+  # plain HTTP on a private address. Without this, every absolute URL the app
+  # builds says `http://` — and the security record requires an exact-match
+  # OAuth `redirect_uri`, which is precisely where a wrong scheme breaks.
+  # NATIVE rather than FRAMEWORK: Tomcat's RemoteIpValve honours X-Forwarded-*
+  # only from its internal-proxy ranges, so a request that reaches the origin
+  # directly cannot spoof the scheme. FRAMEWORK's filter trusts them from
+  # anyone.
+  forward-headers-strategy: native
+
+spring:
+  datasource:
+    hikari:
+      # A guess, not a measured number: one app instance, a 2-vCPU managed
+      # Postgres, and throughput on small instances peaks at a small pool. To
+      # be revisited against real numbers — the first RSVP burst after
+      # invitations go out is the load that will test it.
+      maximum-pool-size: 5
+  flyway:
+    # Restated rather than inherited. This is the one setting whose silent loss
+    # destroys the production database, so it should be readable in the file
+    # someone opens when reviewing a deploy.
+    clean-disabled: true
+
+logging:
+  level:
+    org.hibernate.SQL: 'OFF'
+    # The bound-parameter logger, pinned: this is the one that prints guest
+    # names and phone numbers. Pinned rather than left to the default so that
+    # raising the root level to debug an incident cannot turn it on by
+    # accident (notes/2026-07-30-decision-network-security.md).
+    org.hibernate.orm.jdbc.bind: 'OFF'
+# Deliberately absent: springdoc stays disabled by inheriting the base file —
+# no machine-readable introspection surface is internet-reachable
+# (notes/2026-08-08-decision-scaffold-secrets-and-surface.md). Nothing in this
+# file re-enables it.

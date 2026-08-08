@@ -1,3 +1,10 @@
+# Shared base. Profiles (application-{local,prod}.yml) override in the
+# LOOSENING direction only, so a process started with no profile at all gets
+# the most restrictive behaviour this file can give it.
+#
+# Split: yml carries shape, the environment carries secrets. No credential —
+# DB, OAuth, or otherwise — appears in any profile file.
+# Profile selection: SPRING_PROFILES_ACTIVE (see README, Development).
 server:
   port: 8080
 
@@ -10,6 +17,18 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     open-in-view: false
+    # Bound parameters carry guest names and contacts, so SQL logging is off in
+    # every environment, not just prod
+    # (notes/2026-07-30-decision-network-security.md).
+    show-sql: false
+    hibernate:
+      # Flyway owns the schema everywhere. Stated rather than left to Boot's
+      # default so the guarantee lives in the file.
+      ddl-auto: none
+  flyway:
+    # Safest default, inherited by every profile: a clean that runs anywhere but
+    # a throwaway database is data loss, not a reset.
+    clean-disabled: true
   mvc:
     problemdetails:
       enabled: true

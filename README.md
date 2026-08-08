@@ -67,13 +67,41 @@ cd api
 ./gradlew test                           # tests only
 ./gradlew ktlintFormat                   # auto-fix formatting
 
-sealbox run -p donghaeng -- ./gradlew bootRun --no-daemon
+SPRING_PROFILES_ACTIVE=local sealbox run -p donghaeng -- ./gradlew bootRun --no-daemon
 ```
 
 `bootRun` without the `sealbox run` prefix fails at startup with a datasource
 error — that is the missing environment, not a broken build. `--no-daemon`
 matters: a reused Gradle daemon does not reliably carry the injected
 environment through to the forked application JVM.
+
+#### Profiles
+
+`application.yml` is the shared base and holds the **most restrictive**
+settings — springdoc off, no SQL logging, `ddl-auto: none`, Flyway `clean`
+disabled. Profiles only ever loosen from there, so forgetting to set one
+gives you the safe behaviour rather than an unsafe one.
+
+| Profile | Where | Loosens |
+|---|---|---|
+| *(none)* | anywhere, by accident | nothing — the safe base |
+| `local` | the founder's Mac | `com.donghaeng` at DEBUG, springdoc on, 5-connection pool |
+| `prod` | VPS behind Cloudflare | forwarded-header handling, SQL loggers pinned `OFF`, 5-connection pool |
+
+There is no `test` profile: the Testcontainers suite gets its datasource from
+`@ServiceConnection`, which outranks `spring.datasource.*`, and everything
+else it needs is already the base file's default. There is no `dev` profile
+either — the Mac mini has no deploy target yet.
+
+The profile is chosen by the **`SPRING_PROFILES_ACTIVE` environment
+variable**, in every environment: the command above locally, the container's
+env in prod. Nothing in any yml pins a default, on purpose. The equivalent
+one-off form is
+`./gradlew bootRun --args='--spring.profiles.active=local'`.
+
+**Secrets are never in a yml, in any profile** — yml carries shape, the
+environment carries secrets. DEV reads them from sealbox, PROD from the
+deploy platform's native store (`../../notes/infra-zones.md`).
 
 ## Relationship to prior work
 

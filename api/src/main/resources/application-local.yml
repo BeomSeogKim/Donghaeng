@@ -1,0 +1,22 @@
+# DEV zone, the founder's Mac. Credentials come from sealbox
+# (`sealbox run -p donghaeng -- ...`), never from this file.
+spring:
+  datasource:
+    hikari:
+      # One developer, one app instance, one local Postgres shared with every
+      # other project on the machine — a large pool would only take connections
+      # from its neighbours.
+      maximum-pool-size: 5
+
+springdoc:
+  api-docs:
+    # The seam's TypeScript types are generated from this document (#39), and
+    # generating it means running the app locally. Never loosened past local.
+    enabled: true
+
+logging:
+  level:
+    com.donghaeng: DEBUG
+# Deliberately absent: SQL logging (show-sql / org.hibernate.SQL /
+# org.hibernate.orm.jdbc.bind). Bound parameters are guest contacts even on a
+# laptop, and the local file is what gets copied when a prod one is needed.
