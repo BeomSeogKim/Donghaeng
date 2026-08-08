@@ -51,6 +51,30 @@ Concept stage — vision and core scope agreed (see `notes/`), MVP boundary
 and tech stack not yet chosen. Platform direction is a web app
 (mobile-first).
 
+## Development
+
+### `api/` (Kotlin + Spring Boot, port 8080)
+
+Secrets live in sealbox, never in a `.env` — `DATABASE_URL` (JDBC form, no
+credentials), `DB_USERNAME`, `DB_PASSWORD` under the `donghaeng` project.
+Only running the app needs them; the tests do not, because they start their
+own PostgreSQL with Testcontainers.
+
+```sh
+cd api
+
+./gradlew build                          # compile + ktlint + tests (Docker must be running)
+./gradlew test                           # tests only
+./gradlew ktlintFormat                   # auto-fix formatting
+
+sealbox run -p donghaeng -- ./gradlew bootRun --no-daemon
+```
+
+`bootRun` without the `sealbox run` prefix fails at startup with a datasource
+error — that is the missing environment, not a broken build. `--no-daemon`
+matters: a reused Gradle daemon does not reliably carry the injected
+environment through to the forked application JVM.
+
 ## Relationship to prior work
 
 This is a restart of an earlier wedding-related project, archived at

@@ -109,7 +109,9 @@ until after the MVP is built. Do not start implementation without the user.
 Separated frontend and backend, per `notes/2026-07-30-decision-tech-stack.md`:
 
 - `api/` — Kotlin + Spring Boot (JDK 21, Gradle KTS), JSON API only.
-  Spring Data JPA + Flyway, PostgreSQL. JUnit 5 + Testcontainers.
+  Spring Data JPA + Flyway, **PostgreSQL 16** (ratified 2026-08-08; the
+  native aggregation queries are where a version difference yields a
+  different *number* rather than an error). JUnit 5 + Testcontainers.
 - `web/` — React + TypeScript + Vite, built to static files. **v1 ships one
   bundle** (the couple app); the separate guest RSVP bundle arrives with the
   RSVP links. The rule holds whenever they land: a guest must never download
@@ -416,7 +418,17 @@ that constrain everyday work:
 - Parsed vendor email is rendered as text, never as HTML.
 - Rate limits are per wedding, and per link token once links exist —
   **never IP-only** (Korean carrier NAT would block real guests).
-- Actuator is never internet-exposed; SSH only via Tailscale.
+- **A secret never travels inside a connection string** (added 2026-08-08,
+  `notes/2026-08-08-decision-scaffold-secrets-and-surface.md`) — one sealbox
+  key per credential component, because HikariCP's failure path prints the
+  whole `jdbcUrl`. `donghaeng/DATABASE_URL` is credential-free JDBC form;
+  `DB_USERNAME` and `DB_PASSWORD` are separate keys. A recorded exception to
+  the workspace pattern in `../../notes/local-infra.md`.
+- **No machine-readable introspection surface is internet-reachable** —
+  Actuator, `/v3/api-docs`, Swagger UI alike (widened 2026-08-08 from the
+  Actuator-only rule). `springdoc.api-docs.enabled` is false by default and
+  is enabled only where the document is generated, which is the build.
+  SSH only via Tailscale.
 - Enumeration safety and the link-token rules have **no surface in v1** (no
   public page ships) but are not retracted — they bind the release that
   brings the RSVP links back.

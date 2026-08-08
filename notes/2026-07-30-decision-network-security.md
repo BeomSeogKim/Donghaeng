@@ -8,6 +8,14 @@
 > Session and invite tokens, hashing, log masking, per-wedding rate limits, the
 > aggregation-query whitelist, and the deployment rules all still apply.
 
+> **Amended 2026-08-08** — see
+> [2026-08-08-decision-scaffold-secrets-and-surface.md](2026-08-08-decision-scaffold-secrets-and-surface.md).
+> Two rules this note could not have made, both found while auditing the
+> `api/` scaffold: a secret never travels inside a connection string (log
+> masking has a hiding place this note missed), and "Actuator is never
+> exposed" widens to **no machine-readable introspection surface** —
+> Actuator, `/v3/api-docs`, Swagger UI alike. Nothing here is retracted.
+
 Scope, as set by the founder: **security against attack — network
 exposure, DDoS, token safety, application attack surface.** Data-privacy
 and legal obligations are a separate concern and are listed at the bottom
