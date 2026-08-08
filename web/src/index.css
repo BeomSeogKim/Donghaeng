@@ -1,0 +1,111 @@
+@import 'tailwindcss';
+@import '../../design/tokens.css';
+
+/*
+ * The bridge between design/tokens.css (the source of truth, per
+ * notes/2026-08-07-design-system.md) and Tailwind's utilities.
+ *
+ * Every value here is a var() reference, never a literal: a utility resolves
+ * to the token at runtime, so the two cannot disagree, and the dark theme's
+ * :root[data-theme="dark"] overrides flow through the utilities untouched.
+ *
+ * `--<namespace>-*: initial` clears Tailwind's built-in scale first, so the
+ * named off-the-shelf values do not exist: `bg-slate-100`, `text-red-500`,
+ * `text-sm`, `rounded-lg`, `shadow-md` and `ease-in-out` all fail to compile.
+ * That is the whole of what this buys. Arbitrary-value syntax still walks
+ * straight through — `bg-[#ff0000]`, `rounded-[7px]`, `p-[3px]`,
+ * `text-[13px]`, `duration-[999ms]` all compile today — so a hardcoded value
+ * is still a review catch until the lint rule lands (#45).
+ *
+ * Gold is deliberately absent from --color-*. It is 3.3:1 on porcelain and may
+ * never carry text in light, yet it is the primary text accent in dark, so
+ * `text-gold` would be correct in one theme and unreadable in the other and no
+ * class name could warn you. Its three legitimate uses — hairlines, the
+ * guarantee meter, the brand mark — reach for var(--dh-gold) directly.
+ *
+ * Tabular figures come from Tailwind's own `tabular-nums` utility, not from
+ * tokens.css's `.dh-num` class, so call sites have one styling mechanism.
+ */
+@theme {
+  --color-*: initial;
+  --color-ground: var(--dh-ground);
+  --color-surface: var(--dh-surface);
+  --color-surface-sunken: var(--dh-surface-sunken);
+  --color-ink: var(--dh-ink);
+  --color-ink-muted: var(--dh-ink-muted);
+  --color-ink-faint: var(--dh-ink-faint);
+  --color-ink-on-accent: var(--dh-ink-on-accent);
+  --color-line: var(--dh-line);
+  --color-line-strong: var(--dh-line-strong);
+  --color-primary: var(--dh-primary);
+  --color-primary-hover: var(--dh-primary-hover);
+  --color-primary-soft: var(--dh-primary-soft);
+  --color-attention: var(--dh-attention);
+  --color-attention-soft: var(--dh-attention-soft);
+  --color-danger: var(--dh-danger);
+  --color-danger-soft: var(--dh-danger-soft);
+  --color-focus: var(--dh-focus);
+  --color-att-yes-fg: var(--dh-att-yes-fg);
+  --color-att-yes-bg: var(--dh-att-yes-bg);
+  --color-att-maybe-fg: var(--dh-att-maybe-fg);
+  --color-att-maybe-bg: var(--dh-att-maybe-bg);
+  --color-att-no-fg: var(--dh-att-no-fg);
+  --color-att-no-bg: var(--dh-att-no-bg);
+
+  --font-*: initial;
+  --font-sans: var(--dh-font-sans);
+  --font-display: var(--dh-font-display);
+
+  --text-*: initial;
+  --text-display: var(--dh-text-display);
+  --text-title: var(--dh-text-title);
+  --text-lead: var(--dh-text-lead);
+  --text-body: var(--dh-text-body);
+  --text-meta: var(--dh-text-meta);
+  --text-label: var(--dh-text-label);
+
+  --leading-*: initial;
+  --leading-tight: var(--dh-leading-tight);
+  --leading-snug: var(--dh-leading-snug);
+  --leading-body: var(--dh-leading-body);
+
+  --font-weight-*: initial;
+  --font-weight-regular: var(--dh-weight-regular);
+  --font-weight-medium: var(--dh-weight-medium);
+  --font-weight-semibold: var(--dh-weight-semibold);
+  --font-weight-bold: var(--dh-weight-bold);
+
+  --tracking-*: initial;
+  --tracking-display: var(--dh-tracking-display);
+  --tracking-label: var(--dh-tracking-label);
+
+  /* The whole 4px grid derives from one token: p-4 is 4 × --dh-space-1.
+   *
+   * This works because Tailwind multiplies a single base rather than reading a
+   * list, so it holds only while every spacing token in design/tokens.css is
+   * an integer multiple of --dh-space-1. Checked at this commit: space-1..12
+   * are 1,2,3,4,5,6,8,10,12 × 0.25rem, all exact, with no off-grid value.
+   *
+   * That is now an invariant on the token file, not an observation. Adding
+   * --dh-space-7: 1.75rem is fine — p-7 appears for free. Adding a 6px value
+   * gets no utility at all and fails silently, because there is no scale entry
+   * to omit; the class simply never compiles. An off-grid spacing need is a
+   * reason to reopen this bridge, not to write the value at a call site. */
+  --spacing: var(--dh-space-1);
+
+  --radius-*: initial;
+  --radius-flush: var(--dh-radius-flush);
+  --radius-control: var(--dh-radius-control);
+  --radius-chip: var(--dh-radius-chip);
+  --radius-sheet: var(--dh-radius-sheet);
+
+  --shadow-*: initial;
+  --shadow-overlay: var(--dh-shadow-overlay);
+
+  --ease-*: initial;
+  --ease-standard: var(--dh-ease);
+}
+
+/* Duration has no theme namespace in Tailwind v4, so a transition reads the
+ * token at the call site: `duration-(--dh-dur-count)`, never `duration-260`. */
+
