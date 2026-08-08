@@ -79,7 +79,18 @@
   --tracking-display: var(--dh-tracking-display);
   --tracking-label: var(--dh-tracking-label);
 
-  /* The whole 4px grid derives from one token: p-4 is 4 × --dh-space-1. */
+  /* The whole 4px grid derives from one token: p-4 is 4 × --dh-space-1.
+   *
+   * This works because Tailwind multiplies a single base rather than reading a
+   * list, so it holds only while every spacing token in design/tokens.css is
+   * an integer multiple of --dh-space-1. Checked at this commit: space-1..12
+   * are 1,2,3,4,5,6,8,10,12 × 0.25rem, all exact, with no off-grid value.
+   *
+   * That is now an invariant on the token file, not an observation. Adding
+   * --dh-space-7: 1.75rem is fine — p-7 appears for free. Adding a 6px value
+   * gets no utility at all and fails silently, because there is no scale entry
+   * to omit; the class simply never compiles. An off-grid spacing need is a
+   * reason to reopen this bridge, not to write the value at a call site. */
   --spacing: var(--dh-space-1);
 
   --radius-*: initial;

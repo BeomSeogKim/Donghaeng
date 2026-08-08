@@ -60,6 +60,6 @@ export function createQueryClient() {
  * Which of 1 or 2 applies cannot be settled here: docs/api-spec.md has no
  * endpoint yet, so the aggregate's shape is unknown, and inventing a version
  * field the API does not return would be exactly the client-side guess the
- * spec rule forbids. #39 (generated types) will reveal which; #43 implements
+ * spec rule forbids. #39 (generated types) will reveal which; #44 implements
  * whichever it turns out to be.
  */
