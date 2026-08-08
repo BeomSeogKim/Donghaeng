@@ -9,10 +9,22 @@
  * to the token at runtime, so the two cannot disagree, and the dark theme's
  * :root[data-theme="dark"] overrides flow through the utilities untouched.
  *
- * `--<namespace>-*: initial` clears Tailwind's built-in scale first, so
- * `bg-slate-100`, `rounded-lg` or `shadow-md` simply do not exist — a
- * hardcoded colour, radius or shadow is a build-time failure, not a review
- * catch.
+ * `--<namespace>-*: initial` clears Tailwind's built-in scale first, so the
+ * named off-the-shelf values do not exist: `bg-slate-100`, `text-red-500`,
+ * `text-sm`, `rounded-lg`, `shadow-md` and `ease-in-out` all fail to compile.
+ * That is the whole of what this buys. Arbitrary-value syntax still walks
+ * straight through — `bg-[#ff0000]`, `rounded-[7px]`, `p-[3px]`,
+ * `text-[13px]`, `duration-[999ms]` all compile today — so a hardcoded value
+ * is still a review catch until the lint rule lands (#45).
+ *
+ * Gold is deliberately absent from --color-*. It is 3.3:1 on porcelain and may
+ * never carry text in light, yet it is the primary text accent in dark, so
+ * `text-gold` would be correct in one theme and unreadable in the other and no
+ * class name could warn you. Its three legitimate uses — hairlines, the
+ * guarantee meter, the brand mark — reach for var(--dh-gold) directly.
+ *
+ * Tabular figures come from Tailwind's own `tabular-nums` utility, not from
+ * tokens.css's `.dh-num` class, so call sites have one styling mechanism.
  */
 @theme {
   --color-*: initial;
@@ -28,8 +40,6 @@
   --color-primary: var(--dh-primary);
   --color-primary-hover: var(--dh-primary-hover);
   --color-primary-soft: var(--dh-primary-soft);
-  --color-gold: var(--dh-gold);
-  --color-gold-soft: var(--dh-gold-soft);
   --color-attention: var(--dh-attention);
   --color-attention-soft: var(--dh-attention-soft);
   --color-danger: var(--dh-danger);
@@ -82,7 +92,7 @@
   --shadow-overlay: var(--dh-shadow-overlay);
 
   --ease-*: initial;
-  --ease-dh: var(--dh-ease);
+  --ease-standard: var(--dh-ease);
 }
 
 /* Duration has no theme namespace in Tailwind v4, so a transition reads the

@@ -335,6 +335,15 @@ Full record: `notes/2026-08-08-decision-frontend-architecture.md`.
 - **Hooks, not containers.** No `XContainer`/`XView` split; extract
   data-fetching/derivation/subscription logic into a custom hook. This is
   the mechanism "web and mobile are two layouts, one codebase" runs on.
+- **The token bridge** (built 2026-08-08 with the scaffold): `web/src/index.css`
+  **imports** `design/tokens.css` rather than copying it, and every `@theme`
+  entry is a `var()` reference, never a literal — so utilities resolve to
+  tokens at runtime and the dark theme's `:root[data-theme="dark"]` overrides
+  flow through for free. Each Tailwind namespace is cleared to `initial`
+  first, so `bg-slate-100` and `rounded-lg` **do not exist**. Note the
+  limit, which is real: the *named scale* is dead, but arbitrary-value
+  syntax (`bg-[#ff0000]`, `text-[13px]`) still compiles — that gap is a lint
+  rule's job (issue #45), not the bridge's.
 - **`useEffect` is for external sync only.** Before writing one, name the
   outside-of-React thing it synchronizes with. A user action (a tap, a
   submit) belongs in that action's event handler, never an Effect watching
@@ -374,7 +383,16 @@ which is the same reason 백자 is prized for being *almost* white.
   disagree.
 - **Every digit that can change in place is tabular** — headcount, meal
   counts, 축의금 later. This is 정직함·믿음직함 in typography: a number whose
-  width shifts as it counts reads as unstable.
+  width shifts as it counts reads as unstable. In `web/` the mechanism is
+  Tailwind's **`tabular-nums`** utility, not `.dh-num` (decided 2026-08-08 —
+  two mechanisms existed and the same mandatory rule must not be expressed
+  two ways).
+- **Gold is not a Tailwind colour utility** (decided 2026-08-08). It is
+  deliberately absent from the `@theme` bridge's `--color-*` namespace, so
+  `text-gold` does not exist; the hairline, meter, and brand mark reach for
+  `var(--dh-gold)` directly. Gold is 3.3:1 on porcelain and 7.8:1 on
+  lacquer, so the identical utility would be correct in dark and unreadable
+  in light — the one case a token name provably cannot warn you about.
 - **불참 is neutral, never red; 참석 is 초록** (초록원삼, the robe of a 반가
   bride). A guest who cannot come is a fact, not an error. Red belongs to
   destroying data only — and destructive actions always carry a verb and are

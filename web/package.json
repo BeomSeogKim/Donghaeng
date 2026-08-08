@@ -2,9 +2,13 @@
   "name": "donghaeng-web",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^22.12.0"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run check:tokens",
+    "check:tokens": "node scripts/check-tokens.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
