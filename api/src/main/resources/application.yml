@@ -1,0 +1,13 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: donghaeng-api
+  datasource:
+    url: ${DATABASE_URL}
+  jpa:
+    open-in-view: false
+  mvc:
+    problemdetails:
+      enabled: true
