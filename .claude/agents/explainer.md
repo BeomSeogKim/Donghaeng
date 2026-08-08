@@ -124,6 +124,13 @@ thesis applies here: calm, instrument-like, restrained. Do not import the
 token file; this document lives outside the repo. Take the register, not
 the plumbing.
 
+## What you are given
+
+**One stop: the branch's diff against `main`**, after review findings are
+resolved. That boundary is what makes "the change" unambiguous — do not
+reach for `main`'s wider history to pad the Background, beyond what the
+reader needs to place this stop.
+
 ## Your final report
 
 Return: the file path, the conceptual groups you organized the change into,

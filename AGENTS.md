@@ -26,11 +26,19 @@ See **Development tempo** below and
 `notes/2026-08-08-decision-development-tempo.md`. It added a fifth agent,
 `explainer`.
 
+**How a stop is landed is decided too** (2026-08-08, after an audit of the
+day's own decisions): branch → PR → CI green → merge, the seam type-checked
+by generated OpenAPI types, and a cross-seam requirement split into two
+child issues. See **Build workflow** below and
+`notes/2026-08-08-decision-build-workflow.md`. Work is tracked as GitHub
+Issues (**Work tracking**); the local DB, sealbox entry, and ports are
+already provisioned.
+
 **The next step is scaffolding `web/` and `api/` — do not start it without
 the user.** It is the substrate exception in the tempo rule: horizontal,
 once, at the front, then a hard stop. The five working agents are already in
 place (see **Agents** below), so the scaffolding is what they have been
-waiting on, not the other way round.
+waiting on, not the other way round. It is issues `#1`–`#5`.
 
 All three calls from the flow design were **confirmed on 2026-08-07**:
 
@@ -87,7 +95,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-08-decision-frontend-testing-methodology.md`,
 `2026-08-08-decision-frontend-architecture.md`,
 `2026-08-08-decision-development-tempo.md`,
-`2026-08-08-decision-work-tracking.md`). Read them newest-first: the
+`2026-08-08-decision-work-tracking.md`,
+`2026-08-08-decision-build-workflow.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/` is substrate, not
@@ -185,6 +194,41 @@ board, no backlog file.** Full record:
 - **Leftover concepts become issues.** When an implementor stops after the
   first concept and reports what it left, file those as issues before
   moving on — that report is the intake path for most new work.
+
+## Build workflow (decided 2026-08-08)
+
+Full record: `notes/2026-08-08-decision-build-workflow.md`.
+
+- **One stop = one branch = one PR into `main`.** The diff `reviewer` and
+  `explainer` are handed is `main...<branch>` — that is what makes "the
+  diff of a stop" mechanical instead of a judgment call. Fix commits from
+  review stay on the branch. `Closes #N` goes in the PR.
+- **A red check is never merged.** Not "unrelated", not "fix it after". CI
+  runs `api/` build + test, `web/` typecheck + test, and ktlint on every
+  push and PR.
+- **The seam is type-checked, not just documented.** springdoc generates
+  OpenAPI from the controllers; `web/` generates its TS types from that. A
+  renamed field then breaks the frontend build instead of leaving MSW mocks
+  green against a shape the API no longer returns. `docs/api-spec.md`
+  stays and stays authoritative for **meaning** — what an endpoint is for,
+  which invariant it protects — which OpenAPI cannot carry.
+- **A requirement spanning the seam is one parent issue with two
+  sub-issues**, backend and frontend. Each child is its own stop, review,
+  explanation, and PR; the backend child goes first because the spec is the
+  seam. The parent closes when both children do. **Children are created
+  when the parent is picked up, not up front** — `#6` → `#37`/`#38` is the
+  worked example; the other cross-seam issues are still whole.
+- **`explainer`'s document is linked from its issue** as a comment, so the
+  issue is the index of explanations — the documents themselves are
+  deliberately not committed.
+- **An implementor may push back on a review finding once**, in writing,
+  stating why it is wrong. If the reviewer holds, the founder settles it.
+  Silent capitulation and silent dismissal look identical in a report,
+  which is why this is a rule and not a vibe.
+- **Local infra**: DB `donghaeng`, role `donghaeng_app`, connection string
+  in sealbox at `donghaeng/DATABASE_URL` (never a `.env`). No `_test`
+  database — backend tests use Testcontainers. Ports 8080 (`api/`), 3000
+  (`web/`), registered in `../../notes/local-infra.md`.
 
 ## Backend development methodology (decided 2026-08-07)
 

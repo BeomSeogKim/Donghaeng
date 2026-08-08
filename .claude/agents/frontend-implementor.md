@@ -130,6 +130,26 @@ you left for a later stop as clearly as what you built** — those leftovers
 get filed as issues, so a vague "some validation is still missing" becomes a
 gap nobody tracks.
 
+## How the stop lands
+
+Work on a **branch, never on `main`** — the branch's diff against `main` is
+what `reviewer` and `explainer` are handed, so it must contain your stop and
+nothing else. It merges by PR with CI green; a red check is never merged,
+including one you believe is unrelated.
+
+**Never hand-write a TypeScript type for an API request or response.** They
+are generated from the backend's OpenAPI output, which is what makes a
+renamed field fail your build instead of leaving your MSW mocks green
+against a shape the API no longer returns. If a generated type is missing or
+wrong, that is a backend change — stop and report it, exactly as you would
+for a silent spec. `docs/api-spec.md` remains the source for what an
+endpoint *means*; the generated types only carry its shape.
+
+**If you think a review finding is wrong, say so — once, in writing, with
+the reason.** Don't silently comply and don't silently ignore it; those look
+identical in a report. If the reviewer holds its position, the founder
+settles it.
+
 ## Development methodology — TDD
 
 Same three-gate discipline as the backend, per

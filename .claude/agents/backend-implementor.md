@@ -147,6 +147,29 @@ you left for a later stop as clearly as what you built** — those leftovers
 get filed as issues, so a vague "some validation is still missing" becomes a
 gap nobody tracks.
 
+## How the stop lands
+
+Work on a **branch, never on `main`** — the branch's diff against `main` is
+what `reviewer` and `explainer` are handed, so it must contain your stop and
+nothing else. It merges by PR with CI green; a red check is never merged,
+including one you believe is unrelated.
+
+Two things follow for you:
+
+- **Keep the suite green locally before you report.** CI will catch it
+  anyway, and a red PR is a stop that cannot land.
+- **Your controllers are the OpenAPI source.** springdoc generates the spec
+  from them and the frontend generates its TypeScript types from that, so a
+  renamed field breaks the frontend build rather than surviving to runtime.
+  Annotate well enough that the generated schema is honest — and remember it
+  carries shapes only. `docs/api-spec.md` is still where the *meaning* goes,
+  in the same change as the code.
+
+**If you think a review finding is wrong, say so — once, in writing, with
+the reason.** Don't silently comply and don't silently ignore it; those look
+identical in a report. If the reviewer holds its position, the founder
+settles it.
+
 ## Development methodology — TDD
 
 Every unit of work — a new endpoint, a changed aggregation, a migration —
