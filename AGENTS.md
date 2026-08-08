@@ -19,10 +19,26 @@ does not have strong existing frontend instincts, so this was decided
 explicitly as an enforced default rather than left to per-session judgment,
 backed by a same-day 123-source research pass.
 
+**The tempo the work runs at is also decided** (2026-08-08, last thing
+before scaffolding): vertical slices by requirement, sized in new concepts,
+each ending in a comprehension document the founder reads and is quizzed on.
+See **Development tempo** below and
+`notes/2026-08-08-decision-development-tempo.md`. It added a fifth agent,
+`explainer`.
+
+**How a stop is landed is decided too** (2026-08-08, after an audit of the
+day's own decisions): branch → PR → CI green → merge, the seam type-checked
+by generated OpenAPI types, and a cross-seam requirement split into two
+child issues. See **Build workflow** below and
+`notes/2026-08-08-decision-build-workflow.md`. Work is tracked as GitHub
+Issues (**Work tracking**); the local DB, sealbox entry, and ports are
+already provisioned.
+
 **The next step is scaffolding `web/` and `api/` — do not start it without
-the user.** The four working agents are already in place (see **Agents**
-below), so the scaffolding is what they have been waiting on, not the other
-way round.
+the user.** It is the substrate exception in the tempo rule: horizontal,
+once, at the front, then a hard stop. The five working agents are already in
+place (see **Agents** below), so the scaffolding is what they have been
+waiting on, not the other way round. It is issues `#1`–`#5`.
 
 All three calls from the flow design were **confirmed on 2026-08-07**:
 
@@ -43,7 +59,9 @@ Onboarding is therefore **date and names only.**
 
 Also still open, all small: where the import file hash lives, the initial
 contents of the 관계 synonym table, `GuestChange` retention, and whether
-유아식 counts toward 보증인원 (needs a real venue contract).
+유아식 counts toward 보증인원 (needs a real venue contract). These now live
+as `open-question` issues (`gh issue list --label open-question`) rather
+than as a bullet list here — see **Work tracking** below.
 
 Working style for this project: **talk design through, don't hand over option
 menus.** The founder is the domain owner, and the biggest corrections have all
@@ -75,7 +93,10 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-07-decision-backend-architecture.md`,
 `2026-08-07-decision-backend-api-conventions.md`,
 `2026-08-08-decision-frontend-testing-methodology.md`,
-`2026-08-08-decision-frontend-architecture.md`). Read them newest-first: the
+`2026-08-08-decision-frontend-architecture.md`,
+`2026-08-08-decision-development-tempo.md`,
+`2026-08-08-decision-work-tracking.md`,
+`2026-08-08-decision-build-workflow.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/` is substrate, not
@@ -88,7 +109,9 @@ until after the MVP is built. Do not start implementation without the user.
 Separated frontend and backend, per `notes/2026-07-30-decision-tech-stack.md`:
 
 - `api/` — Kotlin + Spring Boot (JDK 21, Gradle KTS), JSON API only.
-  Spring Data JPA + Flyway, PostgreSQL. JUnit 5 + Testcontainers.
+  Spring Data JPA + Flyway, **PostgreSQL 16** (ratified 2026-08-08; the
+  native aggregation queries are where a version difference yields a
+  different *number* rather than an error). JUnit 5 + Testcontainers.
 - `web/` — React + TypeScript + Vite, built to static files. **v1 ships one
   bundle** (the couple app); the separate guest RSVP bundle arrives with the
   RSVP links. The rule holds whenever they land: a guest must never download
@@ -110,6 +133,104 @@ kept so a native couple app stays possible without paying for it now:
 session lookup reads a token from the request rather than a cookie, and
 **all computation stays server-side** — the API returns conclusions, not
 rows to compute over. The guest RSVP page is web forever.
+
+## Development tempo (decided 2026-08-08)
+
+How every unit of implementation work is cut and accepted, on both sides of
+the seam. Full record: `notes/2026-08-08-decision-development-tempo.md`. The
+goal it serves is the founder's: **minimize the cognitive debt of AI-written
+code** — keep an actual working model of what was built.
+
+- **Cut vertically, by requirement — never horizontally by layer.** One
+  requirement = one Red/Blue/Green cycle = one review = one explanation =
+  one commit = **one stop**. "웨딩 생성" and "웨딩 정보 수정" are separate
+  stops. A layer slice (entity, then API, then service) has no Red Gate test
+  worth writing and hides the domain question until the layers meet — and
+  the seams between separately-approved layers are exactly where an AI
+  silently disagrees with itself.
+- **One honest exception — the substrate.** Scaffolding, the Flyway baseline
+  schema, ProblemDetail/error-handling wiring, and
+  session→membership→wedding resolution are not requirements and are done
+  horizontally, once, at the front. Everything after is vertical.
+- **Slice size is measured in new concepts, not lines: one or two per
+  stop.** The founder reads via the explanation document rather than the raw
+  diff, so the binding constraint is how many unfamiliar ideas land at once,
+  not how many files changed.
+- **Order at every stop:** implementor → `reviewer` + `security-manager` →
+  fix → `explainer` → founder reads and takes the quiz → commit. The
+  explanation is written only after findings are resolved, so it describes
+  verified code.
+- **The comprehension gate is tiered**, so it survives past week two. A stop
+  introducing a new concept gets the full explanation + quiz; a stop
+  repeating an established pattern gets `reviewer`'s report only. The
+  implementor states which tier it thinks its stop is; the founder
+  overrides freely.
+- **Never let the author explain its own work.** An implementor explaining
+  its own change explains its intent, so a bug gets described as the
+  bug-free version it meant to write — turning unknown debt into false
+  confidence, which is worse than no gate. This is why `explainer` exists
+  as a separate agent and why it carries none of the implementation
+  session's context.
+
+## Work tracking (decided 2026-08-08)
+
+**GitHub Issues on `BeomSeogKim/Donghaeng`, reached with `gh` — no Jira, no
+board, no backlog file.** Full record:
+`notes/2026-08-08-decision-work-tracking.md`.
+
+- **`notes/` is why; an Issue is what's left and where it stands.** An
+  issue never decides anything. Rationale in an issue body that isn't in
+  `notes/` is a bug — move it to a record and link. This keeps the single
+  source of truth intact while the tracker stays perishable.
+- **One issue = one requirement, not one stop.** A stop is cut at build
+  time by new-concept count, so one issue may take two or three stops and
+  as many commits. It closes when the requirement is done.
+- **`Closes #N` (or `Refs #N`) in the commit body.** This is the whole
+  mechanism: state updates as a by-product of a commit message that gets
+  written anyway, so nothing depends on remembering to tidy a board.
+- **Two milestones** — `v1` and `post-v1` (deferred, never cancelled).
+  **Four labels** — `api`, `web`, `infra`, `open-question`. Don't add more;
+  labels stop meaning anything the moment they multiply.
+- **`open-question` closes only by writing a `notes/` record.** These are
+  the small undecided items that otherwise evaporate.
+- **Leftover concepts become issues.** When an implementor stops after the
+  first concept and reports what it left, file those as issues before
+  moving on — that report is the intake path for most new work.
+
+## Build workflow (decided 2026-08-08)
+
+Full record: `notes/2026-08-08-decision-build-workflow.md`.
+
+- **One stop = one branch = one PR into `main`.** The diff `reviewer` and
+  `explainer` are handed is `main...<branch>` — that is what makes "the
+  diff of a stop" mechanical instead of a judgment call. Fix commits from
+  review stay on the branch. `Closes #N` goes in the PR.
+- **A red check is never merged.** Not "unrelated", not "fix it after". CI
+  runs `api/` build + test, `web/` typecheck + test, and ktlint on every
+  push and PR.
+- **The seam is type-checked, not just documented.** springdoc generates
+  OpenAPI from the controllers; `web/` generates its TS types from that. A
+  renamed field then breaks the frontend build instead of leaving MSW mocks
+  green against a shape the API no longer returns. `docs/api-spec.md`
+  stays and stays authoritative for **meaning** — what an endpoint is for,
+  which invariant it protects — which OpenAPI cannot carry.
+- **A requirement spanning the seam is one parent issue with two
+  sub-issues**, backend and frontend. Each child is its own stop, review,
+  explanation, and PR; the backend child goes first because the spec is the
+  seam. The parent closes when both children do. **Children are created
+  when the parent is picked up, not up front** — `#6` → `#37`/`#38` is the
+  worked example; the other cross-seam issues are still whole.
+- **`explainer`'s document is linked from its issue** as a comment, so the
+  issue is the index of explanations — the documents themselves are
+  deliberately not committed.
+- **An implementor may push back on a review finding once**, in writing,
+  stating why it is wrong. If the reviewer holds, the founder settles it.
+  Silent capitulation and silent dismissal look identical in a report,
+  which is why this is a rule and not a vibe.
+- **Local infra**: DB `donghaeng`, role `donghaeng_app`, connection string
+  in sealbox at `donghaeng/DATABASE_URL` (never a `.env`). No `_test`
+  database — backend tests use Testcontainers. Ports 8080 (`api/`), 3000
+  (`web/`), registered in `../../notes/local-infra.md`.
 
 ## Backend development methodology (decided 2026-08-07)
 
@@ -297,7 +418,17 @@ that constrain everyday work:
 - Parsed vendor email is rendered as text, never as HTML.
 - Rate limits are per wedding, and per link token once links exist —
   **never IP-only** (Korean carrier NAT would block real guests).
-- Actuator is never internet-exposed; SSH only via Tailscale.
+- **A secret never travels inside a connection string** (added 2026-08-08,
+  `notes/2026-08-08-decision-scaffold-secrets-and-surface.md`) — one sealbox
+  key per credential component, because HikariCP's failure path prints the
+  whole `jdbcUrl`. `donghaeng/DATABASE_URL` is credential-free JDBC form;
+  `DB_USERNAME` and `DB_PASSWORD` are separate keys. A recorded exception to
+  the workspace pattern in `../../notes/local-infra.md`.
+- **No machine-readable introspection surface is internet-reachable** —
+  Actuator, `/v3/api-docs`, Swagger UI alike (widened 2026-08-08 from the
+  Actuator-only rule). `springdoc.api-docs.enabled` is false by default and
+  is enabled only where the document is generated, which is the build.
+  SSH only via Tailscale.
 - Enumeration safety and the link-token rules have **no surface in v1** (no
   public page ships) but are not retracted — they bind the release that
   brings the RSVP links back.
@@ -436,9 +567,9 @@ Brand name: 동행 (Donghaeng) — "walking together," chosen to express the
 service acting as a steady companion through the couple's wedding journey.
 Repo/folder slug: `donghaeng`.
 
-## Agents (set up 2026-08-07)
+## Agents (set up 2026-08-07, `explainer` added 2026-08-08)
 
-Four subagents in `.claude/agents/`, split by role:
+Five subagents in `.claude/agents/`, split by role:
 
 - **`backend-implementor`** — all `api/` code. Sole owner of
   `docs/api-spec.md`.
@@ -448,8 +579,12 @@ Four subagents in `.claude/agents/`, split by role:
   refactoring gate. Read-only.
 - **`security-manager`** — audits against
   `notes/2026-07-30-decision-network-security.md`. Read-only.
+- **`explainer`** — the comprehension gate at the end of a stop. Writes the
+  Background/Intuition/Code/Quiz document, in Korean, as a self-contained
+  HTML file outside the repo. Never touches repo code, and never carries the
+  implementation session's context.
 
-Four things bind:
+Five things bind:
 
 - **Delegation is automatic in this repo.** Route implementation work to the
   implementors and review work to the reviewers without being asked; explicit
@@ -462,7 +597,14 @@ Four things bind:
   or wrong the frontend stops rather than guessing, and never computes a
   number client-side to route around it.
 - **The reviewers cannot write.** No `Edit`, no `Write` — that is what makes
-  their verdict worth reading. They report; the implementors fix.
+  their verdict worth reading. They report; the implementors fix. `explainer`
+  has `Write` for exactly one purpose — its own HTML file, in the
+  scratchpad — and never for repo code.
+- **`explainer` runs last and cold.** After the review findings are
+  resolved, never before: an explanation of code that is about to change is
+  wasted reading. It gets the diff and `notes/`, never the session that
+  produced the code — see **Development tempo** for why that separation is
+  the whole point.
 - **This file and `notes/` stay the single source of truth.** An agent prompt
   carries a short operative checklist of the rules its own area actually
   breaks — an auto-delegated agent gets one shot, so the reminder earns its

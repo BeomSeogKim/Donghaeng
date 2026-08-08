@@ -1,0 +1,49 @@
+# PROD zone: VPS behind the Cloudflare proxy, managed Postgres
+# (../../notes/infra-zones.md). Credentials come from the deploy platform's
+# native store, never from this file.
+donghaeng:
+  # Required marker. Its absence is how a no-profile start fails fast — see
+  # com.donghaeng.config.RequiredProfileMarker.
+  profile: prod
+
+server:
+  # Cloudflare and Caddy both sit in front, so the request the app sees is plain
+  # HTTP on a private address. Without this, every absolute URL the app builds
+  # says `http://` — and the security record requires an exact-match OAuth
+  # `redirect_uri`, which is precisely where a wrong scheme breaks.
+  #
+  # NATIVE rather than FRAMEWORK: NATIVE installs Tomcat's RemoteIpValve, which
+  # honours X-Forwarded-* only from its `internal-proxies` ranges, while
+  # FRAMEWORK's ForwardedHeaderFilter has no notion of a trusted proxy at all.
+  # It is a narrowing, not a guarantee: Tomcat's defaults include 100.64.0.0/10,
+  # which is Tailscale's CGNAT range, and the VPS firewall admits exactly
+  # Cloudflare and Tailscale — so the one class of direct-to-origin request the
+  # perimeter permits is inside the trusted set. Pinning `internal-proxies` to
+  # the real proxy address is a deploy-stop item; no record fixes it yet.
+  forward-headers-strategy: native
+
+spring:
+  datasource:
+    hikari:
+      # A guess, not a measured number: one app instance, a 2-vCPU managed
+      # Postgres, and small-instance throughput peaks at a small pool. The load
+      # that will actually test it is the first RSVP burst after invitations go
+      # out; tracked as an open question rather than sized by pretending.
+      maximum-pool-size: 5
+  flyway:
+    # Restated, though Boot's FlywayProperties already defaults it true and the
+    # base sets it: this is the one setting whose silent loss is unrecoverable,
+    # and this file is what gets read during a deploy review.
+    clean-disabled: true
+
+logging:
+  level:
+    # Restated from the base, where they are set for every environment. Read the
+    # comment there for why they exist; here they are simply not reopened.
+    org.hibernate.SQL: 'OFF'
+    org.hibernate.orm.jdbc.bind: 'OFF'
+    org.hibernate.orm.jdbc.extract: 'OFF'
+# Deliberately absent: springdoc stays disabled by inheriting the base — no
+# machine-readable introspection surface is internet-reachable
+# (notes/2026-08-08-decision-scaffold-secrets-and-surface.md). Nothing here
+# re-enables it.

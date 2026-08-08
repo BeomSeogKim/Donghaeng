@@ -107,6 +107,49 @@ Full record: `notes/2026-08-08-decision-frontend-architecture.md`.
 - Search is a Field variant; the filter chips are a Tag with a selected state.
   The ten-component inventory holds — before adding an eleventh, say why.
 
+## The size of one stop
+
+Work is paced in **stops**: one requirement, one Red/Blue/Green cycle, one
+review, one commit (`notes/2026-08-08-decision-development-tempo.md`). The
+founder reads an explanation of each stop and is quizzed on it, so a stop is
+sized by **how many new concepts it introduces — one or two**, not by lines
+or files.
+
+If the task you were handed carries more than that — a screen that also
+brings the first React Query setup, the error-`code` branching, and a new
+mutation flow — **build the first concept only and stop**, naming what you
+left for the next stop. Delivering three concepts at once is not efficiency
+here; it is the exact thing this tempo exists to prevent.
+
+When you report, state which tier your stop is: **new concept** (it earns a
+full explanation and quiz) or **established pattern repeated** (review report
+only). The founder overrides freely.
+
+Name the GitHub issue your stop belongs to (`gh issue list`), and **list what
+you left for a later stop as clearly as what you built** — those leftovers
+get filed as issues, so a vague "some validation is still missing" becomes a
+gap nobody tracks.
+
+## How the stop lands
+
+Work on a **branch, never on `main`** — the branch's diff against `main` is
+what `reviewer` and `explainer` are handed, so it must contain your stop and
+nothing else. It merges by PR with CI green; a red check is never merged,
+including one you believe is unrelated.
+
+**Never hand-write a TypeScript type for an API request or response.** They
+are generated from the backend's OpenAPI output, which is what makes a
+renamed field fail your build instead of leaving your MSW mocks green
+against a shape the API no longer returns. If a generated type is missing or
+wrong, that is a backend change — stop and report it, exactly as you would
+for a silent spec. `docs/api-spec.md` remains the source for what an
+endpoint *means*; the generated types only carry its shape.
+
+**If you think a review finding is wrong, say so — once, in writing, with
+the reason.** Don't silently comply and don't silently ignore it; those look
+identical in a report. If the reviewer holds its position, the founder
+settles it.
+
 ## Development methodology — TDD
 
 Same three-gate discipline as the backend, per
