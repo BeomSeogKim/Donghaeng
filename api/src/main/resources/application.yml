@@ -1,9 +1,19 @@
-# Shared base. Profiles (application-{local,prod}.yml) override in the
-# LOOSENING direction only, so a process started with no profile at all gets
-# the most restrictive behaviour this file can give it.
+# Shared base for the two profiles, application-{dev,prod}.yml.
+#
+# Starting with no profile is an ERROR, not a restrictive start: `donghaeng.profile`
+# is required and only the profile files define it, so the context fails with an
+# instruction naming the fix (com.donghaeng.config.MissingProfileFailureAnalyzer).
+# The reason is Flyway — a mistyped profile has already migrated the production
+# database by the time the missing forwarded-header handling breaks a login.
+#
+# What this file holds is the setting whose WRONG value is unsafe, so that a
+# profile has to opt out of safety deliberately. It is not true that profiles
+# only loosen: springdoc, forwarded headers and log level loosen here, the
+# connection-pool cap tightens, and the session cookie flags landing in #5 will
+# have to tighten (Boot defaults `server.servlet.session.cookie.secure` to false).
 #
 # Split: yml carries shape, the environment carries secrets. No credential —
-# DB, OAuth, or otherwise — appears in any profile file.
+# DB, OAuth, or otherwise — appears in any profile file, and a test enforces it.
 # Profile selection: SPRING_PROFILES_ACTIVE (see README, Development).
 server:
   port: 8080
@@ -17,9 +27,6 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     open-in-view: false
-    # Bound parameters carry guest names and contacts, so SQL logging is off in
-    # every environment, not just prod
-    # (notes/2026-07-30-decision-network-security.md).
     show-sql: false
     hibernate:
       # Flyway owns the schema everywhere. Stated rather than left to Boot's
@@ -32,6 +39,23 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+    # When true, Spring logs request headers — including Cookie, i.e. the session
+    # token. Boot defaults it false; stated because "masked in logs" is a rule
+    # here, not a preference (notes/2026-07-30-decision-network-security.md).
+    log-request-details: false
+
+logging:
+  level:
+    # These three belong in the BASE, not in prod. They have no safe default and
+    # they are what print 하객 names and phone numbers: `bind` logs the parameters
+    # sent, `extract` logs the values read back — same data, opposite direction —
+    # and neither is covered by `show-sql: false`, which is a different code path.
+    # Pinned so that raising the root level to DEBUG during an incident, on any
+    # machine, cannot turn them on by accident.
+    # The quotes are load-bearing: unquoted OFF is the YAML 1.1 boolean false.
+    org.hibernate.SQL: 'OFF'
+    org.hibernate.orm.jdbc.bind: 'OFF'
+    org.hibernate.orm.jdbc.extract: 'OFF'
 
 springdoc:
   api-docs:

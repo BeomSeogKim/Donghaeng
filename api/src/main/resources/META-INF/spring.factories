@@ -1,0 +1,5 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.donghaeng.config.RequiredProfileMarker
+
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.donghaeng.config.MissingProfileFailureAnalyzer

@@ -10,7 +10,10 @@ import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import javax.sql.DataSource
 
-@SpringBootTest
+// The suite is not an environment: it has no profile of its own, because
+// @ServiceConnection supplies the datasource and outranks spring.datasource.*.
+// It still has to satisfy the profile marker, so it states one explicitly.
+@SpringBootTest(properties = ["donghaeng.profile=test"])
 @Testcontainers
 class DonghaengApplicationTest {
     companion object {

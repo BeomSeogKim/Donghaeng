@@ -41,6 +41,24 @@ This is a documented **exception to the workspace pattern** in
 `../../notes/local-infra.md`, recorded there too. The exception is
 Spring-specific; it does not generalise to every project.
 
+### And the connection itself must be encrypted (added later the same day)
+
+Making `DATABASE_URL` credential-free answered *who can read the secret* and
+said nothing about *who can read the traffic*. In PROD the Postgres is
+**managed, so it is off-box** — every bound parameter crosses a network, and
+those parameters are guest names, phone numbers, and later 축의금 amounts.
+Nothing in any record required that hop to be encrypted.
+
+**Rule: the PROD `DATABASE_URL` carries `sslmode=verify-full`.** Not
+`require`, which encrypts but authenticates nothing and so does not survive
+a MITM; `verify-full` is the mode that checks the certificate and the
+hostname. Because the URL is now credential-free, this is the rare security
+property that is safe to assert on in a test rather than only in a runbook.
+
+Dev is exempt: the local Postgres is a unix-socket-or-loopback hop on the
+same machine, and requiring TLS there would only teach people to turn it
+off.
+
 ## No machine-readable introspection surface is internet-reachable
 
 The security record says "Spring Boot Actuator is never exposed to the

@@ -1,0 +1,37 @@
+# DEV zone: the founder's Mac, which is also the Mac mini instance's profile when
+# that instance exists (../../notes/infra-zones.md). Credentials come from
+# sealbox (`sealbox run -p donghaeng -- ...`), never from this file.
+donghaeng:
+  # Required marker. Its absence is how a no-profile start fails fast — see
+  # com.donghaeng.config.RequiredProfileMarker.
+  profile: dev
+
+server:
+  # api-docs is on in this profile, so bind loopback only: on 0.0.0.0 the whole
+  # endpoint/DTO map is readable by anything on the LAN and by every Tailscale
+  # peer. The security record's line is "internet-reachable", which this would
+  # not breach — it is simply free to close in the one profile that opens it.
+  address: 127.0.0.1
+  # Tomcat's RemoteIpValve is deliberately absent here: nothing proxies this.
+
+spring:
+  datasource:
+    hikari:
+      # Tightens, not loosens: one developer, one app instance, and a local
+      # Postgres shared with every other project on the machine — a bigger pool
+      # would only take connections from its neighbours.
+      maximum-pool-size: 5
+
+springdoc:
+  api-docs:
+    # The seam's TypeScript types are generated from this document (#39), and
+    # generating it means running the app. Never enabled outside this profile.
+    enabled: true
+
+logging:
+  level:
+    com.donghaeng: DEBUG
+# Deliberately absent: SQL logging (show-sql, org.hibernate.SQL,
+# org.hibernate.orm.jdbc.bind/extract — all pinned OFF in the base and not
+# reopened here). Bound parameters are guest contacts on a laptop too, and this
+# is the file someone copies when they need a new environment's.
