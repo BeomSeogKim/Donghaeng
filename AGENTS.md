@@ -51,7 +51,9 @@ Onboarding is therefore **date and names only.**
 
 Also still open, all small: where the import file hash lives, the initial
 contents of the 관계 synonym table, `GuestChange` retention, and whether
-유아식 counts toward 보증인원 (needs a real venue contract).
+유아식 counts toward 보증인원 (needs a real venue contract). These now live
+as `open-question` issues (`gh issue list --label open-question`) rather
+than as a bullet list here — see **Work tracking** below.
 
 Working style for this project: **talk design through, don't hand over option
 menus.** The founder is the domain owner, and the biggest corrections have all
@@ -84,7 +86,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-07-decision-backend-api-conventions.md`,
 `2026-08-08-decision-frontend-testing-methodology.md`,
 `2026-08-08-decision-frontend-architecture.md`,
-`2026-08-08-decision-development-tempo.md`). Read them newest-first: the
+`2026-08-08-decision-development-tempo.md`,
+`2026-08-08-decision-work-tracking.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/` is substrate, not
@@ -157,6 +160,31 @@ code** — keep an actual working model of what was built.
   confidence, which is worse than no gate. This is why `explainer` exists
   as a separate agent and why it carries none of the implementation
   session's context.
+
+## Work tracking (decided 2026-08-08)
+
+**GitHub Issues on `BeomSeogKim/Donghaeng`, reached with `gh` — no Jira, no
+board, no backlog file.** Full record:
+`notes/2026-08-08-decision-work-tracking.md`.
+
+- **`notes/` is why; an Issue is what's left and where it stands.** An
+  issue never decides anything. Rationale in an issue body that isn't in
+  `notes/` is a bug — move it to a record and link. This keeps the single
+  source of truth intact while the tracker stays perishable.
+- **One issue = one requirement, not one stop.** A stop is cut at build
+  time by new-concept count, so one issue may take two or three stops and
+  as many commits. It closes when the requirement is done.
+- **`Closes #N` (or `Refs #N`) in the commit body.** This is the whole
+  mechanism: state updates as a by-product of a commit message that gets
+  written anyway, so nothing depends on remembering to tidy a board.
+- **Two milestones** — `v1` and `post-v1` (deferred, never cancelled).
+  **Four labels** — `api`, `web`, `infra`, `open-question`. Don't add more;
+  labels stop meaning anything the moment they multiply.
+- **`open-question` closes only by writing a `notes/` record.** These are
+  the small undecided items that otherwise evaporate.
+- **Leftover concepts become issues.** When an implementor stops after the
+  first concept and reports what it left, file those as issues before
+  moving on — that report is the intake path for most new work.
 
 ## Backend development methodology (decided 2026-08-07)
 

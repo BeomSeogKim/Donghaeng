@@ -142,6 +142,11 @@ When you report, state which tier your stop is: **new concept** (it earns a
 full explanation and quiz) or **established pattern repeated** (review report
 only). The founder overrides freely.
 
+Name the GitHub issue your stop belongs to (`gh issue list`), and **list what
+you left for a later stop as clearly as what you built** — those leftovers
+get filed as issues, so a vague "some validation is still missing" becomes a
+gap nobody tracks.
+
 ## Development methodology — TDD
 
 Every unit of work — a new endpoint, a changed aggregation, a migration —

@@ -116,8 +116,12 @@ overrides freely.
   is not always in the same position, and distractors are balanced in
   length — per the gist's own follow-up corrections.
 
-## Still open
+## A missed question triggers nothing
 
-- Whether a missed quiz question triggers anything mechanical (a follow-up
-  explanation, a re-slice) or stays the founder's judgement call. Left
-  unmechanized until there are real misses to look at.
+Decided the same day, closing the one item this record left open: a wrong
+answer does not mechanically force a follow-up explanation or a re-slice. It
+is information the founder acts on or doesn't.
+
+Mechanizing it would have made the quiz a gate that can fail, and a gate
+that can fail is a gate people learn to pass — which would corrupt the one
+thing the quiz is for, honestly measuring comprehension.
