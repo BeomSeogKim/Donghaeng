@@ -1,0 +1,281 @@
+# CI exists to make a merged `main` deployable without worry — not to prove the
+# code compiles. So the pipeline is allowed to be slow where slowness buys
+# deploy confidence: `prod-boot` boots the committed prod configuration, and
+# `docker` boots the packaged image itself and interrogates what it serves.
+#
+# notes/2026-08-08-decision-build-workflow.md ("a red check is never merged").
+#
+# Schema ownership (who applies DDL, and therefore what these jobs must set up
+# before the app starts) is open and tracked on issue #3.
+name: CI
+
+# The default token scope is a repository setting nobody is watching, and every
+# job below runs third-party code — Gradle plugins, npm lifecycle scripts —
+# inside the job. Pinned here for the same reason the restrictive settings live
+# in `application.yml`: opting out has to be deliberate and visible in review.
+permissions:
+  contents: read
+
+on:
+  # Push is restricted to `main` because `pull_request` already covers every
+  # branch that matters; unfiltered, each PR push ran the whole pipeline twice
+  # under two different concurrency groups.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never on `main`: this pipeline exists to certify `main`, and two quick
+  # merges would cancel the first run. A cancelled run is not green.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# No repository secret is used anywhere in this file. The only credentials are
+# the throwaway values in the `docker` job below, for a Postgres that lives and
+# dies with the job.
+
+jobs:
+  api:
+    name: api · ktlint + build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The committed wrapper jar and the pinned distribution have already
+      # disagreed once (notes/2026-08-08-decision-scaffold-secrets-and-surface.md).
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Testcontainers needs no service container: ubuntu-latest runners ship a
+      # working Docker daemon, and the tests start their own Postgres.
+      - run: ./gradlew ktlintCheck build --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-test-results
+          path: api/build/reports/tests/test
+          if-no-files-found: ignore
+
+  prod-boot:
+    # The same tests the `api` job already ran, isolated so the checks list
+    # carries a distinct "the committed dev and prod configuration actually
+    # boots" signal. It costs one extra compile; a red here means do not deploy,
+    # which is worth more than the minute.
+    name: prod-boot · real dev/prod config boots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Same justification as in the `api` job: this job runs the wrapper too,
+      # so it gets the same check.
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Gradle fails the task when a filter matches nothing, so a stale filter
+      # is loud rather than vacuously green.
+      - run: ./gradlew test --tests 'com.donghaeng.*ProfileBootTest' --no-daemon
+
+  web:
+    name: web · typecheck + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          # package.json pins engines.node to ^22.12.0.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # `build` chains check:tokens, which is the only guard on the token bridge.
+      - run: npm run build
+
+  docker:
+    name: docker · image builds, boots and serves
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: donghaeng
+          POSTGRES_USER: donghaeng_ci
+          POSTGRES_PASSWORD: donghaeng_ci_throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U donghaeng_ci -d donghaeng"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: api
+          load: true
+          tags: donghaeng-api:ci
+          # Without this the build stage re-downloads the pinned Gradle
+          # distribution and every dependency on every run.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --network host so the container reaches the service container's published
+      # port, and so its own 8080 is reachable from the runner. The credentials
+      # repeat the service block's on purpose — they are throwaway literals, and
+      # a level of indirection would only hide which value is being used.
+      #
+      # TLS to Postgres is deliberately not asserted here: this connection is
+      # loopback inside one runner, so `sslmode=verify-full` has nothing to
+      # verify. Asserting it needs a real prod environment and belongs to the
+      # deploy stop.
+      - name: Run the image against Postgres
+        run: |
+          docker run -d --name donghaeng-api --network host \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e DATABASE_URL='jdbc:postgresql://127.0.0.1:5432/donghaeng' \
+            -e DB_USERNAME='donghaeng_ci' \
+            -e DB_PASSWORD='donghaeng_ci_throwaway' \
+            donghaeng-api:ci
+
+      # `docker logs ... | grep -q` is deliberately avoided: `grep -q` exits on
+      # the first match and closes the pipe, `docker logs` then dies of SIGPIPE
+      # with 141, and `pipefail` reports the successful match as a failure — so a
+      # matched line spins to the deadline and reports a timeout on an app that
+      # started fine. Capturing to a file removes the pipe entirely.
+      - name: Wait for startup
+        run: |
+          set -euo pipefail
+          await_log() {
+            pattern=$1
+            budget=$2
+            deadline=$(( SECONDS + budget ))
+            while true; do
+              docker logs donghaeng-api > /tmp/api.log 2>&1
+              if grep -qF "$pattern" /tmp/api.log; then
+                echo "logged: $pattern"
+                return 0
+              fi
+              if [ "$(docker inspect -f '{{.State.Running}}' donghaeng-api)" != "true" ]; then
+                echo "::error::the container exited before logging '$pattern'"
+                return 1
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::no '$pattern' within ${budget}s"
+                return 1
+              fi
+              sleep 2
+            done
+          }
+
+          # Hikari opens the pool on the first getConnection(), so this line is
+          # proof the app reached Postgres — not merely that it parsed a
+          # datasource URL. Asserted in its own right because today it is Flyway
+          # that triggers the first connection, and that is exactly what is about
+          # to change (issue #3); when it does, this goes red instead of quietly
+          # certifying an app that never talked to the database.
+          await_log 'HikariPool-1 - Start completed.' 120
+
+          # Boot prints `Started DonghaengApplicationKt` — Kotlin names the file
+          # facade, not the class — so this matches as a prefix.
+          await_log 'Started DonghaengApplication' 120
+
+      # The startup line already implies the TCP accept, so a socket connect adds
+      # nothing: together they net out to "a JVM opened a port". A broken
+      # DispatcherServlet, a filter chain throwing on every request, or
+      # ProblemDetail wiring that never took would all pass that.
+      #
+      # So: assert the real artifact answers a real HTTP request with Spring's
+      # RFC 9457 problem document (`spring.mvc.problemdetails.enabled: true` is
+      # committed), and assert the introspection surface is OFF on that same
+      # artifact. The image bakes application-dev.yml, whose whole
+      # security-relevant content is `springdoc.api-docs.enabled: true`, and
+      # nothing else anywhere observes what port 8080 actually serves under the
+      # prod profile. A negative assertion on the artifact is the only kind that
+      # survives a profile-precedence mistake
+      # (notes/2026-08-08-decision-scaffold-secrets-and-surface.md).
+      - name: The image serves, and publishes nothing
+        run: |
+          set -euo pipefail
+          probe() {
+            curl -sS --max-time 10 --retry 10 --retry-connrefused --retry-delay 2 \
+              -o /tmp/body -w '%{http_code} %{content_type}' \
+              "http://127.0.0.1:8080$1"
+          }
+
+          expect_404() {
+            path=$1
+            result=$(probe "$path")
+            echo "$path -> $result"
+            case "$result" in
+              '404 '*) ;;
+              *) echo "::error::$path answered '$result', expected 404"; exit 1 ;;
+            esac
+          }
+
+          # Serving at all: an unmapped path comes back as a problem document,
+          # which only a working servlet stack can produce.
+          result=$(probe /__ci_unmapped_path)
+          echo "/__ci_unmapped_path -> $result"
+          case "$result" in
+            '404 application/problem+json'*) ;;
+            *) echo "::error::unmapped path answered '$result', expected a 404 problem document"; exit 1 ;;
+          esac
+          # Parsed, not grepped. `grep '"status":404'` would depend on Jackson
+          # emitting whitespace-free JSON, and go red on a healthy app the day
+          # anything pretty-prints (indent-output, or a ProblemDetail
+          # customisation in #4) — a check failing for a reason unrelated to
+          # what it claims to test, which is the whole failure family this job
+          # has already been bitten by once. jq is preinstalled on the runner.
+          jq -e '.status == 404 and (.title | type) == "string"' /tmp/body > /dev/null
+
+          # Publishing nothing.
+          expect_404 /v3/api-docs
+          expect_404 /swagger-ui/index.html
+          expect_404 /actuator/health
+
+      - name: Container log
+        if: always()
+        run: docker logs donghaeng-api 2>&1 || true

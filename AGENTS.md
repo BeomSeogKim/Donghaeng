@@ -207,7 +207,25 @@ Full record: `notes/2026-08-08-decision-build-workflow.md`.
   review stay on the branch. `Closes #N` goes in the PR.
 - **A red check is never merged.** Not "unrelated", not "fix it after". CI
   runs `api/` build + test, `web/` typecheck + test, and ktlint on every
-  push and PR.
+  push and PR — plus two jobs that exist because **green has to mean
+  deployable, not compiling** (built 2026-08-08): `prod-boot` boots the
+  committed `application-{dev,prod}.yml` for real, and `docker` builds the
+  image, runs it under the prod profile, and asserts it serves HTTP, reaches
+  Postgres, and answers 404 on `/v3/api-docs`, `/swagger-ui`, `/actuator` —
+  a negative assertion on the shipped artifact, the only kind that survives
+  a profile-precedence mistake.
+- **A boot test must be named `*ProfileBootTest`.** The `prod-boot` job
+  selects by that pattern, so a boot test named anything else silently
+  vanishes from that check — and does *not* go red, because the `api` job
+  still runs it. The name is a contract, not a style.
+- **The merge gate is local, and leaky on purpose** (decided 2026-08-08,
+  `notes/2026-08-08-decision-merge-gate.md`). Branch protection is
+  unavailable — private repo on the free plan returns 403 — so
+  `.githooks/pre-push` refuses a direct push to `main` and a `PreToolUse`
+  hook blocks `gh pr merge` unless `gh pr checks` is green, failing closed.
+  **A merge from the GitHub web UI bypasses both.** Revisit the moment the
+  repo goes public/paid or a second person gets commit access; delete the
+  local gate then rather than stating the rule twice.
 - **The seam is type-checked, not just documented.** springdoc generates
   OpenAPI from the controllers; `web/` generates its TS types from that. A
   renamed field then breaks the frontend build instead of leaving MSW mocks

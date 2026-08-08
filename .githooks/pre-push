@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Refuses a direct push to main.
+#
+# This exists because GitHub branch protection is unavailable on this repo:
+# private repository, free plan, so `branches/main/protection` answers 403
+# ("Upgrade to GitHub Pro or make this repository public"). The build workflow
+# requires every stop to land as a PR with a green check
+# (notes/2026-08-08-decision-build-workflow.md), and with no server-side gate
+# that requirement would live only in memory.
+#
+# Enable it once per clone:
+#   git config core.hooksPath .githooks
+#
+# Bypassing it is `--no-verify`, which is a deliberate act and shows up nowhere
+# else. That is the honest limit of a client-side gate; see
+# notes/2026-08-08-decision-merge-gate.md.
+
+set -euo pipefail
+
+protected='refs/heads/main'
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "$protected" ]; then
+    cat >&2 <<'MSG'
+
+  ✗ main is push-protected.
+
+    One stop = one branch = one PR into main, and a red check is never merged.
+    Push the branch and open a PR instead:
+
+        git push -u origin <branch>
+        gh pr create
+
+    (notes/2026-08-08-decision-build-workflow.md)
+
+MSG
+    exit 1
+  fi
+done
+
+exit 0

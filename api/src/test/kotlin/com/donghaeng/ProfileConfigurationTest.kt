@@ -117,6 +117,39 @@ class ProfileConfigurationTest {
     }
 
     @Test
+    fun `no environment loosens what the base pins`() {
+        // The base pins these three, but a profile file outranks the base, so
+        // pinning alone stops nothing — the same reason the SQL-logging test
+        // above sweeps rather than asserting on `base` only. Two of them are
+        // the ones whose wrong value destroys data: `ddl-auto` on a profile
+        // pointed at a real database, and `clean-disabled: false` in `dev`,
+        // which points at the founder's shared local Postgres.
+        //
+        // This is also the guard on the cheapest way out of a red job: when a
+        // future CI failure reads "schema does not match", `ddl-auto: update`
+        // makes it green and takes the schema away from its owner.
+        configFiles().forEach { path ->
+            val source = properties(path)
+
+            assertThat(source["spring.jpa.hibernate.ddl-auto"])
+                .describedAs("%s · ddl-auto must not create or mutate the schema", path)
+                .isIn(null, "none", "validate")
+
+            assertThat(source["spring.flyway.clean-disabled"])
+                .describedAs("%s · flyway clean must stay disabled", path)
+                .isNotEqualTo(false)
+
+            // dev is the one profile that generates the OpenAPI document, and
+            // it binds loopback to do it (asserted below).
+            if (!path.fileName.toString().startsWith("application-dev.")) {
+                assertThat(source["springdoc.api-docs.enabled"])
+                    .describedAs("%s · no machine-readable introspection surface outside dev", path)
+                    .isNotEqualTo(true)
+            }
+        }
+    }
+
+    @Test
     fun `the base never logs request details`() {
         // Cookie header, i.e. the session token.
         assertThat(base["spring.mvc.log-request-details"]).isEqualTo(false)
