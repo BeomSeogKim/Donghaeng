@@ -62,7 +62,10 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-06-review-scale-and-extensibility.md`,
 `2026-08-07-design-system.md`,
 `2026-08-07-decision-import-idempotency.md`,
-`2026-08-07-design-screens-and-flow.md`). Read them newest-first: the
+`2026-08-07-design-screens-and-flow.md`,
+`2026-08-07-decision-backend-tdd-methodology.md`,
+`2026-08-07-decision-backend-architecture.md`,
+`2026-08-07-decision-backend-api-conventions.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 There is no application code yet — `design/` is substrate, not
@@ -97,6 +100,65 @@ kept so a native couple app stays possible without paying for it now:
 session lookup reads a token from the request rather than a cookie, and
 **all computation stays server-side** — the API returns conclusions, not
 rows to compute over. The guest RSVP page is web forever.
+
+## Backend development methodology (decided 2026-08-07)
+
+`backend-implementor` builds every unit of `api/` work through three gates,
+per `notes/2026-08-07-decision-backend-tdd-methodology.md`:
+
+1. **Red Gate** — a failing test for the requirement, written first.
+2. **Blue Gate** — the minimum implementation that turns it green, nothing
+   the test doesn't ask for.
+3. **Green Gate** — refactor for stability and extensibility with the suite
+   green throughout.
+
+Per requirement, not per PR. This governs *when* a test is written; the
+existing rule on *what kind* (JUnit 5 + Testcontainers, mandatory for
+wedding-scoped queries, aggregation, import, tokens) is unchanged.
+
+## Backend architecture (decided 2026-08-07)
+
+Full record: `notes/2026-08-07-decision-backend-architecture.md`.
+
+- **Packages are domain-based** (`wedding/`, `guest/`, `import/`, `auth/`),
+  each self-contained with its own Controller/Service/Repository/Entity —
+  not layer-based (`controllers/`, `services/`, `repositories/`).
+- **Layers stay shallow**: Controller (DTO) → Service (tx boundary,
+  invariants, aggregate recompute, `GuestChange` writes) → Repository (JPA
+  + native aggregation queries). No hexagonal/ports-and-adapters layer.
+- **Split a class when it starts doing two distinct things, not before.**
+  Kotlin `internal` is the default visibility inside a domain package;
+  only the Controller and an explicit cross-domain contract are `public`.
+  Cross-domain access always goes through that contract, never straight
+  into another domain's entities or repository.
+- **Tests mirror the domain tree**, not the layer tree
+  (`src/test/kotlin/.../guest/` next to `src/main/kotlin/.../guest/`).
+  Three kinds, chosen by where a requirement's risk lives: Service unit
+  tests (JUnit 5, no DB), Repository Testcontainers tests (mandatory for
+  wedding-scoped/aggregation/import/token paths, unchanged from the TDD
+  note), Controller contract tests (against `docs/api-spec.md`).
+
+## Backend API conventions (decided 2026-08-07)
+
+Full record: `notes/2026-08-07-decision-backend-api-conventions.md`.
+
+- **Success responses have no envelope** — the resource's own DTO, returned
+  directly. No `{data: ...}` wrapper: one first-party client, no
+  pagination, no API versioning, so it buys nothing.
+- **Errors are RFC 9457 Problem Details** (`type`/`title`/`status`/
+  `detail`/`instance`), via Spring Boot 3's native `ProblemDetail` —
+  `spring.mvc.problemdetails.enabled=true` plus one global
+  `@ControllerAdvice`. Extended with a **`code`** field (e.g.
+  `GUEST_NOT_FOUND`) so the frontend switches on a stable string instead
+  of parsing `detail`.
+- **HTTP status follows standard verb/outcome mapping**: 200 read/update,
+  201 create, 204 delete, 400 validation, 404 not found, 409 conflict, 401
+  unauthenticated, 403 wrong wedding, 500 unhandled (masked per security
+  posture).
+- **DTO naming**: `XxxRequest` / `XxxResponse`, mapped via extension
+  functions in the domain package. Entities never serialize directly.
+- **No `/v1` prefix** — no second API version planned; free to add later.
+- **ktlint** applied via the standard Gradle plugin, default ruleset.
 
 ## Design system (decided 2026-08-07)
 

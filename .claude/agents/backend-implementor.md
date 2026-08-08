@@ -13,13 +13,19 @@ them.
 
 1. `AGENTS.md` at the repo root — the standing constraints section is binding,
    not background. Read it every time; it changes.
-2. `docs/api-spec.md` — the contract you own. Read before you touch anything.
-3. `notes/2026-08-03-design-domain-model.md` — entities, ownership, `wedding_id`.
-4. `notes/2026-08-05-design-meal-headcount.md` — the aggregation. Read whenever
+2. `notes/2026-08-07-decision-backend-tdd-methodology.md` — how you build,
+   below. Read it every time too.
+3. `notes/2026-08-07-decision-backend-architecture.md` — how the code is
+   shaped, below. Read it every time too.
+4. `notes/2026-08-07-decision-backend-api-conventions.md` — response shape,
+   errors, status codes, below. Read it every time too.
+5. `docs/api-spec.md` — the contract you own. Read before you touch anything.
+6. `notes/2026-08-03-design-domain-model.md` — entities, ownership, `wedding_id`.
+7. `notes/2026-08-05-design-meal-headcount.md` — the aggregation. Read whenever
    a number is involved.
-5. `notes/2026-07-30-decision-network-security.md` — before any auth, token,
+8. `notes/2026-07-30-decision-network-security.md` — before any auth, token,
    native query, or parsing work.
-6. Whichever `notes/` record covers the feature at hand. Read newest-first; the
+9. Whichever `notes/` record covers the feature at hand. Read newest-first; the
    2026-08-06 and 2026-08-07 records supersede parts of earlier ones and each
    affected note carries a banner saying what changed.
 
@@ -44,6 +50,48 @@ the replacement, and leave it until the frontend has moved off it.
 
 Every response you finish, state the spec delta explicitly — added, changed,
 deprecated — so the main loop can hand it to the frontend.
+
+## Architecture
+
+Full record: `notes/2026-08-07-decision-backend-architecture.md`.
+
+- **Packages are domain-based**: `wedding/`, `guest/`, `import/`, `auth/`,
+  each holding its own Controller/Service/Repository/Entity. Never add a
+  top-level `controllers/`, `services/`, or `repositories/` folder — a new
+  domain gets a new folder, not a wider one.
+- **Layers stay shallow**: Controller (DTO in/out only) → Service
+  (transaction boundary, invariants, aggregate recompute, `GuestChange`
+  writes) → Repository (JPA + native aggregation queries). No hexagonal
+  layer, no separate domain module.
+- **Split a class when it starts doing two distinct things, not before.**
+  Don't let a domain's Service accrete unrelated responsibilities into one
+  file; don't pre-split a domain that only does one thing yet.
+- **`internal` is the default visibility inside a domain package.** Only
+  the Controller and an explicit cross-domain contract are `public`.
+  Reaching into another domain's entity or repository directly is the bug
+  this is supposed to make impossible to compile.
+- Entities carry invariant-preserving logic; API responses are always a
+  separate DTO, never the entity itself.
+- Exceptions: a small domain-exception set, mapped to HTTP status by one
+  global `@ControllerAdvice`. No per-controller try/catch.
+
+## API conventions
+
+Full record: `notes/2026-08-07-decision-backend-api-conventions.md`.
+
+- **No response envelope.** A success response is the endpoint's own DTO,
+  returned directly — never wrapped in `{data: ...}`.
+- **Errors are RFC 9457 Problem Details**, via Spring Boot's native
+  `ProblemDetail` (`spring.mvc.problemdetails.enabled=true` + one global
+  `@ControllerAdvice`). Add the `code` extension member (e.g.
+  `GUEST_NOT_FOUND`) on every domain exception — the frontend switches on
+  it, never on `detail`.
+- **HTTP status, standard mapping**: 200 read/update, 201 create, 204
+  delete, 400 validation, 404 not found, 409 conflict, 401
+  unauthenticated, 403 wrong wedding, 500 unhandled (message masked).
+- **DTOs**: `XxxRequest` / `XxxResponse`, mapped via extension functions in
+  the domain package.
+- **No `/v1` path prefix.**
 
 ## Invariants you are specifically responsible for
 
@@ -76,12 +124,40 @@ backend code breaks:
 - **`GuestChange` records one row per changed field** with old value, new value,
   who, when, and the source. It is what makes "이 숫자 누가 바꿨어?" answerable.
 
-## Tests
+## Development methodology — TDD
 
-JUnit 5 + Testcontainers against real Postgres. Not optional for: any
-wedding-scoped query, any aggregation, any import path, anything touching a
-token. The aggregation and the importer are where a wrong number ships quietly,
-and a wrong number violates 정직함·믿음직함 directly.
+Every unit of work — a new endpoint, a changed aggregation, a migration —
+goes through three gates, in order, per requirement rather than per PR. Do
+not batch several requirements into one Red test or one Blue implementation,
+and do not skip a gate because the change looks small.
+
+1. **Red Gate** — write a test for the requirement before any implementation
+   exists, and confirm it fails, for the right reason (not a compile error,
+   not a bad fixture).
+2. **Blue Gate** — write the minimum implementation that turns the test
+   green without breaking any test that was already green. Nothing the test
+   doesn't ask for — no branches for cases it doesn't cover, no anticipating
+   the next requirement.
+3. **Green Gate** — refactor for stability and extensibility, with the full
+   suite staying green throughout. Duplication, naming, and structure get
+   fixed here, never during Blue Gate.
+
+Full record: `notes/2026-08-07-decision-backend-tdd-methodology.md`.
+
+**Tests mirror the domain tree, not the layer tree** —
+`src/test/kotlin/.../guest/` sits next to `src/main/kotlin/.../guest/`.
+Three kinds, pick the one matching where the requirement's risk lives:
+
+- **Service unit tests** — plain JUnit 5, no Spring context, no database.
+  Where the Red Gate starts for a business rule or invariant.
+- **Repository tests — JUnit 5 + Testcontainers against real Postgres.**
+  Not optional for: any wedding-scoped query, any aggregation, any import
+  path, anything touching a token. This is where a wrong number ships
+  quietly, and a wrong number violates 정직함·믿음직함 directly.
+- **Controller contract tests** — request/response DTO shape checked
+  against `docs/api-spec.md`.
+
+Not every requirement needs all three — only the one carrying the risk.
 
 ## Boundaries
 
