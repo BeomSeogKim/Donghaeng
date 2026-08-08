@@ -52,8 +52,15 @@ Nothing in any record required that hop to be encrypted.
 **Rule: the PROD `DATABASE_URL` carries `sslmode=verify-full`.** Not
 `require`, which encrypts but authenticates nothing and so does not survive
 a MITM; `verify-full` is the mode that checks the certificate and the
-hostname. Because the URL is now credential-free, this is the rare security
-property that is safe to assert on in a test rather than only in a runbook.
+hostname.
+
+Where the check lives is not obvious, and the first version of this note got
+it wrong. The prod `DATABASE_URL` arrives from the deploy platform's store,
+so no yml sweep can see it — the assertion has to run against the *running*
+environment, which means it belongs with the deploy work, not with the
+profile split. What being credential-free buys is that such a check is safe
+to write at all: the value can be read, matched, and named in an error
+without printing a secret.
 
 Dev is exempt: the local Postgres is a unix-socket-or-loopback hop on the
 same machine, and requiring TLS there would only teach people to turn it

@@ -12,8 +12,6 @@ import org.springframework.boot.diagnostics.FailureAnalysis
  * context exists, so it cannot be a bean.
  */
 internal class MissingProfileFailureAnalyzer : AbstractFailureAnalyzer<MissingProfileException>() {
-    fun analyze(cause: MissingProfileException): FailureAnalysis? = analyze(cause, cause)
-
     override fun analyze(
         rootFailure: Throwable,
         cause: MissingProfileException,
