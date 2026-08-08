@@ -34,6 +34,16 @@ Two things in this codebase are worth extra suspicion because a mistake there
 ships silently rather than crashing: **the aggregation** and **the importer**.
 A wrong number does not throw.
 
+**A missing test on a mandatory path is a correctness finding, not a style
+note.** Backend: any wedding-scoped query, aggregation, import path, or
+anything touching a token
+(`notes/2026-08-07-decision-backend-tdd-methodology.md`). Frontend: the
+ledger/headcount/meal-count display, any mutation flow (attendance tap,
+guest edit, CSV import, vendor-email conflict resolution), and anything
+branching on the API's error `code`
+(`notes/2026-08-08-decision-frontend-testing-methodology.md`). Everything
+else on either side is a judgment call, not a gap.
+
 ### 2. The domain question
 
 You are not the domain owner — the founder is. But you have the notes, and the
@@ -57,11 +67,45 @@ test for every decision here:
 
 ### 3. Convention and complexity
 
-Convention is per area. Backend: package layout, naming, transaction
-boundaries, where validation lives, migration style. Frontend: component
-boundaries, token usage, where data fetching lives, layout split. Match what
-the codebase already does — an inconsistency is a finding even when both forms
-are defensible.
+Convention is per area — match what the codebase already does, and treat an
+inconsistency as a finding even when both forms are defensible. The items
+below are named because they're decided, checkable rules, not because the
+list is exhaustive; anything else convention-shaped still gets judged
+against the code around it.
+
+**Backend** (`notes/2026-08-07-decision-backend-architecture.md`,
+`notes/2026-08-07-decision-backend-api-conventions.md`):
+
+- Domain-based packages, not layer-based — a class under `controllers/`,
+  `services/`, or `repositories/` is a finding on sight.
+- `internal` visibility inside a domain package by default. A `public`
+  class that doesn't need to be, or a direct reach into another domain's
+  entity or repository, is the bug the visibility rule exists to make
+  impossible.
+- No response envelope (`{data: ...}`); errors are RFC 9457 Problem Details
+  with a `code` extension member — not a hand-shaped error body, and not a
+  bare `detail` string the frontend would have to parse.
+- Transaction boundary, invariant enforcement, and `GuestChange` writes live
+  in the Service, not the Controller or Repository.
+
+**Frontend** (`notes/2026-08-08-decision-frontend-architecture.md`,
+`notes/2026-08-08-decision-frontend-testing-methodology.md`):
+
+- Server state — anything that's a client-side copy of API/DB data — goes
+  through React Query. A hand-rolled `useEffect` + `fetch` + `useState` for
+  data the API owns is a finding, not a style preference.
+- `useEffect` synchronizes with something outside React. One that derives a
+  value, resets state on navigation, or reacts to a user action instead of
+  living in that action's own event handler is a finding — name what it
+  should have been instead.
+- Client state reaching for Context or a state library without the cheaper
+  rungs (`useState` → lift → `useReducer`) having actually failed first is
+  premature, not just a preference.
+- No barrel files (`index.ts` re-exports). A `Container`/`View` split
+  instead of a custom hook is the pre-hooks pattern this codebase
+  deliberately doesn't use.
+- Tests query by role/label/text first. A `data-testid` reached for before
+  those fail, or `container.querySelector` on a class name, is a finding.
 
 Then the refactoring gate. **Complexity that has passed the point where a
 refactor was due, and was not refactored, is a finding — not a nice-to-have.**
