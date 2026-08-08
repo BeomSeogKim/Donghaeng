@@ -1,0 +1,90 @@
+@import 'tailwindcss';
+@import '../../design/tokens.css';
+
+/*
+ * The bridge between design/tokens.css (the source of truth, per
+ * notes/2026-08-07-design-system.md) and Tailwind's utilities.
+ *
+ * Every value here is a var() reference, never a literal: a utility resolves
+ * to the token at runtime, so the two cannot disagree, and the dark theme's
+ * :root[data-theme="dark"] overrides flow through the utilities untouched.
+ *
+ * `--<namespace>-*: initial` clears Tailwind's built-in scale first, so
+ * `bg-slate-100`, `rounded-lg` or `shadow-md` simply do not exist — a
+ * hardcoded colour, radius or shadow is a build-time failure, not a review
+ * catch.
+ */
+@theme {
+  --color-*: initial;
+  --color-ground: var(--dh-ground);
+  --color-surface: var(--dh-surface);
+  --color-surface-sunken: var(--dh-surface-sunken);
+  --color-ink: var(--dh-ink);
+  --color-ink-muted: var(--dh-ink-muted);
+  --color-ink-faint: var(--dh-ink-faint);
+  --color-ink-on-accent: var(--dh-ink-on-accent);
+  --color-line: var(--dh-line);
+  --color-line-strong: var(--dh-line-strong);
+  --color-primary: var(--dh-primary);
+  --color-primary-hover: var(--dh-primary-hover);
+  --color-primary-soft: var(--dh-primary-soft);
+  --color-gold: var(--dh-gold);
+  --color-gold-soft: var(--dh-gold-soft);
+  --color-attention: var(--dh-attention);
+  --color-attention-soft: var(--dh-attention-soft);
+  --color-danger: var(--dh-danger);
+  --color-danger-soft: var(--dh-danger-soft);
+  --color-focus: var(--dh-focus);
+  --color-att-yes-fg: var(--dh-att-yes-fg);
+  --color-att-yes-bg: var(--dh-att-yes-bg);
+  --color-att-maybe-fg: var(--dh-att-maybe-fg);
+  --color-att-maybe-bg: var(--dh-att-maybe-bg);
+  --color-att-no-fg: var(--dh-att-no-fg);
+  --color-att-no-bg: var(--dh-att-no-bg);
+
+  --font-*: initial;
+  --font-sans: var(--dh-font-sans);
+  --font-display: var(--dh-font-display);
+
+  --text-*: initial;
+  --text-display: var(--dh-text-display);
+  --text-title: var(--dh-text-title);
+  --text-lead: var(--dh-text-lead);
+  --text-body: var(--dh-text-body);
+  --text-meta: var(--dh-text-meta);
+  --text-label: var(--dh-text-label);
+
+  --leading-*: initial;
+  --leading-tight: var(--dh-leading-tight);
+  --leading-snug: var(--dh-leading-snug);
+  --leading-body: var(--dh-leading-body);
+
+  --font-weight-*: initial;
+  --font-weight-regular: var(--dh-weight-regular);
+  --font-weight-medium: var(--dh-weight-medium);
+  --font-weight-semibold: var(--dh-weight-semibold);
+  --font-weight-bold: var(--dh-weight-bold);
+
+  --tracking-*: initial;
+  --tracking-display: var(--dh-tracking-display);
+  --tracking-label: var(--dh-tracking-label);
+
+  /* The whole 4px grid derives from one token: p-4 is 4 × --dh-space-1. */
+  --spacing: var(--dh-space-1);
+
+  --radius-*: initial;
+  --radius-flush: var(--dh-radius-flush);
+  --radius-control: var(--dh-radius-control);
+  --radius-chip: var(--dh-radius-chip);
+  --radius-sheet: var(--dh-radius-sheet);
+
+  --shadow-*: initial;
+  --shadow-overlay: var(--dh-shadow-overlay);
+
+  --ease-*: initial;
+  --ease-dh: var(--dh-ease);
+}
+
+/* Duration has no theme namespace in Tailwind v4, so a transition reads the
+ * token at the call site: `duration-(--dh-dur-count)`, never `duration-260`. */
+
