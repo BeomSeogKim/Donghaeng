@@ -1,5 +1,7 @@
 org.springframework.boot.env.EnvironmentPostProcessor=\
-com.donghaeng.config.RequiredProfileMarker
+com.donghaeng.config.RequiredProfileMarker,\
+com.donghaeng.config.SchemaOwnershipGuard
 
 org.springframework.boot.diagnostics.FailureAnalyzer=\
-com.donghaeng.config.MissingProfileFailureAnalyzer
+com.donghaeng.config.MissingProfileFailureAnalyzer,\
+com.donghaeng.config.SchemaOwnershipFailureAnalyzer

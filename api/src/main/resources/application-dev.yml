@@ -15,6 +15,24 @@ server:
   # Tomcat's RemoteIpValve is deliberately absent here: nothing proxies this.
 
 spring:
+  jpa:
+    hibernate:
+      # Raised from the base's `none`. Flyway does not run here — the schema of
+      # this database was typed in by hand, while the suite builds its own from
+      # the migration files (notes/2026-08-09-decision-schema-ownership.md). That
+      # split is a gap nothing else observes: the suite is green against a schema
+      # nobody has confirmed this database has. `validate` is what observes it,
+      # at the cheapest moment — the app refuses to start when its mappings do
+      # not match the database it just connected to, instead of throwing on a
+      # query later.
+      #
+      # Its reach is narrower than it sounds: it checks the tables, columns and
+      # types Hibernate MAPS. Not indexes, not most constraints, not defaults,
+      # not triggers, and nothing no entity refers to. A missing index passes
+      # validation — and with this product's aggregation queries, that is a
+      # plausible way to be slow rather than wrong. Those parts stay the
+      # founder's to check.
+      ddl-auto: validate
   datasource:
     hikari:
       # Tightens, not loosens: one developer, one app instance, and a local

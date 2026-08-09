@@ -87,24 +87,59 @@ splitting them would buy nothing.
 mechanism is a required `donghaeng.profile` property that only the two
 profile files define. Fail-fast rather than fail-visibly, because the
 visible failure (a broken OAuth `redirect_uri`) only appears at the first
-login attempt, and Flyway has migrated the database long before that.
+login attempt, and by then the app has been connected to a real database and
+serving traffic under the wrong settings for a long time.
 
 | Profile | Where | Differs from the base |
 |---|---|---|
 | *(none)* | — | **startup error**, by design |
-| `dev` | the founder's Mac, later the Mac mini | *looser*: `com.donghaeng` at DEBUG, springdoc on — *tighter*: bound to `127.0.0.1`, pool capped at 5 |
-| `prod` | VPS behind Cloudflare | *looser*: forwarded-header handling — *tighter*: pool capped at 5 |
+| `dev` | the founder's Mac, later the Mac mini | *looser*: `com.donghaeng` at DEBUG, springdoc on — *tighter*: bound to `127.0.0.1`, pool capped at 5, `ddl-auto: validate` |
+| `prod` | VPS behind Cloudflare | *looser*: forwarded-header handling — *tighter*: pool capped at 5, `ddl-auto: validate` |
 
 The base holds the setting whose **wrong value is unsafe**, so a profile has
-to opt out of safety on purpose: springdoc off, `ddl-auto: none`, Flyway
-`clean` disabled, request-detail logging off, and the three Hibernate SQL
-loggers pinned `OFF`. It is *not* the case that profiles only loosen — the
-pool caps tighten, and the session cookie flags arriving with #5 will have
-to tighten too.
+to opt out of safety on purpose: springdoc off, `ddl-auto: none`, **Flyway
+disabled**, Flyway `clean` disabled, request-detail logging off, and the
+three Hibernate SQL loggers pinned `OFF`. It is *not* the case that profiles
+only loosen — the pool caps tighten, `ddl-auto` tightens to `validate`, and
+the session cookie flags arriving with #5 will have to tighten too.
+
+#### Who owns the schema
+
+**Flyway runs in the tests and nowhere else.** Every DDL statement against a
+real database is applied by the founder, by hand, from the same migration
+files the suite builds its schema from — there is no second copy of the DDL
+(`notes/2026-08-09-decision-schema-ownership.md`). A migration that runs at
+startup is irreversible, unattended work at the moment an environment is
+least observed.
+
+That split means the schema the suite builds and the schema an environment
+actually has are two things, so `dev` and `prod` run **`ddl-auto: validate`**
+— the app refuses to start when its entity mappings do not match the database
+it just connected to, rather than failing on a query in front of a user. Be
+honest about its reach: it checks mapped tables, columns and types, and says
+nothing about indexes, most constraints, defaults, or anything no entity maps.
 
 There is no `test` profile: everything the suite needs is already the base
 file's value, and it states the profile marker directly instead, because the
-suite is not an environment.
+suite is not an environment. The one thing it does need — Flyway — it opts
+into with a `systemProperty` on the Gradle `test` task, so the opt-in belongs
+to the test JVM and cannot reach `bootRun`, the packaged jar, or CI's
+`prod-boot`.
+
+The counterpart to applying DDL by hand is that nothing else can:
+`.claude/hooks/db-guard.sh` refuses any `psql` / `pgcli` / `pg_dump` /
+`pg_dumpall` / `pg_restore` / `flyway` command whose target is not loopback, or
+whose target cannot be resolved at all (a `PGSERVICE` entry, a config file, a
+shell variable — unresolvable means refused, not assumed local). It blocks agent
+sessions, including yours; run those statements in a terminal, where you read
+them first.
+
+**Know what it does not cover** — SSH tunnels, any client it does not know by
+name, a script file, tools other than Bash, and Codex sessions. It stops the
+casual path reliably and is not a boundary against a determined process. The
+full list, and why each gap is inherent, is in
+`notes/2026-08-09-decision-schema-ownership.md`. `bash .claude/hooks/db-guard.test.sh`
+runs its regression suite.
 
 Two datasource shapes exist in the tests, and the difference is deliberate.
 A test that only needs *a working database* takes it from
