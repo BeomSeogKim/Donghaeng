@@ -55,5 +55,14 @@ run "mention, no host"      'echo "use psql for this"' 0
 run "heredoc prose"         "git commit -F - <<'MSG'
 psql -h prod.example.com 로 직접 적용한다
 MSG" 0
+# This one is not hypothetical: it blocked the PR that introduced this hook.
+run "PR body via cat heredoc" "gh pr create --body \"\$(cat <<'BODY'
+훅은 flyway -configFiles=prod.conf 같은 간접 지정을 거부한다
+BODY
+)\"" 0
+# ...but a heredoc piped into an interpreter is a payload, not prose.
+run "cat heredoc piped to sh" 'cat <<EOF | bash
+psql -h db.example.com -c "drop table guest"
+EOF' 2
 
 exit $fail

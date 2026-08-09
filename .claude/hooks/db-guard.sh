@@ -56,7 +56,13 @@ runnable=$(printf '%s\n' "$command" | awk '
       sub(/^<<-?[ \t]*/, "", d)
       gsub(/['"'"'"]/, "", d)
       delim = d
-      strip = ($0 ~ /git[[:space:]]+commit|git[[:space:]]+tag|cat[[:space:]]*>|tee[[:space:]]/) ? 1 : 0
+      # Text sinks: a commit message, a file being written, or a bare `cat`
+      # heredoc feeding a command substitution — which is how every PR body in
+      # this repo is written, and which blocked this hook from opening one.
+      # The `|` exclusion is the line that keeps it honest: `cat <<EOF | bash`
+      # is a payload, not prose, and must stay visible.
+      strip = ($0 ~ /git[[:space:]]+commit|git[[:space:]]+tag|tee[[:space:]]|cat[[:space:]]*(>|<<)/) &&
+              ($0 !~ /\|/) ? 1 : 0
     }
     print
   }')
