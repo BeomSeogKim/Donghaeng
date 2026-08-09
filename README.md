@@ -102,10 +102,18 @@ loggers pinned `OFF`. It is *not* the case that profiles only loosen — the
 pool caps tighten, and the session cookie flags arriving with #5 will have
 to tighten too.
 
-There is no `test` profile: the Testcontainers suite gets its datasource
-from `@ServiceConnection`, which outranks `spring.datasource.*`, and
-everything else it needs is already the base file's value. It states the
-profile marker directly instead, because the suite is not an environment.
+There is no `test` profile: everything the suite needs is already the base
+file's value, and it states the profile marker directly instead, because the
+suite is not an environment.
+
+Two datasource shapes exist in the tests, and the difference is deliberate.
+A test that only needs *a working database* takes it from
+`@ServiceConnection`. A test that must prove **the committed configuration
+boots** cannot — `@ServiceConnection` contributes a `JdbcConnectionDetails`
+bean that outranks `spring.datasource.*`, so it stays green on a config that
+could never start. Those tests publish the container's coordinates under the
+production names (`DATABASE_URL` / `DB_USERNAME` / `DB_PASSWORD`) so the
+`${...}` placeholders in the committed yml are the code path under test.
 
 The profile is chosen by the **`SPRING_PROFILES_ACTIVE` environment
 variable**, in every environment: the command above locally, the container's
@@ -115,6 +123,41 @@ one-off form is `./gradlew bootRun --args='--spring.profiles.active=dev'`.
 **Secrets are never in a yml, in any profile** — yml carries shape, the
 environment carries secrets. DEV reads them from sealbox, PROD from the
 deploy platform's native store (`../../notes/infra-zones.md`).
+
+### CI, and what green means
+
+`.github/workflows/ci.yml` runs on every PR into `main` and on `main` itself.
+It is built around one claim: **a green `main` is deployable**, not merely
+compiling.
+
+| Job | What it proves |
+|---|---|
+| `api` | ktlint passes, it compiles, the suite passes |
+| `web` | it typechecks, the suite passes, the bundle and token check build |
+| `prod-boot` | the **committed** `application-{dev,prod}.yml` actually boots |
+| `docker` | the **packaged image** boots, serves HTTP, and reaches Postgres |
+
+`docker` is the one that catches what Gradle never does. It builds
+`api/Dockerfile`, runs the image under `SPRING_PROFILES_ACTIVE=prod` against a
+throwaway Postgres, and then asserts positively (an unmapped path answers
+`404 application/problem+json`, so the servlet stack really serves) and
+negatively (`/v3/api-docs`, `/swagger-ui/index.html` and `/actuator/health`
+are all 404, so the shipped artifact exposes no introspection surface). There
+is no health endpoint to poll — that absence is the security posture, not an
+oversight.
+
+### The merge gate — run this once per clone
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Branch protection is unavailable here (private repo, free plan — the API
+answers 403), so "a red check is never merged" is enforced locally instead:
+`.githooks/pre-push` refuses a direct push to `main`, and a Claude Code hook
+blocks `gh pr merge` while the checks are not green. **Merging from the GitHub
+web UI bypasses both** — that hole and the conditions for going back to real
+branch protection are in `notes/2026-08-08-decision-merge-gate.md`.
 
 ## Relationship to prior work
 

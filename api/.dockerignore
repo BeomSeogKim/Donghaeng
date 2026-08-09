@@ -1,0 +1,17 @@
+# Local build output and caches. Nothing in the Dockerfile copies them, but they
+# run to hundreds of MB and every byte is uploaded to the daemon as build context
+# before the first instruction runs.
+build/
+.gradle/
+.idea/
+.kotlin/
+
+# Secret material, excluded even though today's Dockerfile copies named paths
+# only. A gitignored file is invisible in review by construction, so this is the
+# thing that stops it the day someone writes a broad `COPY . .` — and a secret
+# baked into a layer survives being deleted in a later one.
+.env
+.env.*
+!.env.example
+*.pem
+*.key

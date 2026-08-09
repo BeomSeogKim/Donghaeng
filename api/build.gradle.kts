@@ -52,3 +52,10 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// The Dockerfile copies build/libs/*.jar. With the plain jar enabled, the glob
+// matches two files the day anything runs `build` instead of `bootJar` — and
+// the plain jar is not runnable. Nothing consumes this project as a library.
+tasks.jar {
+    enabled = false
+}
