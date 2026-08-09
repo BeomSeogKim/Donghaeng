@@ -157,6 +157,13 @@ jobs:
           context: api
           load: true
           tags: donghaeng-api:ci
+          # Default-on SLSA provenance embeds the whole GitHub event payload —
+          # PR body, author, repository metadata — into the image's attestation,
+          # and prints it into this log. Harmless while the image is built and
+          # thrown away; it becomes a real leak the moment #56 starts pushing to
+          # a registry, and it would arrive there as a default nobody chose.
+          # Turned off here rather than left for the deploy stop to notice.
+          provenance: false
           # Without this the build stage re-downloads the pinned Gradle
           # distribution and every dependency on every run.
           cache-from: type=gha
