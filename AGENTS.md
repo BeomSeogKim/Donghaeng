@@ -109,9 +109,10 @@ until after the MVP is built. Do not start implementation without the user.
 Separated frontend and backend, per `notes/2026-07-30-decision-tech-stack.md`:
 
 - `api/` — Kotlin + Spring Boot (JDK 21, Gradle KTS), JSON API only.
-  Spring Data JPA + Flyway, **PostgreSQL 16** (ratified 2026-08-08; the
-  native aggregation queries are where a version difference yields a
-  different *number* rather than an error). JUnit 5 + Testcontainers.
+  Spring Data JPA + Flyway (**tests only** — see below), **PostgreSQL 16**
+  (ratified 2026-08-08; the native aggregation queries are where a version
+  difference yields a different *number* rather than an error). JUnit 5 +
+  Testcontainers.
 - `web/` — React + TypeScript + Vite, built to static files. **v1 ships one
   bundle** (the couple app); the separate guest RSVP bundle arrives with the
   RSVP links. The rule holds whenever they land: a guest must never download
@@ -133,6 +134,42 @@ kept so a native couple app stays possible without paying for it now:
 session lookup reads a token from the request rather than a cookie, and
 **all computation stays server-side** — the API returns conclusions, not
 rows to compute over. The guest RSVP page is web forever.
+
+## Schema ownership (decided 2026-08-09)
+
+Full record: `notes/2026-08-09-decision-schema-ownership.md`. This **supersedes**
+the earlier "Flyway owns the schema everywhere".
+
+- **Flyway runs in tests only. Every DDL statement against a real database is
+  applied by the founder, by hand.** A migration running unattended at startup
+  is irreversible work at the moment an environment is least observed;
+  `clean-disabled` guards one catastrophic verb and nothing else.
+- **The migration SQL files stay authoritative and stay the only copy.** They
+  are what the tests build from and what the founder types. A second copy of
+  the DDL is what would make this unworkable.
+- **`ddl-auto: validate` in dev/prod is the drift detector**, but its reach is
+  narrower than the name suggests: Hibernate 6 compares mapped columns' JDBC
+  **type codes only** — not length, precision, scale or nullability, and
+  nothing about indexes, constraints or defaults. **A hand-typed `varchar(20)`
+  under a `length = 255` mapping passes**, then fails at INSERT on a long name.
+  Size is the likeliest drift when a person types the DDL, and it is uncaught.
+- **The environment outranks every yml.** `SPRING_FLYWAY_ENABLED=true` in the
+  deploy platform reverses this decision with the whole suite green, so the
+  resolved values are asserted at **startup**, not only in tests. Any guard
+  that reads a committed file cannot see the environment that actually runs.
+- **Agents may not reach a non-local database** — in Claude Code sessions.
+  `.claude/hooks/db-guard.sh` refuses any DB client command whose target is not
+  loopback or is unresolvable (a `PGSERVICE`, a config file, a shell variable).
+  It blocks the founder's own agent sessions on purpose. **It does not cover**
+  SSH tunnels, clients it does not know by name, script files, non-Bash tools,
+  or Codex — the full list is in the record, and the hook stops the casual path
+  rather than a determined one.
+- **`prod-boot` rehearses the configuration, never the schema.** It is a Gradle
+  `Test` task, so it inherits the Flyway opt-in *even in CI* and builds its own
+  schema from the migrations. Only **`docker`** runs the real deploy shape (the
+  packaged jar, Flyway off), so #55 — applying the migration SQL to the
+  throwaway Postgres once entities exist — lands on `docker` alone. Do not read
+  a green `prod-boot` as a rehearsed deploy.
 
 ## Development tempo (decided 2026-08-08)
 

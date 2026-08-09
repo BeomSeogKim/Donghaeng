@@ -3,8 +3,9 @@
 # Starting with no profile is an ERROR, not a restrictive start: `donghaeng.profile`
 # is required and only the profile files define it, so the context fails with an
 # instruction naming the fix (com.donghaeng.config.MissingProfileFailureAnalyzer).
-# The reason is Flyway — a mistyped profile has already migrated the production
-# database by the time the missing forwarded-header handling breaks a login.
+# The reason is that the visible symptom comes far too late — a mistyped profile
+# has connected to whatever DATABASE_URL points at and served traffic under the
+# wrong settings long before the missing forwarded-header handling breaks a login.
 #
 # What this file holds is the setting whose WRONG value is unsafe, so that a
 # profile has to opt out of safety deliberately. It is not true that profiles
@@ -29,12 +30,28 @@ spring:
     open-in-view: false
     show-sql: false
     hibernate:
-      # Flyway owns the schema everywhere. Stated rather than left to Boot's
-      # default so the guarantee lives in the file.
+      # The app never writes DDL, in any environment. `none` is the right value
+      # for the base because the base describes an environment that has declared
+      # nothing about its database; dev and prod raise it to `validate`, and the
+      # comment there says why.
       ddl-auto: none
   flyway:
+    # Flyway runs in the TESTS ONLY (notes/2026-08-09-decision-schema-ownership.md).
+    # Every DDL statement against a real database is applied by the founder, by
+    # hand, from these same migration files — there is no second copy of the DDL.
+    # A migration that runs at startup is irreversible, unattended work at the
+    # moment an environment is least observed, and `clean-disabled` only guards
+    # one catastrophic verb; it says nothing about a DROP COLUMN that looked
+    # right in review.
+    #
+    # It lives in the base, off, because that is the value whose opposite is
+    # unsafe: an environment has to opt in deliberately. The suite opts in
+    # through a system property set in build.gradle.kts; nothing else does, and
+    # ProfileConfigurationTest fails if a profile file tries.
+    enabled: false
     # Safest default, inherited by every profile: a clean that runs anywhere but
-    # a throwaway database is data loss, not a reset.
+    # a throwaway database is data loss, not a reset. Kept even with Flyway off —
+    # it is the setting that has to already be right on the day it is turned on.
     clean-disabled: true
   mvc:
     problemdetails:

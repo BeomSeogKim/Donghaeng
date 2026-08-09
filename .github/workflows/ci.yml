@@ -101,6 +101,39 @@ jobs:
       # is loud rather than vacuously green.
       - run: ./gradlew test --tests 'com.donghaeng.*ProfileBootTest' --no-daemon
 
+  hooks:
+    name: hooks · merge gate + db guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # These two shell suites guard rules the repo cannot otherwise enforce: what
+    # may be merged, and what may reach a database. Both were hand-run until a
+    # review found seven bypasses in the db guard at once — a control nothing
+    # exercises is a control nobody knows the shape of.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: bash .claude/hooks/merge-gate.test.sh
+      - run: bash .claude/hooks/db-guard.test.sh
+
+      # A passing suite says the hook works, not that anything runs it. Deleting
+      # four lines from settings.json leaves every check green and both guards
+      # absent. The Kotlin side has this assertion (spring.factories); the shell
+      # side did not.
+      - name: The hooks are still wired
+        run: |
+          set -euo pipefail
+          for hook in merge-gate db-guard; do
+            jq -e --arg h "$hook" '
+              [.hooks.PreToolUse[]
+               | select(.matcher == "Bash")
+               | .hooks[].command
+               | select(test($h))] | length > 0
+            ' .claude/settings.json > /dev/null \
+              || { echo "::error::$hook.sh is not registered as a Bash PreToolUse hook"; exit 1; }
+            echo "wired: $hook.sh"
+          done
+
   web:
     name: web · typecheck + test + build
     runs-on: ubuntu-latest
@@ -233,10 +266,18 @@ jobs:
 
           # Hikari opens the pool on the first getConnection(), so this line is
           # proof the app reached Postgres — not merely that it parsed a
-          # datasource URL. Asserted in its own right because today it is Flyway
-          # that triggers the first connection, and that is exactly what is about
-          # to change (issue #3); when it does, this goes red instead of quietly
-          # certifying an app that never talked to the database.
+          # datasource URL. Flyway no longer runs here at all
+          # (notes/2026-08-09-decision-schema-ownership.md), so what opens that
+          # first connection is Hibernate's database-metadata lookup while the
+          # EntityManagerFactory is built — verified against this image, not
+          # assumed. Asserted in its own right because the day that stops being
+          # true this goes red instead of quietly certifying an app that never
+          # talked to the database.
+          #
+          # This job's Postgres is empty, and `ddl-auto: validate` on a mapping
+          # with no entities is trivially true. The moment the baseline schema
+          # and its entities land (#3), this job has to apply the migration SQL
+          # to its Postgres before starting the app, or it fails validation.
           await_log 'HikariPool-1 - Start completed.' 120
 
           # Boot prints `Started DonghaengApplicationKt` — Kotlin names the file

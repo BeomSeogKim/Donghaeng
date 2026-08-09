@@ -23,6 +23,23 @@ server:
   forward-headers-strategy: native
 
 spring:
+  jpa:
+    hibernate:
+      # Raised from the base's `none`, and this is the file where it matters
+      # most. No migration runs during a deploy: the founder applies the DDL by
+      # hand from the migration files, while the suite builds its own schema
+      # from them (notes/2026-08-09-decision-schema-ownership.md). Nothing
+      # compares those two schemas — the first symptom of a divergence would
+      # otherwise be a runtime error on a query, in front of a user. `validate`
+      # turns that into a refusal to start, at deploy time, where someone is
+      # already watching.
+      #
+      # Honest about its reach: it checks the tables, columns and types
+      # Hibernate MAPS — not indexes, most constraints, defaults, triggers, or
+      # anything no entity refers to. A missing index starts cleanly and is a
+      # plausible way for the aggregation queries to be slow rather than wrong.
+      # The unmapped schema stays the founder's to verify.
+      ddl-auto: validate
   datasource:
     hikari:
       # A guess, not a measured number: one app instance, a 2-vCPU managed
@@ -31,9 +48,23 @@ spring:
       # out; tracked as an open question rather than sized by pretending.
       maximum-pool-size: 5
   flyway:
-    # Restated, though Boot's FlywayProperties already defaults it true and the
-    # base sets it: this is the one setting whose silent loss is unrecoverable,
-    # and this file is what gets read during a deploy review.
+    # Both restated from the base, and for one reason: this file is what gets
+    # read during a deploy review, and "deliberately absent" is not the same
+    # thing as visibly off to the person reading it.
+    #
+    # `enabled: false` is the whole of the schema-ownership decision
+    # (notes/2026-08-09-decision-schema-ownership.md) — no migration runs during
+    # a deploy, the founder applies the DDL by hand from the same migration
+    # files. Losing it silently is the failure this restatement exists to make
+    # visible. `clean-disabled` is the one whose loss is unrecoverable, and it
+    # stays pinned even with Flyway off: it has to already be right on the day
+    # anything turns Flyway on.
+    #
+    # Neither is load-bearing on its own: the base sets both, a sweep in
+    # ProfileConfigurationTest forbids any profile from loosening either, and
+    # SchemaOwnershipGuard refuses to start on the RESOLVED value — which is the
+    # only check an environment variable cannot walk past.
+    enabled: false
     clean-disabled: true
 
 logging:

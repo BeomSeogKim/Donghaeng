@@ -135,9 +135,25 @@ class ProfileConfigurationTest {
                 .describedAs("%s · ddl-auto must not create or mutate the schema", path)
                 .isIn(null, "none", "validate")
 
+            // Both flags below are whitelists of safe values, not `isNotEqualTo`
+            // of the unsafe one, and the quoting is why: YAML loads `true` as a
+            // Boolean and `"true"` as the String "true", while Spring's relaxed
+            // binding turns Flyway on for either. `isNotEqualTo(true)` therefore
+            // passes on five quote characters. Same shape as `ddl-auto` above —
+            // name what is allowed, so an unrecognised value is red by default.
             assertThat(source["spring.flyway.clean-disabled"])
                 .describedAs("%s · flyway clean must stay disabled", path)
-                .isNotEqualTo(false)
+                .isIn(null, true, "true")
+
+            // Flyway is a restrictive-base setting now, for the same reason as
+            // the two above: a migration running unattended at startup is
+            // irreversible work against a real database
+            // (notes/2026-08-09-decision-schema-ownership.md). The suite opts in
+            // through a system property set in build.gradle.kts, never here — so
+            // no environment file may turn it on, not even dev.
+            assertThat(source["spring.flyway.enabled"])
+                .describedAs("%s · only the tests may run Flyway", path)
+                .isIn(null, false, "false")
 
             // dev is the one profile that generates the OpenAPI document, and
             // it binds loopback to do it (asserted below).
@@ -147,6 +163,18 @@ class ProfileConfigurationTest {
                     .isNotEqualTo(true)
             }
         }
+    }
+
+    @Test
+    fun `every environment with a real database validates its mapping against it`() {
+        // The counterpart to Flyway being off outside the tests: the schema the
+        // suite builds from the migration files and the schema someone typed in
+        // by hand are two things, and `validate` is the only thing that ever
+        // compares them (notes/2026-08-09-decision-schema-ownership.md). The
+        // base stays `none` — an environment that has declared nothing has
+        // nothing to validate against.
+        assertThat(dev["spring.jpa.hibernate.ddl-auto"]).isEqualTo("validate")
+        assertThat(prod["spring.jpa.hibernate.ddl-auto"]).isEqualTo("validate")
     }
 
     @Test
@@ -160,6 +188,7 @@ class ProfileConfigurationTest {
         assertThat(base["springdoc.api-docs.enabled"]).isEqualTo(false)
         assertThat(base["spring.jpa.hibernate.ddl-auto"]).isEqualTo("none")
         assertThat(base["spring.flyway.clean-disabled"]).isEqualTo(true)
+        assertThat(base["spring.flyway.enabled"]).isEqualTo(false)
         assertThat(base["spring.profiles.active"]).isNull()
         assertThat(base["spring.profiles.default"]).isNull()
     }
@@ -172,7 +201,11 @@ class ProfileConfigurationTest {
     }
 
     @Test
-    fun `prod disables flyway clean, trusts forwarded headers, publishes nothing`() {
+    fun `prod restates the flyway settings, trusts forwarded headers, publishes nothing`() {
+        // Restated in the file rather than inherited, so a deploy review reads
+        // them where it is already looking; pinned here so the restatement
+        // cannot quietly rot away.
+        assertThat(prod["spring.flyway.enabled"]).isEqualTo(false)
         assertThat(prod["spring.flyway.clean-disabled"]).isEqualTo(true)
         assertThat(prod["server.forward-headers-strategy"]).isEqualTo("native")
         assertThat(prod["springdoc.api-docs.enabled"]).isNotEqualTo(true)

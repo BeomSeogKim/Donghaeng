@@ -15,8 +15,8 @@ import org.springframework.mock.env.MockEnvironment
 
 /**
  * A mistyped or forgotten profile must fail at startup rather than at the first
- * login attempt — by which time Flyway has already migrated the database it was
- * pointed at.
+ * login attempt — by which time the app has already connected to the database
+ * it was pointed at and served traffic under the wrong settings.
  */
 class RequiredProfileMarkerTest {
     private val marker = RequiredProfileMarker()
@@ -57,9 +57,10 @@ class RequiredProfileMarkerTest {
 
     /**
      * The checks above pass against a MockEnvironment even if this class is turned
-     * back into a `@Configuration` bean — which is the shape that let Flyway
-     * connect and migrate before the check ever ran. These two hold the fix in
-     * place: the registration, and the ordering it buys.
+     * back into a `@Configuration` bean — which is the shape that let the
+     * datasource be built, and its first connection opened, before the check ever
+     * ran. These two hold the fix in place: the registration, and the ordering it
+     * buys.
      */
     @Test
     fun `the marker is registered as an EnvironmentPostProcessor, not as a bean`() {

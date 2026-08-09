@@ -51,6 +51,33 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // Flyway is disabled in application.yml for every environment — it runs in
+    // the tests and nowhere else (notes/2026-08-09-decision-schema-ownership.md).
+    // This is where the tests opt back in, so the suite keeps building its schema
+    // from the migration files, which are also the text the founder applies by
+    // hand. One copy of the DDL, checked by the same tests that use it.
+    //
+    // A system property rather than a yml, and the alternatives are why:
+    // src/test/resources/application.yml would SHADOW the committed base file on
+    // the test classpath, which is precisely what RealConfigurationBootTest
+    // exists to prevent, and there is deliberately no `test` profile (README,
+    // Profiles).
+    //
+    // Exactly what this reaches, stated precisely because it is easy to get
+    // wrong: EVERY JVM forked by a `Test` task, wherever that task runs. That
+    // includes both CI jobs that run one — `api` (./gradlew build) and
+    // `prod-boot` (./gradlew test --tests '...ProfileBootTest'). So `prod-boot`
+    // boots the committed prod configuration with Flyway ENABLED, and does not
+    // rehearse the hand-applied schema that a real deploy gets. Whether it
+    // should is a decision for the founder, not something to paper over here.
+    //
+    // What it does NOT reach: `bootRun`, the packaged jar, and therefore CI's
+    // `docker` job, which starts the real image. Those are the JVMs
+    // SchemaOwnershipGuard refuses to start, and the two directions are
+    // asserted by ProfileConfigurationTest, RealConfigurationBootTest and
+    // SchemaOwnershipGuardTest.
+    systemProperty("spring.flyway.enabled", "true")
 }
 
 // The Dockerfile copies build/libs/*.jar. With the plain jar enabled, the glob

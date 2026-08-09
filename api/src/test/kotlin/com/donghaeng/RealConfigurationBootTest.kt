@@ -71,6 +71,43 @@ abstract class RealConfigurationBootTest(
         }
     }
 
+    @Test
+    fun `the schema is validated, and only the suite runs Flyway`() {
+        // Two halves of one arrangement (notes/2026-08-09-decision-schema-ownership.md).
+        //
+        // Half one: every environment that points at a real database resolves
+        // `validate`, so a mapping that has drifted from the hand-applied schema
+        // stops the app at boot instead of failing on a query in front of a user.
+        assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate")
+
+        // Half two: the committed yml disables Flyway for every environment, and
+        // the suite opts back in — through a system property set in
+        // build.gradle.kts, which no running app has. Asserting the source, not
+        // just the value, is the point: read from `environment` alone this would
+        // stay green if someone re-enabled Flyway in a profile file.
+        assertThat(System.getProperty("spring.flyway.enabled")).isEqualTo("true")
+
+        // And it actually ran. Without this the opt-in could be silently inert —
+        // a suite whose tests build no schema at all still passes today, because
+        // there are no entities yet to notice.
+        //
+        // What this does NOT prove, verified rather than assumed: Flyway creates
+        // the history table even when it finds zero migrations. The log of this
+        // very test reads "No migrations found. Are your locations set up
+        // correctly?" and then "Creating Schema History table". So the day #3's
+        // SQL lands in the wrong location, this assertion stays green. Closing
+        // that needs an assertion about applied migrations, which cannot be
+        // written before a migration exists — it is an acceptance criterion on
+        // #3, deliberately not pre-built here.
+        dataSource.connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("select count(*) from flyway_schema_history").use { rows ->
+                    assertThat(rows.next()).isTrue()
+                }
+            }
+        }
+    }
+
     companion object {
         private val postgres =
             PostgreSQLContainer("postgres:16-alpine").apply { start() }
