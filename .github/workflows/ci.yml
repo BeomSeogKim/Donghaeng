@@ -157,13 +157,21 @@ jobs:
           context: api
           load: true
           tags: donghaeng-api:ci
-          # Default-on SLSA provenance embeds the whole GitHub event payload —
-          # PR body, author, repository metadata — into the image's attestation,
-          # and prints it into this log. Harmless while the image is built and
-          # thrown away; it becomes a real leak the moment #56 starts pushing to
-          # a registry, and it would arrive there as a default nobody chose.
-          # Turned off here rather than left for the deploy stop to notice.
+          # Default-on SLSA provenance attaches an attestation to the image.
+          # Nothing consumes it here — the image is loaded, probed and thrown
+          # away — and it becomes a real question the moment #56 pushes to a
+          # registry, where it would arrive as a default nobody chose.
           provenance: false
+        env:
+          # A SECOND, separate mechanism, and the one that actually publishes.
+          # `provenance:` governs the image; the build summary governs the run:
+          # it exports a `.dockerbuild` record carrying
+          # `environment.github_event_payload` — the entire event, PR body and
+          # all — into the job log and uploads it as a run artifact kept for 90
+          # days. Turning off provenance alone leaves that untouched; this was
+          # verified by reading the log of the run that did exactly that.
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
           # Without this the build stage re-downloads the pinned Gradle
           # distribution and every dependency on every run.
           cache-from: type=gha
