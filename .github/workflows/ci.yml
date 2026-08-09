@@ -172,6 +172,12 @@ jobs:
           # verified by reading the log of the run that did exactly that.
           DOCKER_BUILD_SUMMARY: false
           DOCKER_BUILD_RECORD_UPLOAD: false
+          # And a THIRD: the action prints the buildx metadata file into the job
+          # log under `##[group]Metadata`, provenance included. Killing the
+          # upload left this behind. How much it exposes depends on the event —
+          # `synchronize` carries a diff-sized payload, `opened` carried the
+          # entire PR body — which is why one clean-looking run is not evidence.
+          BUILDX_METADATA_PROVENANCE: disabled
           # Without this the build stage re-downloads the pinned Gradle
           # distribution and every dependency on every run.
           cache-from: type=gha
