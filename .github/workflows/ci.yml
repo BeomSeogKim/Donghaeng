@@ -157,6 +157,27 @@ jobs:
           context: api
           load: true
           tags: donghaeng-api:ci
+          # Default-on SLSA provenance attaches an attestation to the image.
+          # Nothing consumes it here — the image is loaded, probed and thrown
+          # away — and it becomes a real question the moment #56 pushes to a
+          # registry, where it would arrive as a default nobody chose.
+          provenance: false
+        env:
+          # A SECOND, separate mechanism, and the one that actually publishes.
+          # `provenance:` governs the image; the build summary governs the run:
+          # it exports a `.dockerbuild` record carrying
+          # `environment.github_event_payload` — the entire event, PR body and
+          # all — into the job log and uploads it as a run artifact kept for 90
+          # days. Turning off provenance alone leaves that untouched; this was
+          # verified by reading the log of the run that did exactly that.
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
+          # And a THIRD: the action prints the buildx metadata file into the job
+          # log under `##[group]Metadata`, provenance included. Killing the
+          # upload left this behind. How much it exposes depends on the event —
+          # `synchronize` carries a diff-sized payload, `opened` carried the
+          # entire PR body — which is why one clean-looking run is not evidence.
+          BUILDX_METADATA_PROVENANCE: disabled
           # Without this the build stage re-downloads the pinned Gradle
           # distribution and every dependency on every run.
           cache-from: type=gha
