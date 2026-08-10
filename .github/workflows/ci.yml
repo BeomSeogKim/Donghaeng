@@ -154,6 +154,14 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - run: npm ci
+      # Biome (lint + format) chained with check:design, which enforces the one
+      # design-system rule nothing else can: the @theme bridge in src/index.css
+      # clears Tailwind's namespaces so a hardcoded colour or radius fails to
+      # compile, but v4 has no duration namespace to clear and arbitrary-value
+      # syntax (`bg-[#ff0000]`) walks past all of them
+      # (notes/2026-08-07-design-system.md, issue #45). A linter not in CI is a
+      # suggestion, which is why this line and not just the package.json script.
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       # `build` chains check:tokens, which is the only guard on the token bridge.

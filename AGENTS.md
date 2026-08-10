@@ -407,8 +407,32 @@ Full record: `notes/2026-08-08-decision-frontend-architecture.md`.
   flow through for free. Each Tailwind namespace is cleared to `initial`
   first, so `bg-slate-100` and `rounded-lg` **do not exist**. Note the
   limit, which is real: the *named scale* is dead, but arbitrary-value
-  syntax (`bg-[#ff0000]`, `text-[13px]`) still compiles — that gap is a lint
-  rule's job (issue #45), not the bridge's.
+  syntax (`bg-[#ff0000]`, `text-[13px]`) still compiles — that gap is not the
+  bridge's to close, and it is now closed by `check:design` (below).
+- **The fourth design value is enforced by our own checker, not by the
+  linter** (built 2026-08-10, `notes/2026-08-10-decision-design-value-enforcement.md`).
+  The bridge mechanically kills hardcoded colour/size/radius by clearing each
+  Tailwind namespace, but it cannot see `duration-300` (v4 has no duration
+  namespace) or any arbitrary value. `web/scripts/design-values.mjs` covers
+  both, run as `npm run check:design` inside `npm run lint`, in CI.
+  **It is hand-written because the rule cannot be expressed in the linter** —
+  Biome's only extension point is GritQL over Rust's `regex`, which has no
+  lookaround, and the rule needs "flag `[...]` *unless* its content is
+  `var(--dh-*)`" so that `border-[var(--dh-gold)]` passes. A checker next to
+  a linter looks like duplication and is not; do not try to fold it in.
+  Biome itself was likewise not a preference — `typescript@^7` is the native
+  port with no compiler API, so typescript-eslint cannot parse this repo at
+  all. Known cost: Biome has **no type-aware rules**, so a floating promise
+  in a mutation handler is caught by nothing (#71).
+- **Only design-carrying prefixes are checked; layout arbitrary values pass**
+  (founder's call, 2026-08-10). `grid-cols-[1fr_auto]`, `z-[60]`,
+  `content-['']` are legal — they are not colour, size, radius or duration.
+  A prefix earns its place on the list **only if `design/tokens.css` has a
+  token family behind it**, which is what makes membership checkable instead
+  of arguable. Viewport units are a value-shape exception (`min-h-[100dvh]`
+  passes) because they are a relationship to the device, not a step on a
+  scale — but the match is anchored, so `min-h-[calc(100dvh-44px)]` still
+  fails on the hardcoded tap floor.
 - **`useEffect` is for external sync only.** Before writing one, name the
   outside-of-React thing it synchronizes with. A user action (a tap, a
   submit) belongs in that action's event handler, never an Effect watching

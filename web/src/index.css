@@ -1,6 +1,12 @@
 @import 'tailwindcss';
 @import '../../design/tokens.css';
 
+/* Tailwind scans the whole project for class-name candidates, and scripts/ is
+ * where the lint rule for hardcoded design values lives — its fixtures are
+ * deliberately illegal classes (`bg-[#ff0000]`, `duration-300`). Unscoped, the
+ * check that forbids them would compile them into the shipped stylesheet. */
+@source not '../scripts';
+
 /*
  * The bridge between design/tokens.css (the source of truth, per
  * notes/2026-08-07-design-system.md) and Tailwind's utilities.
@@ -12,10 +18,16 @@
  * `--<namespace>-*: initial` clears Tailwind's built-in scale first, so the
  * named off-the-shelf values do not exist: `bg-slate-100`, `text-red-500`,
  * `text-sm`, `rounded-lg`, `shadow-md` and `ease-in-out` all fail to compile.
- * That is the whole of what this buys. Arbitrary-value syntax still walks
- * straight through — `bg-[#ff0000]`, `rounded-[7px]`, `p-[3px]`,
- * `text-[13px]`, `duration-[999ms]` all compile today — so a hardcoded value
- * is still a review catch until the lint rule lands (#45).
+ * That is the whole of what this buys, and it is a build error rather than a
+ * check — there is no utility to emit.
+ *
+ * The rest of "nothing hardcodes a colour, size, radius or duration" is
+ * enforced by scripts/design-values.mjs, run from `npm run lint`, because two
+ * things are invisible to a namespace: arbitrary-value syntax compiles
+ * whatever you write (`bg-[#ff0000]`, `rounded-[7px]`, `text-[13px]`), and
+ * Tailwind v4 has no duration namespace to clear at all, so `duration-300`
+ * compiles and a call site must read `duration-(--dh-dur-count)`.
+ * notes/2026-08-10-decision-design-value-enforcement.md.
  *
  * Gold is deliberately absent from --color-*. It is 3.3:1 on porcelain and may
  * never carry text in light, yet it is the primary text accent in dark, so
@@ -108,4 +120,3 @@
 
 /* Duration has no theme namespace in Tailwind v4, so a transition reads the
  * token at the call site: `duration-(--dh-dur-count)`, never `duration-260`. */
-

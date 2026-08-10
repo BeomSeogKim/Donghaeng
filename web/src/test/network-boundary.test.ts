@@ -1,11 +1,9 @@
-import { http, HttpResponse } from 'msw'
+import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { server } from './server'
 
 it('intercepts a real fetch at the network boundary', async () => {
-  server.use(
-    http.get('http://api.test/scaffold', () => HttpResponse.json({ ok: true })),
-  )
+  server.use(http.get('http://api.test/scaffold', () => HttpResponse.json({ ok: true })))
 
   const response = await fetch('http://api.test/scaffold')
 
