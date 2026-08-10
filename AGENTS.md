@@ -27,6 +27,8 @@ the test harness.
 `notes/2026-08-10-decision-auth-gate-and-sequence.md`):
 
     #3       baseline schema        ← next, and the last horizontal stop
+                                      unblocked 08-10: #32 closed by the
+                                      soft-delete record
     #6/#37   social login — session issuance + CurrentUser
     #7       웨딩 만들기 — the first membership exists here
     #5       CurrentWedding resolution + cross-tenant 404
@@ -105,7 +107,8 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-09-decision-schema-ownership.md`,
 `2026-08-10-decision-cross-tenant-status-code.md`,
 `2026-08-10-decision-design-value-enforcement.md`,
-`2026-08-10-decision-auth-gate-and-sequence.md`). Read them newest-first: the
+`2026-08-10-decision-auth-gate-and-sequence.md`,
+`2026-08-10-decision-soft-delete.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 **Design has no remaining blocker.** Application code exists but no domain
@@ -663,6 +666,30 @@ SUM already does. This is the first fixed point of the screen design.
   carry it from the start. It is what makes "every wedding-scoped root
   filters on `wedding_id`" mechanically checkable instead of a per-query
   judgement, and a cross-wedding leak is not an ordinary bug here.
+- **Every delete is soft** (decided 2026-08-10,
+  `notes/2026-08-10-decision-soft-delete.md`) — but only on rows a *user* can
+  delete. `guest`, `membership`, meal type and `wedding` carry `deleted_at`;
+  `guest_change` and the import/ingest records do not, because a deletable
+  audit log is not an audit log and deleting an ingest breaks hash idempotency.
+  Three consequences bind everything downstream:
+  **(1)** `@SQLRestriction` filters the JPA path and **does not touch native
+  queries** — so the one path the automatic filter cannot reach is the native
+  aggregation that computes 보증인원. A missed filter there does not throw, it
+  over-counts, and over-counting is money. It is closed by a test (`#17`), not
+  by attention. The default is on precisely because forgetting it then shows
+  *fewer* rows rather than leaking deleted ones.
+  **(2)** The import matcher is the one path that must *see* deleted rows —
+  it cannot ask "되살릴까요?" about a row it cannot load. That is an explicitly
+  named bypass, never an ambient one.
+  **(3)** Every unique constraint becomes a **partial** index
+  (`WHERE deleted_at IS NULL`), or a dead membership blocks a re-invite.
+- **A deleted guest reappearing in an import is asked about, not skipped** —
+  되살리기 / 그대로 두기, and "그대로 두기" is remembered under the standing
+  *"a resolved question is not asked again"* rule. This is a **deliberate
+  exception** to "a returning file is a stale name list": attendance has a
+  screen to fix it on and deletion does not, so the import is the only place
+  the couple will ever be told that guest exists. Attendance itself is
+  unaffected — import still never touches it.
 - **The session never knows the wedding.** Each request resolves
   user → membership → wedding; one person may belong to several.
 - **Guest groups are seven fixed categories plus a free label**: 가족 · 친척 ·
