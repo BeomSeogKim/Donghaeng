@@ -155,6 +155,22 @@ class ProfileConfigurationTest {
                 .describedAs("%s · only the tests may run Flyway", path)
                 .isIn(null, false, "false")
 
+            // The three keys that decide how much of a server-side failure the
+            // error page publishes. Boot's defaults are already the safe values,
+            // which is exactly why they are pinned: a default is not a decision,
+            // and `server.error.include-message: always` is a one-line change
+            // nobody would flag in review. Whitelists again, for the quoting
+            // reason above.
+            assertThat(source["server.error.include-message"])
+                .describedAs("%s · an error page never publishes an exception message", path)
+                .isIn(null, "never")
+            assertThat(source["server.error.include-stacktrace"])
+                .describedAs("%s · an error page never publishes a stack trace", path)
+                .isIn(null, "never")
+            assertThat(source["server.error.include-exception"])
+                .describedAs("%s · an error page never publishes an exception class name", path)
+                .isIn(null, false, "false")
+
             // dev is the one profile that generates the OpenAPI document, and
             // it binds loopback to do it (asserted below).
             if (!path.fileName.toString().startsWith("application-dev.")) {
@@ -189,6 +205,9 @@ class ProfileConfigurationTest {
         assertThat(base["spring.jpa.hibernate.ddl-auto"]).isEqualTo("none")
         assertThat(base["spring.flyway.clean-disabled"]).isEqualTo(true)
         assertThat(base["spring.flyway.enabled"]).isEqualTo(false)
+        assertThat(base["server.error.include-message"]).isEqualTo("never")
+        assertThat(base["server.error.include-stacktrace"]).isEqualTo("never")
+        assertThat(base["server.error.include-exception"]).isEqualTo(false)
         assertThat(base["spring.profiles.active"]).isNull()
         assertThat(base["spring.profiles.default"]).isNull()
     }

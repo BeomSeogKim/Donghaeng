@@ -338,6 +338,58 @@ jobs:
           expect_404 /swagger-ui/index.html
           expect_404 /actuator/health
 
+          # `/error` is a mapped path, not an unmapped one: `@RequestMapping`
+          # matches DispatcherType.REQUEST too, so anyone can GET it. With no
+          # dispatch attributes there is no error to report, and a 500 here would
+          # be a fabricated incident an anonymous client can generate at will —
+          # against the 401/404/429 spike alerting the security record keeps, and
+          # unrateable, since the standing rule is per-wedding and per-link-token
+          # and this path has neither. Asserted on the artifact because the
+          # reachability comes from Spring MVC's mapping, not from our code.
+          expect_404 /error
+
+      # The container's own error page — the one producer no Kotlin class in this
+      # repo can reach. Tomcat's ErrorReportValve defaults to rendering the
+      # exception, a partial stack trace and its own version string; Boot hardens
+      # it ONLY when `server.error.include-stacktrace` resolves to `never`, so
+      # without TomcatErrorPageHardening the guarantee hangs off one environment
+      # variable. A negative assertion on the shipped artifact is the only kind
+      # that survives that variable being set in the deploy platform.
+      #
+      # A request target the connector rejects outright is used deliberately: it
+      # is answered before the request reaches the servlet context, so neither of
+      # our producers runs and only the valve can respond. curl will not send it
+      # — it is not a valid URL — which is why this is a raw socket.
+      - name: The container error page publishes nothing either
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import socket, sys
+
+          request = b"GET /a|b HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+          with socket.create_connection(("127.0.0.1", 8080), timeout=10) as sock:
+              sock.sendall(request)
+              received = b""
+              while True:
+                  chunk = sock.recv(4096)
+                  if not chunk:
+                      break
+                  received += chunk
+
+          response = received.decode("utf-8", "replace")
+          print(response.splitlines()[0] if response else "<empty response>")
+
+          published = [
+              marker
+              for marker in ("Apache Tomcat", "Exception Report", "java.lang.", "jakarta.servlet")
+              if marker in response
+          ]
+          if published:
+              print(f"::error::the container error page published {published}")
+              sys.exit(1)
+          print("container error page: clean")
+          PY
+
       - name: Container log
         if: always()
         run: docker logs donghaeng-api 2>&1 || true

@@ -4,6 +4,8 @@ import com.donghaeng.config.RequiredProfileMarker
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.web.ErrorProperties
+import org.springframework.boot.autoconfigure.web.ServerProperties
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.core.env.Environment
 import org.springframework.test.context.ActiveProfiles
@@ -54,6 +56,9 @@ abstract class RealConfigurationBootTest(
     @Autowired
     private lateinit var environment: Environment
 
+    @Autowired
+    private lateinit var serverProperties: ServerProperties
+
     @Test
     fun `the committed configuration boots and reaches postgres`() {
         assertThat(environment.activeProfiles).containsExactly(expectedProfile)
@@ -69,6 +74,31 @@ abstract class RealConfigurationBootTest(
             // The pool connected to the resolved URL, not to something else.
             assertThat(connection.metaData.url).isEqualTo(postgres.jdbcUrl)
         }
+    }
+
+    @Test
+    fun `the server error properties resolve to the values the base file pins`() {
+        // The RESOLVED values, and that is the point of asserting them here as
+        // well as in ProfileConfigurationTest's file sweep. The environment
+        // outranks every yml (notes/2026-08-09-decision-schema-ownership.md), so
+        // `SERVER_ERROR_INCLUDE_MESSAGE=always` typed into a deploy platform
+        // reverses the pin with the whole suite green — and a test that reads
+        // committed files provably cannot see it.
+        //
+        // Asserted on the bound ServerProperties rather than on the raw property
+        // string, so relaxed binding and enum coercion are inside what is
+        // checked.
+        //
+        // What this does NOT cover, stated so nobody deletes the tests that do:
+        // it is not the masking guarantee. ProblemErrorController never reads
+        // include-message or include-exception, and the masking of our own
+        // responses is asserted by GlobalErrorHandlerTest and
+        // ErrorDispatchContractTest. `include-stacktrace` is the one with reach
+        // beyond this file — it gates Boot's hardening of Tomcat's error page —
+        // and TomcatErrorPageHardening exists so that reach does not matter.
+        assertThat(serverProperties.error.includeMessage).isEqualTo(ErrorProperties.IncludeAttribute.NEVER)
+        assertThat(serverProperties.error.includeStacktrace).isEqualTo(ErrorProperties.IncludeAttribute.NEVER)
+        assertThat(serverProperties.error.isIncludeException).isFalse()
     }
 
     @Test

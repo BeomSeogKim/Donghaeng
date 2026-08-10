@@ -18,6 +18,24 @@
 # Profile selection: SPRING_PROFILES_ACTIVE (see README, Development).
 server:
   port: 8080
+  error:
+    # What the servlet container's error page may publish. Boot already defaults
+    # all three to the safe value, and they are pinned anyway for the same reason
+    # `log-request-details` below is: a default is not a decision, and the
+    # environment outranks every file in the jar
+    # (notes/2026-08-09-decision-schema-ownership.md), so
+    # `SERVER_ERROR_INCLUDE_MESSAGE=always` in a deploy platform would publish
+    # exception messages with the whole suite green. RealConfigurationBootTest
+    # asserts the RESOLVED values, which is the only place that reversal is
+    # visible.
+    #
+    # Since ProblemErrorController replaced BasicErrorController these three
+    # decide nothing at runtime — it never reads them. That is deliberate
+    # redundancy, not a leftover: the pin has to outlive anyone deleting that
+    # class without knowing what it was for.
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
 
 spring:
   application:
