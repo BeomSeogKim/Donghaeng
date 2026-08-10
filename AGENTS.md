@@ -3,42 +3,45 @@
 Wedding-journey companion web service for couples — centered on a guest
 ledger (하객·좌석·축의금). See README.md for the product pitch.
 
-## Pick up here (last session: 2026-08-08)
+## Pick up here (last session: 2026-08-10)
 
-**Design is done.** Screen and flow design (③) — the last blocker — is
-complete: `notes/2026-08-07-design-screens-and-flow.md`. The import knot that
-had blocked it dissolved the same day
-(`notes/2026-08-07-decision-import-idempotency.md`), and the design system is
-built (`notes/2026-08-07-design-system.md`).
+**Substrate is one item from closed, and the order after it is decided.**
+Design, both implementors' methodologies, the tempo, the work tracker and the
+build workflow were all settled 2026-08-07/08; each has its own section below
+and its own record in `notes/`. Read those sections for the rules — this one
+only says where the work is.
 
-**Both implementors now have a decided build methodology.** Backend got
-TDD/architecture/API-conventions on 2026-08-07; frontend closed the
-methodology gap left open by that note on 2026-08-08 — see **Frontend
-development methodology** and **Frontend architecture** below. The founder
-does not have strong existing frontend instincts, so this was decided
-explicitly as an enforced default rather than left to per-session judgment,
-backed by a same-day 123-source research pass.
+**What has landed** (all merged; `main` clean): `api/` and `web/` scaffolding
+(`#1`, `#2`), the profile split (`#50`), CI with its `prod-boot` and `docker`
+jobs plus the local merge gate (`#36`, `#57`, `#58`), schema ownership moved
+to hand-applied DDL (`#59`), a real-config boot test (`#41`), the RFC 9457
+error contract and Tomcat error-page hardening (`#4`), `web/`'s linter and
+the design-value checker (`#45`), and a liveness probe for a guard that could
+disable itself (`#60`).
 
-**The tempo the work runs at is also decided** (2026-08-08, last thing
-before scaffolding): vertical slices by requirement, sized in new concepts,
-each ending in a comprehension document the founder reads and is quizzed on.
-See **Development tempo** below and
-`notes/2026-08-08-decision-development-tempo.md`. It added a fifth agent,
-`explainer`.
+So there is application code now, but **no domain code**: `api/src` is four
+config guards plus the error contract, `web/src` is App, the query client and
+the test harness.
 
-**How a stop is landed is decided too** (2026-08-08, after an audit of the
-day's own decisions): branch → PR → CI green → merge, the seam type-checked
-by generated OpenAPI types, and a cross-seam requirement split into two
-child issues. See **Build workflow** below and
-`notes/2026-08-08-decision-build-workflow.md`. Work is tracked as GitHub
-Issues (**Work tracking**); the local DB, sealbox entry, and ports are
-already provisioned.
+**The order from here** (decided 2026-08-10,
+`notes/2026-08-10-decision-auth-gate-and-sequence.md`):
 
-**The next step is scaffolding `web/` and `api/` — do not start it without
-the user.** It is the substrate exception in the tempo rule: horizontal,
-once, at the front, then a hard stop. The five working agents are already in
-place (see **Agents** below), so the scaffolding is what they have been
-waiting on, not the other way round. It is issues `#1`–`#5`.
+    #3       baseline schema        ← next, and the last horizontal stop
+    #6/#37   social login — session issuance + CurrentUser
+    #7       웨딩 만들기 — the first membership exists here
+    #5       CurrentWedding resolution + cross-tenant 404
+    #8~      vertical, all of it
+
+Auth lands **after** login rather than before it, because no v1 requirement
+can be built ahead of auth anyway — every one of `#7`–`#24` sits behind "who
+is asking" and "which wedding", so the only alternative to a real session is
+a hardcoded `userId` threaded through fifteen endpoints. **The resolver is
+the gate, not Spring Security's filter chain** — see **Security posture**.
+That call split `#5` along the user/wedding axis (the session half moved into
+`#6`) and shrank `#62` to a single OAuth-callback case owned by `#6`.
+
+The five working agents are in place (see **Agents** below), delegation is
+automatic, and the local DB, sealbox entry and ports are provisioned.
 
 All three calls from the flow design were **confirmed on 2026-08-07**:
 
@@ -73,7 +76,7 @@ Reserve multiple-choice for operational forks.
 
 ## Status
 
-Concept stage, aligned (as of 2026-08-07). Vision, core scope, product
+Building the substrate (as of 2026-08-10). Vision, core scope, product
 values, the MVP's hard design spots, the tech stack, the domain model, the
 headcount aggregation, the **v1 scope cut**, and the **design system
 foundations** are decided — see the
@@ -96,13 +99,18 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-08-decision-frontend-architecture.md`,
 `2026-08-08-decision-development-tempo.md`,
 `2026-08-08-decision-work-tracking.md`,
-`2026-08-08-decision-build-workflow.md`). Read them newest-first: the
+`2026-08-08-decision-build-workflow.md`,
+`2026-08-08-decision-merge-gate.md`,
+`2026-08-08-decision-scaffold-secrets-and-surface.md`,
+`2026-08-09-decision-schema-ownership.md`,
+`2026-08-10-decision-cross-tenant-status-code.md`,
+`2026-08-10-decision-design-value-enforcement.md`,
+`2026-08-10-decision-auth-gate-and-sequence.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
-There is no application code yet — `design/` is substrate, not
-implementation. **Design has no remaining blocker**: the next step is
-scaffolding `web/` and `api/`. Success criteria are deliberately deferred
-until after the MVP is built. Do not start implementation without the user.
+**Design has no remaining blocker.** Application code exists but no domain
+code yet — see **Pick up here** for exactly what has landed and what is next.
+Success criteria are deliberately deferred until after the MVP is built.
 
 ## Stack (decided 2026-07-30)
 
@@ -518,6 +526,28 @@ that constrain everyday work:
   ≥128-bit CSPRNG, **stored SHA-256-hashed**, constant-time compared, masked
   in logs. Privileges and lifetimes differ per kind — the per-guest link can
   only respond as that guest, never read.
+- **The auth gate is our resolver, not Spring Security's filter chain**
+  (decided 2026-08-10, `notes/2026-08-10-decision-auth-gate-and-sequence.md`).
+  `authorizeHttpRequests` stays `permitAll` in **every** environment; what
+  rejects a request is `user → membership → wedding` resolution failing. The
+  asymmetry is retrofit cost: flipping the filter chain later is one line and
+  turns every fixture-less test red at once, whereas retrofitting the resolver
+  means threading a parameter through every endpoint written in the meantime,
+  by hand and silently. So the resolver is present from the first endpoint and
+  the filter chain is defense in depth. This is a design, not deferred
+  hardening, and it is only honest because two tests hold it: an anonymous
+  request to a wedding-scoped endpoint is 401, an authenticated non-member is
+  404. **Forgetting the resolver must fail closed** — `#5` ships either an
+  interceptor that denies undeclared handlers or a build-time check that every
+  handler takes a resolved principal. Never neither.
+- **CSRF in v1 is `SameSite=Lax` plus no state-changing GET** — the pair, not
+  either half. Lax withholds the cookie on cross-site POST and admits it only
+  on top-level GET navigation, so a state-changing GET reopens exactly what
+  Lax closed. Spring Security's CSRF filter being off is therefore an explicit
+  act with a stated substitute, never a silent `csrf { disable() }`; the token
+  itself is defense in depth and belongs to `#48`. **`SameSite=Strict` is
+  wrong here** — the OAuth callback is a top-level cross-site navigation, so
+  Strict drops the cookie at the moment of login.
 - Injection risk lives exactly in the native aggregation queries; column
   names go through a whitelist, never string concatenation.
 - Parsed vendor email is rendered as text, never as HTML.
