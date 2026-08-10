@@ -11,6 +11,20 @@ import org.springframework.boot.diagnostics.FailureAnalysis
  *
  * Registered in META-INF/spring.factories — a FailureAnalyzer runs before the
  * context exists, so it cannot be a bean.
+ *
+ * The sentence starting "The schema of a real database is applied by hand" is a
+ * CI CONTRACT: the `docker` job greps the packaged image's log for it (issue
+ * #60). Reword it and update .github/workflows/ci.yml in the same change.
+ *
+ * That job also matches Boot's "APPLICATION FAILED TO START" banner, and the two
+ * are not independent — the banner is printed only by
+ * LoggingFailureAnalysisReporter, i.e. only when some FailureAnalyzer answered,
+ * so both patterns prove THIS CLASS IS WIRED and neither proves the guard spoke.
+ * The consequence to know before deleting this class: doing so is a defensible
+ * simplification — the guard still refuses and the app still will not start —
+ * but it turns that step red with "refused, but not as the guard", because Boot
+ * would log a bare stack trace and no banner. This analyzer and that step change
+ * together.
  */
 internal class SchemaOwnershipFailureAnalyzer : AbstractFailureAnalyzer<SchemaOwnershipViolationException>() {
     override fun analyze(
