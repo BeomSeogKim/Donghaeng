@@ -398,6 +398,155 @@ jobs:
           print("container error page: clean")
           PY
 
+      # SchemaOwnershipGuard refuses to start an environment that could write DDL
+      # — and it disables itself whenever `spring-boot-starter-test` is on the
+      # classpath, because the suite legitimately runs Flyway. So the day a test
+      # dependency reaches the runtime classpath, the guard is silently absent
+      # from the shipped jar and every other check stays green (issue #60).
+      #
+      # This job is the only place that regression is observable. `prod-boot`
+      # cannot see it: a Gradle `Test` task carries the test classpath, so it
+      # boots with the guard already off by design. Here the artifact is the real
+      # one, so asking it to do the forbidden thing and watching it say no is a
+      # negative assertion on what actually ships.
+      #
+      # THE MATCHED STRINGS ARE A CONTRACT. A container that exits for an
+      # unrelated reason — no database, a port clash, a mistyped variable name —
+      # would satisfy an exit-code check while proving nothing, so the assertion
+      # is on text instead. Both source files say so where the strings are
+      # defined.
+      #
+      # Three patterns are matched, and they are NOT three independent proofs.
+      # `APPLICATION FAILED TO START` is printed only by Boot's
+      # LoggingFailureAnalysisReporter — that is, only when some FailureAnalyzer
+      # produced an analysis — so it and the "applied by hand" sentence are two
+      # readings of one fact: SchemaOwnershipFailureAnalyzer is wired. Only the
+      # violation sentence is the guard's own text. The banner is kept anyway
+      # because the "applied by hand" line pins WHICH analyzer answered, which
+      # the banner alone does not.
+      #
+      # The coupling that follows is deliberate and worth knowing before you trip
+      # over it: deleting the FailureAnalyzer is a defensible simplification —
+      # the guard still refuses, the app still will not start — but it turns this
+      # step red with "refused, but not as the guard". The analyzer and this step
+      # change together.
+      #
+      # The unit test (SchemaOwnershipGuardTest) deliberately does NOT assert
+      # these sentences; it builds its own message. Do not "fix" that gap: if the
+      # suite pinned them, a reword would edit the test in the same breath and be
+      # rubber-stamped. Leaving them unpinned there means a reword fails here, in
+      # the one check whose whole subject is a contract with something outside
+      # the suite. Minutes late beats seconds late and silently agreed with.
+      - name: The packaged image still refuses to write DDL
+        run: |
+          set -euo pipefail
+
+          # No `await_log` here, and no waiting idiom at all: the refusal happens
+          # in an EnvironmentPostProcessor, before a single bean, so the
+          # container simply exits and `docker wait` is the synchronisation. The
+          # timeout is the interesting half — if the guard is gone the app boots
+          # normally and never exits, which is reported as "kept running instead
+          # of refusing" rather than hanging to the job deadline.
+          #
+          # Same --network host and same credentials as the boot above, plus a
+          # free port, so that a guard-less jar would START — reaching Postgres,
+          # binding a connector, running on — and the timeout branch reports the
+          # regression it is named for instead of the app dying of an unreachable
+          # database and being written off as "refused, but not as the guard".
+          # None of it is exercised while the guard works: it fires before a port
+          # is bound or a connection opened.
+          #
+          # That "would START" holds only WHILE THE SCHEMA IS EMPTY. There are no
+          # migrations and no @Entity yet, so `validate` is trivially true. Once
+          # #3/#55 land, this job applies the migration SQL before starting the
+          # app (see the comment in "Wait for startup"), and a guard-less jar then
+          # meets Flyway's "Found non-empty schema without schema history table"
+          # and exits — so the regression surfaces through the "refused, but not
+          # as the guard" branch instead. Still red, still a detector; the branch
+          # that fires changes, and this paragraph is what stops that reading as
+          # a bug.
+          refuses() {
+            label=$1 env_name=$2 env_value=$3 violation=$4
+            name=donghaeng-api-guard
+
+            # `set -u` catches a missing 4th argument; it says nothing about an
+            # empty one, and `grep -qF ""` matches any log at all. That failure
+            # would be a green step asserting nothing — this file's recurring
+            # failure, and the exact thing issue #60 is about.
+            [ -n "$violation" ] || { echo "::error::$label: no violation pattern given"; return 1; }
+
+            docker rm -f "$name" > /dev/null 2>&1 || true
+            docker run -d --name "$name" --network host \
+              -e SPRING_PROFILES_ACTIVE=prod \
+              -e SERVER_PORT=8099 \
+              -e DATABASE_URL='jdbc:postgresql://127.0.0.1:5432/donghaeng' \
+              -e DB_USERNAME='donghaeng_ci' \
+              -e DB_PASSWORD='donghaeng_ci_throwaway' \
+              -e "$env_name=$env_value" \
+              donghaeng-api:ci > /dev/null
+
+            # `timeout` reports its own timeout as 124 and passes anything else
+            # through, and the two must not share a branch: a daemon hiccup or a
+            # renamed container would otherwise print the most alarming line in
+            # this workflow — "the guard is not in the jar" — about something
+            # that was never observed. stderr is kept for the same reason; the
+            # `No such container` line is the evidence that tells them apart.
+            status=0
+            timeout 120 docker wait "$name" > /tmp/guard-exit || status=$?
+            docker logs "$name" > /tmp/guard.log 2>&1 || true
+            docker rm -f "$name" > /dev/null 2>&1 || true
+
+            # Every failure branch below dumps the whole boot log, and that is
+            # safe only because DATABASE_URL carries no credential: HikariCP
+            # prints the entire jdbcUrl on its failure path, which is precisely
+            # why the username and password are separate keys
+            # (notes/2026-08-08-decision-scaffold-secrets-and-surface.md). Put a
+            # password back in the URL and this step publishes it into the job
+            # log the first time a boot fails for an unrelated reason.
+            if [ "$status" -eq 124 ]; then
+              echo "::error::$label: the image kept running instead of refusing — the guard is not in the jar"
+              cat /tmp/guard.log
+              return 1
+            fi
+            if [ "$status" -ne 0 ]; then
+              echo "::error::$label: could not observe the container (docker wait exited $status) — this says nothing about the guard"
+              return 1
+            fi
+            if [ "$(cat /tmp/guard-exit)" = "0" ]; then
+              echo "::error::$label: the image exited 0; a refusal is a failed start"
+              cat /tmp/guard.log
+              return 1
+            fi
+
+            # It refused. Now: did IT refuse, or did something else break?
+            while IFS= read -r pattern; do
+              if ! grep -qF "$pattern" /tmp/guard.log; then
+                echo "::error::$label: the image refused, but not as the guard — no '$pattern' in its log"
+                cat /tmp/guard.log
+                return 1
+              fi
+            done <<EOF
+          APPLICATION FAILED TO START
+          $violation
+          The schema of a real database is applied by hand
+          EOF
+
+            echo "refused as designed ($label) — this failed boot is the assertion, not an incident"
+          }
+
+          refuses 'flyway re-enabled' \
+            SPRING_FLYWAY_ENABLED true \
+            '`spring.flyway.enabled` resolved to `true`, and this application never runs a migration outside its own tests.'
+
+          # The second door, and it is not a synonym that loses:
+          # HibernateProperties.determineDdlAuto reads the raw
+          # `hibernate.hbm2ddl.auto` BEFORE Boot's `ddl-auto` alias, so an
+          # environment can set it and win outright. Costs one more failed boot,
+          # which ends in the EnvironmentPostProcessor and so is a few seconds.
+          refuses 'raw hibernate ddl property' \
+            SPRING_JPA_PROPERTIES_HIBERNATE_HBM2DDL_AUTO create-drop \
+            '`spring.jpa.properties.hibernate.hbm2ddl.auto` resolved to `create-drop`, and this application never writes DDL.'
+
       - name: Container log
         if: always()
         run: docker logs donghaeng-api 2>&1 || true

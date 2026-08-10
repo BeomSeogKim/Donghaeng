@@ -67,6 +67,21 @@ internal class SchemaOwnershipViolationException(
 internal class SchemaOwnershipGuard(
     private val underTest: Boolean = TEST_CLASSPATH,
 ) : EnvironmentPostProcessor {
+    // The two refusal messages below are a CI CONTRACT, not just diagnostics.
+    // The `docker` job boots the packaged image with SPRING_FLYWAY_ENABLED=true
+    // and with the raw hbm2ddl property set, and greps for exactly these
+    // sentences — because an exit code alone would also be produced by an
+    // unreachable database or a port clash, and would certify nothing. That job
+    // is the only detector of the regression described under "why it is inert
+    // under the tests" (issue #60). Reword either sentence and update
+    // .github/workflows/ci.yml in the same change.
+    //
+    // These are the only strings in that check that are THIS class's; the other
+    // two patterns it matches both prove that SchemaOwnershipFailureAnalyzer is
+    // wired, not that the guard spoke. SchemaOwnershipGuardTest deliberately
+    // does not assert these sentences — it builds its own — so that a reword
+    // fails in CI rather than being edited into agreement alongside the change
+    // that caused it.
     override fun postProcessEnvironment(
         environment: ConfigurableEnvironment,
         application: SpringApplication,
