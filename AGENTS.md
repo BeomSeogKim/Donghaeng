@@ -339,8 +339,16 @@ Full record: `notes/2026-08-07-decision-backend-api-conventions.md`.
   of parsing `detail`.
 - **HTTP status follows standard verb/outcome mapping**: 200 read/update,
   201 create, 204 delete, 400 validation, 404 not found, 409 conflict, 401
-  unauthenticated, 403 wrong wedding, 500 unhandled (masked per security
-  posture).
+  unauthenticated, 500 unhandled (masked per security posture).
+- **A cross-tenant request is 404, never 403** (decided 2026-08-10,
+  `notes/2026-08-10-decision-cross-tenant-status-code.md`, superseding one
+  row of the 08-07 table). Any resource addressed by a caller-supplied id
+  whose owning wedding the caller is not a member of returns the same
+  response as an id that does not exist — otherwise the pair is a wedding-id
+  oracle. **403 means the caller *is* a member and lacks a privilege within
+  that wedding, so v1 has no correct use for it.** 404 is the default and
+  not a per-endpoint exception, for the same reason `wedding_id` sits on
+  every root: a default cannot be forgotten, a judgement call can.
 - **DTO naming**: `XxxRequest` / `XxxResponse`, mapped via extension
   functions in the domain package. Entities never serialize directly.
 - **No `/v1` prefix** — no second API version planned; free to add later.
@@ -502,6 +510,26 @@ that constrain everyday work:
   Actuator-only rule). `springdoc.api-docs.enabled` is false by default and
   is enabled only where the document is generated, which is the build.
   SSH only via Tailscale.
+- **The servlet container's own error page counts too** (widened 2026-08-10,
+  found auditing #4). Tomcat's `ErrorReportValve` renders the original
+  exception as HTML with a partial stack trace and the Tomcat version.
+  Boot does harden it — but **conditionally**:
+  `TomcatWebServerFactoryCustomizer.customizeErrorReportValve` sets
+  `showReport`/`showServerInfo` false *only if*
+  `server.error.include-stacktrace == NEVER`. So
+  `SERVER_ERROR_INCLUDE_STACKTRACE=always` in a deploy platform un-hardens
+  the page, which makes the `server.error.*` pins **runtime-load-bearing**,
+  not merely declarative — the same environment-outranks-yml shape as the
+  schema-ownership guard. `TomcatErrorPageHardening` pins both flags
+  unconditionally, and the `docker` job asserts no response body ever
+  contains `Apache Tomcat` or `Exception Report`.
+  Reached by **a filter that throws during the `ERROR` dispatch** — which
+  Spring Security's chain is, since it registers for `ERROR` by default, so
+  #5 puts real code there. (Not by our own `/error` handler throwing: that
+  is a `@RequestMapping` method, so the exception resolvers catch it and
+  `GlobalErrorHandler` answers, masked.)
+  The earlier rule named only *machine*-readable surfaces; this is the
+  human-readable one, and it was unnamed for that reason alone.
 - Enumeration safety and the link-token rules have **no surface in v1** (no
   public page ships) but are not retracted — they bind the release that
   brings the RSVP links back.

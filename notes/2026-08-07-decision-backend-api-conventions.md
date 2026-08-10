@@ -1,5 +1,13 @@
 # Decision — backend API conventions (2026-08-07)
 
+> **Superseded on one row (2026-08-10):** the status table below says
+> `403` for "Authenticated, wrong wedding/membership". It is **404** —
+> 403 on an existing wedding and 404 on a nonexistent one is a wedding-id
+> oracle, and this note had contradicted
+> `notes/2026-07-30-decision-network-security.md` without either side
+> noticing. See `notes/2026-08-10-decision-cross-tenant-status-code.md`.
+> Everything else in this note stands.
+
 Closes the concrete gaps flagged right after the architecture decision:
 response shape, HTTP status usage, DTO naming, and tooling — the things
 that get hit on day one of scaffolding rather than day thirty. The founder
