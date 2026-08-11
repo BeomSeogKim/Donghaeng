@@ -154,6 +154,16 @@ phone4 key.
 
 ## 4. Provisional guests
 
+> **NOT IN v1 — deferred 2026-08-11**
+> (`2026-08-11-decision-baseline-schema-calls.md` §D). The definition below is
+> untouched and is what the column comes back from; it simply has no trigger in
+> v1. The only thing that mints a provisional guest is an unmatched RSVP-link
+> response, and the links are deferred (2026-08-06) — vendor email and CSV
+> import both resolve on a screen the couple is watching, so a guest is
+> acknowledged at the moment it is created. `guest.lifecycle` is therefore
+> absent from the baseline schema, and returns with the links as an `ALTER`,
+> alongside whatever makes the expected slots optional.
+
 An `unmatched` response creates a **real `Guest`**, not a separate kind of
 object. The expected/confirmed split already distinguishes it: expected
 slots empty, confirmed slots filled from the response — that combination
