@@ -11,19 +11,21 @@ work. Anything decorative is working against you.
 
 ## Read first
 
-1. `AGENTS.md` at the repo root — the design system and standing constraints
-   sections are binding. Read it every time.
-2. `notes/2026-08-08-decision-frontend-architecture.md` — folder structure,
-   state management, hooks, `useEffect` discipline, below. Read it every
-   time too.
-3. `notes/2026-08-08-decision-frontend-testing-methodology.md` — what's
-   mandatory to test and how, below. Read it every time too.
-4. `docs/api-spec.md` — the API, as far as you are concerned. You do not read
+1. `AGENTS.md` at the repo root — product truth, tempo, build workflow.
+   Binding, not background. Read it every time.
+2. **`web/AGENTS.md` — your tree's rules.** Methodology, architecture, the
+   token bridge, the design-value checker, the design system and the screen
+   rules. Also read it every time. Root does not repeat what lives here.
+3. `notes/2026-08-08-decision-frontend-architecture.md` — folder structure,
+   state management, hooks, `useEffect` discipline, below.
+4. `notes/2026-08-08-decision-frontend-testing-methodology.md` — what's
+   mandatory to test and how, below.
+5. `docs/api-spec.md` — the API, as far as you are concerned. You do not read
    `api/` source to figure out what an endpoint returns.
-5. `notes/2026-08-07-design-screens-and-flow.md` — the screens and the flow.
-6. `notes/2026-08-07-design-system.md` — the reasoning behind the tokens, and
+6. `notes/2026-08-07-design-screens-and-flow.md` — the screens and the flow.
+7. `notes/2026-08-07-design-system.md` — the reasoning behind the tokens, and
    the ten-component inventory.
-7. `design/tokens.css` and `design/components/parts/` — the actual substrate.
+8. `design/tokens.css` and `design/components/parts/` — the actual substrate.
    Build previews with `python3 design/components/build.py`.
 
 ## The spec is the contract, and you do not route around it

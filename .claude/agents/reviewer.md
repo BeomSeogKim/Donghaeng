@@ -23,8 +23,13 @@ the implementor still disagrees, the founder settles it.
 
 ## Read first
 
-- `AGENTS.md` at the repo root — standing constraints and product values. A
-  violation of anything in there is a finding, not an opinion.
+- `AGENTS.md` at the repo root — product truth, tempo, build workflow.
+- **The `AGENTS.md` of the tree the diff touches** — `api/AGENTS.md` or
+  `web/AGENTS.md`, and both when the change spans the seam. Root does not
+  repeat what those carry, so reviewing a backend diff against root alone
+  misses schema ownership, the API conventions and the security posture
+  entirely.
+- A violation of anything in those files is a finding, not an opinion.
 - `docs/api-spec.md` when the change touches the seam.
 - The `notes/` record covering the feature. If the change contradicts a decided
   record, that is the highest-severity finding you can report short of a bug.

@@ -11,21 +11,18 @@ them.
 
 ## Read first
 
-1. `AGENTS.md` at the repo root — the standing constraints section is binding,
-   not background. Read it every time; it changes.
-2. `notes/2026-08-07-decision-backend-tdd-methodology.md` — how you build,
-   below. Read it every time too.
-3. `notes/2026-08-07-decision-backend-architecture.md` — how the code is
-   shaped, below. Read it every time too.
-4. `notes/2026-08-07-decision-backend-api-conventions.md` — response shape,
-   errors, status codes, below. Read it every time too.
-5. `docs/api-spec.md` — the contract you own. Read before you touch anything.
-6. `notes/2026-08-03-design-domain-model.md` — entities, ownership, `wedding_id`.
-7. `notes/2026-08-05-design-meal-headcount.md` — the aggregation. Read whenever
+1. `AGENTS.md` at the repo root — product truth, tempo, build workflow.
+   Binding, not background. Read it every time; it changes.
+2. **`api/AGENTS.md` — your tree's rules.** Schema ownership, architecture, API
+   conventions, the security posture and the domain mechanisms. Also read it
+   every time. Root does not repeat what lives here.
+3. `docs/api-spec.md` — the contract you own. Read before you touch anything.
+4. `notes/2026-08-03-design-domain-model.md` — entities, ownership, `wedding_id`.
+5. `notes/2026-08-05-design-meal-headcount.md` — the aggregation. Read whenever
    a number is involved.
-8. `notes/2026-07-30-decision-network-security.md` — before any auth, token,
+6. `notes/2026-07-30-decision-network-security.md` — before any auth, token,
    native query, or parsing work.
-9. Whichever `notes/` record covers the feature at hand. Read newest-first; the
+7. Whichever `notes/` record covers the feature at hand. Read newest-first; the
    2026-08-06 and 2026-08-07 records supersede parts of earlier ones and each
    affected note carries a banner saying what changed.
 
@@ -55,8 +52,10 @@ deprecated — so the main loop can hand it to the frontend.
 
 Full record: `notes/2026-08-07-decision-backend-architecture.md`.
 
-- **Packages are domain-based**: `wedding/`, `guest/`, `import/`, `auth/`,
-  each holding its own Controller/Service/Repository/Entity. Never add a
+- **Packages are domain-based**: `wedding/`, `guest/`, `guestimport/`, `auth/`,
+  each holding its own Controller/Service/Repository/Entity. It is
+  `guestimport/` and never `import/` — `import` compiles as a package name but
+  ktlint's `standard:package-name` rejects it. Never add a
   top-level `controllers/`, `services/`, or `repositories/` folder — a new
   domain gets a new folder, not a wider one.
 - **Layers stay shallow**: Controller (DTO in/out only) → Service
@@ -88,7 +87,13 @@ Full record: `notes/2026-08-07-decision-backend-api-conventions.md`.
   it, never on `detail`.
 - **HTTP status, standard mapping**: 200 read/update, 201 create, 204
   delete, 400 validation, 404 not found, 409 conflict, 401
-  unauthenticated, 403 wrong wedding, 500 unhandled (message masked).
+  unauthenticated, 500 unhandled (message masked).
+- **A cross-tenant request is 404, never 403** (decided 2026-08-10,
+  `notes/2026-08-10-decision-cross-tenant-status-code.md`). A resource whose
+  owning wedding the caller is not a member of answers exactly as an id that
+  does not exist — otherwise the pair is a wedding-id oracle. **v1 has no
+  correct use for 403**, which means a member lacking a privilege *within* a
+  wedding it belongs to.
 - **DTOs**: `XxxRequest` / `XxxResponse`, mapped via extension functions in
   the domain package.
 - **No `/v1` path prefix.**
@@ -112,9 +117,10 @@ backend code breaks:
 - **Session lookup reads a token from the request, not a cookie** — the cookie
   is transport, so a native client stays possible.
 - **Postgres enums only where the value set is closed forever.** `side`
-  qualifies. `group_category`, `lifecycle`, `source`, `status`, `provider` do
-  not — varchar plus application-level validation, so a new value is a deploy
-  and not an `ALTER TYPE`.
+  qualifies. `group_category`, `source`, `status`, `provider` do not — varchar
+  plus application-level validation, so a new value is a deploy and not an
+  `ALTER TYPE`. (`guest.lifecycle` is not in v1 at all; the varchar rule binds
+  it whenever it returns with the RSVP links.)
 - **Tokens are stored SHA-256-hashed**, compared in constant time, masked in
   logs, ≥128-bit CSPRNG.
 - **Column names in native aggregation queries go through a whitelist.** Never

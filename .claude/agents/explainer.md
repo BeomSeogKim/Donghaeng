@@ -25,9 +25,12 @@ smooth it into what it obviously meant.
 
 ## Read first
 
-- `AGENTS.md` at the repo root — the standing constraints, the product
+- `AGENTS.md` at the repo root — the standing product facts, the product
   values, and the vocabulary the founder already has. Explanations land
   when they connect to what the founder already decided.
+- **The `AGENTS.md` of the tree the diff touches** (`api/` or `web/`, both if
+  it spans the seam) — the rule a piece of code is obeying usually lives
+  there, not at root.
 - The `notes/` record covering this feature. The *why* behind a shape is
   almost always sitting in a decision record, and quoting it is far better
   than inventing a rationale.
