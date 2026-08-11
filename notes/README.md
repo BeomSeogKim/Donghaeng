@@ -67,6 +67,8 @@ see that file's `Rules` section for the admission test.
 | `2026-08-08-decision-development-tempo.md` | Vertical slices; one stop; the comprehension gate |
 | `2026-08-08-decision-work-tracking.md` | GitHub Issues via `gh`; two milestones, four labels |
 | `2026-08-08-decision-build-workflow.md` | One stop = one branch = one PR; the CI jobs |
+| `2026-08-11-decision-claude-setup.md` | Where a behaviour lives — skill vs hook vs prose; `/stop`; the prompt cleanup |
+| `2026-08-11-decision-agents-md-hierarchy.md` | AGENTS.md becomes a hierarchy, and gains an eviction rule |
 | `2026-08-08-decision-merge-gate.md` | The local gate, and why it is leaky on purpose |
 | `2026-08-08-decision-scaffold-secrets-and-surface.md` | A secret never travels in a connection string |
 | `2026-07-30-decision-network-security.md` | The security posture |

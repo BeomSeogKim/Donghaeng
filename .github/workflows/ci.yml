@@ -102,19 +102,27 @@ jobs:
       - run: ./gradlew test --tests 'com.donghaeng.*ProfileBootTest' --no-daemon
 
   hooks:
-    name: hooks · merge gate + db guard
+    name: hooks · guards + AGENTS.md budget
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # These two shell suites guard rules the repo cannot otherwise enforce: what
-    # may be merged, and what may reach a database. Both were hand-run until a
-    # review found seven bypasses in the db guard at once — a control nothing
-    # exercises is a control nobody knows the shape of.
+    # These shell suites guard rules the repo cannot otherwise enforce: what may
+    # be merged, what may reach a database, what a closing trailer may name, and
+    # how large the rule files may get. All were hand-run until a review found
+    # seven bypasses in the db guard at once — a control nothing exercises is a
+    # control nobody knows the shape of.
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - run: bash .claude/hooks/merge-gate.test.sh
       - run: bash .claude/hooks/db-guard.test.sh
+      - run: bash .claude/hooks/closes-guard.test.sh
+
+      # Not a suite — the check itself. The budget was written into AGENTS.md
+      # and run by nobody, which is the same shape as the 908-line file it was
+      # written to prevent.
+      - name: AGENTS.md is within budget
+        run: bash .claude/hooks/agents-budget.sh
 
       # A passing suite says the hook works, not that anything runs it. Deleting
       # four lines from settings.json leaves every check green and both guards
@@ -123,7 +131,7 @@ jobs:
       - name: The hooks are still wired
         run: |
           set -euo pipefail
-          for hook in merge-gate db-guard; do
+          for hook in merge-gate db-guard closes-guard; do
             jq -e --arg h "$hook" '
               [.hooks.PreToolUse[]
                | select(.matcher == "Bash")

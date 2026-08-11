@@ -17,6 +17,17 @@
 
 set -euo pipefail
 
+# The AGENTS.md budgets, checked before anything leaves the machine. They are
+# stated in AGENTS.md itself; a stated budget that nothing runs is what let the
+# root file reach 908 lines in the first place.
+if ! .claude/hooks/agents-budget.sh >/dev/null; then
+  echo >&2
+  echo "  ✗ push blocked: AGENTS.md is over budget." >&2
+  echo >&2
+  .claude/hooks/agents-budget.sh >/dev/null 2>&1 || .claude/hooks/agents-budget.sh 2>&1 >/dev/null | sed 's/^/  /' >&2
+  exit 1
+fi
+
 protected='refs/heads/main'
 
 while read -r _local_ref _local_sha remote_ref _remote_sha; do

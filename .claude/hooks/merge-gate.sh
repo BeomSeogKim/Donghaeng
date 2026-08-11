@@ -40,7 +40,18 @@ runnable=$(printf '%s\n' "$command" | awk '
       gsub(/['"'"'"]/, "", d)
       delim = d
     }
-    print
+    # A "(" glued to the end of a bare word is a call or a rule string, not a
+    # subshell — `Bash(gh pr merge*)` is a permission rule in settings.json, and
+    # reading that file used to trip this hook. Replace that paren with a space
+    # so the command-position test below no longer sees a delimiter. A real
+    # subshell has "(" at the start or after whitespace or an operator, so this
+    # cannot hide one.
+    line = $0; out = ""
+    while (match(line, /[A-Za-z0-9_]\(/)) {
+      out = out substr(line, 1, RSTART) " "
+      line = substr(line, RSTART + RLENGTH)
+    }
+    print out line
   }')
 
 if ! printf '%s\n' "$runnable" |

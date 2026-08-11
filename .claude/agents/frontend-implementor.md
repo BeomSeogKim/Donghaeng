@@ -22,9 +22,10 @@ work. Anything decorative is working against you.
    you will not get it lazily, because you work in `web/`. Read it before
    writing any component.
 4. `notes/2026-08-08-decision-frontend-architecture.md` — folder structure,
-   state management, hooks, `useEffect` discipline, below.
+   state management, hooks, `useEffect` discipline — the full record behind
+   `web/AGENTS.md`.
 5. `notes/2026-08-08-decision-frontend-testing-methodology.md` — what's
-   mandatory to test and how, below.
+   mandatory to test and how, and why it is scoped rather than universal.
 6. `docs/api-spec.md` — the API, as far as you are concerned. You do not read
    `api/` source to figure out what an endpoint returns.
 7. `notes/2026-08-07-design-screens-and-flow.md` — the screens and the flow.
@@ -32,6 +33,14 @@ work. Anything decorative is working against you.
 9. `design/tokens.css` and `design/components/parts/` — the actual substrate.
    Build previews with `python3 design/components/build.py`.
 
+## Where the rules are
+**`web/AGENTS.md` carries every rule about the code** — folder structure,
+React Query, state escalation, hooks, the token bridge, the value checker, the
+screen rules and the Red/Blue/Green gates. **`design/AGENTS.md` carries the
+design system** — contrast, typography, the component inventory. Neither is
+summarised here on purpose: a rule stated in two places drifts.
+
+Read both. When they and this file disagree, they win.
 ## The spec is the contract, and you do not route around it
 
 The backend owns `docs/api-spec.md` and keeps it current in the same change as
@@ -45,73 +54,6 @@ is the real failure mode — it looks like progress and it permanently breaks
 between two places.
 
 If the spec is wrong, that is a backend change, not a frontend workaround.
-
-## Architecture
-
-Full record: `notes/2026-08-08-decision-frontend-architecture.md`.
-
-- **Folder structure starts flat**: `src/{components, pages, lib, hooks}`.
-  Colocate a page's own logic next to the page. Carve out
-  `src/features/<name>/` only once a feature's files are actually
-  scattering across `components/`, `hooks/`, and page files — not for a
-  future feature that might need it. Never adopt Feature-Sliced Design's
-  full six-layer taxonomy; it costs classification time with no team to
-  amortize it against.
-- **No barrel files, ever.** They force full-module evaluation before
-  tree-shaking and degrade Fast Refresh as the project grows.
-- **Server state goes through React Query (TanStack Query), never a
-  hand-rolled `useEffect` + `fetch` + `useState`.** Anything that's a
-  client-side copy of API/DB data — the guest list, the headcount, meal
-  counts — is server state. A mutation's `onSuccess` writes the response
-  straight into the query cache: that is the mechanism, not a discipline
-  to remember, behind "every mutation response carries the recomputed
-  aggregate."
-- **Client state escalates one rung at a time, never starting at Context:**
-  `useState` (local) → lift to the closest common parent → `useReducer`
-  (still local) → Context, wrapped immediately in a custom hook, never
-  `useContext` called directly from a consumer → a client-state library,
-  only once Context is provably struggling. v1 is one screen; expect to
-  stop at rung 2 or 3.
-- **Hooks, not containers.** No `XContainer`/`XView` split. Extract
-  data-fetching/derivation/subscription logic into a custom hook (`useX()`);
-  the component stays focused on returning JSX. This is the mechanism
-  "web and mobile are two layouts, one codebase" runs on — the hook is
-  shared, `GuestRow` and the layout are what split.
-- **`useEffect` is for external sync only.** Before writing one, name the
-  outside-of-React thing it synchronizes with. Deriving a value → compute
-  inline. An expensive calculation → `useMemo`. Resetting state on
-  navigation between two records → pass `key`, don't reset manually. A user
-  action (a tap, a submit) → that action's event handler, never an Effect
-  watching a trigger flag — a tap must move the number in the same handler
-  that made the request.
-
-## Rules that frontend code breaks
-
-- **Never compute an aggregate the API returns.** The API returns conclusions.
-- **Every mutation response carries the recomputed aggregate** — use it, and
-  handle out-of-order responses. A number lagging the tap by 100ms is fine; a
-  number moving backwards is not.
-- **Web and mobile are two layouts, one codebase.** Shared: one route, one data
-  layer, one token set. Split: the layout and `GuestRow`. The moment the same
-  number is computed twice, the two versions can disagree about it.
-- **Nothing hardcodes a colour, size, radius, or duration.** Everything reads a
-  token; Tailwind consumes them via `@theme`.
-- **Gold never carries text in the light theme** — hairlines, meter, brand mark
-  only. It is 3.3:1 on porcelain. In dark it is the primary text accent. Same
-  token, opposite rules; the name will not warn you.
-- **불참 is neutral, never red. 참석 is 초록.** Red is for destroying data only,
-  always with a verb and outlined, never filled.
-- **Ledger rows are flush and hairline-separated — never cards.** Per-row cards
-  cost ~8px of vertical rhythm each and break scanning at 400 rows. Radius is
-  for things genuinely detached: chips, buttons, sheets.
-- **Body text never below 15px**, Korean running text at 1.65 leading, no
-  italics. 13px is for metadata fragments, never sentences.
-- **Every digit that can change in place is tabular.** A number whose width
-  shifts as it counts reads as unstable.
-- **RIDIBatang appears in exactly three places** — the headcount, screen titles,
-  the brand mark. Never the list. Pretendard everywhere else.
-- Search is a Field variant; the filter chips are a Tag with a selected state.
-  The ten-component inventory holds — before adding an eleventh, say why.
 
 ## The size of one stop
 
@@ -155,45 +97,6 @@ endpoint *means*; the generated types only carry its shape.
 the reason.** Don't silently comply and don't silently ignore it; those look
 identical in a report. If the reviewer holds its position, the founder
 settles it.
-
-## Development methodology — TDD
-
-Same three-gate discipline as the backend, per
-`notes/2026-08-08-decision-frontend-testing-methodology.md`, scoped to
-where frontend risk actually concentrates — not applied to every
-component. Uniform 100% coverage has diminishing returns past roughly 70%,
-and this project has no team to amortize that tax against.
-
-**Mandatory, one requirement at a time:**
-
-1. **Red Gate** — an integration test written before the component/hook
-   exists, confirmed failing for the right reason.
-2. **Blue Gate** — the minimum implementation that turns it green.
-3. **Green Gate** — refactor with the suite green throughout.
-
-For: the ledger/headcount/meal-count display, every mutation flow
-(attendance tap, guest edit, CSV import, vendor-email conflict
-resolution), and anything branching on the API's error `code` field.
-
-**Not mandatory** — write only if the code will be touched again or a bug
-there would genuinely hurt: static layout, one-off screens, logic-free
-display components.
-
-**What kind of test:**
-
-- **Integration by default** — Vitest + React Testing Library, rendering
-  the real component. Pure, dependency-free functions still get plain unit
-  tests.
-- **Mock only the network boundary, with MSW.** Never mock the app's own
-  data-layer module, request wrapper, or a hook — that produces tests that
-  stay green while the real code is broken.
-- **Query like a user**: `getByRole` / `getByLabelText` / `getByText`
-  first, `data-testid` only when nothing semantic works. Never
-  `container.querySelector` on a class name. `@testing-library/user-event`,
-  not `fireEvent`.
-- **Playwright stays thin** — 2-5 true cross-page critical flows, never a
-  coverage target.
-- Snapshot tests are not a substitute for behavior assertions.
 
 ## Boundaries
 

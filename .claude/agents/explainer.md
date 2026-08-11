@@ -117,6 +117,16 @@ One self-contained `.html` file in the session scratchpad, named
 `YYYY-MM-DD-<slug>.html`. All CSS and JavaScript inline; no external
 requests of any kind. Quiz interaction is a few lines of vanilla JS.
 
+**The main loop publishes your file as an Artifact and comments the URL on the
+issue** — the scratchpad is disposable and the founder reads across three
+machines, so the URL is the copy that survives. Two consequences for you:
+a strict CSP blocks every external request, so "no external requests" is a
+hard requirement rather than a preference; and write a `<title>` at the top,
+because it names the page in the founder's artifact gallery.
+
+Write the page content directly — no `<!DOCTYPE>`, `<html>`, `<head>` or
+`<body>` tags. They are supplied at publish time and yours would be discarded.
+
 Readable on a phone: fluid widths, and code blocks scroll inside their own
 container rather than making the page scroll sideways. Preserve whitespace
 in code blocks (`white-space: pre`) and never let a diff excerpt reflow.
