@@ -276,7 +276,9 @@ for both now costs nothing; retrofitting a theme later costs every component.
 
 - [ ] **Screen and flow design** — still the blocker, and still gated on the
       import conflict screen at scale.
-- [ ] Whether 유아식 counts toward the venue's 보증인원.
+- [x] ~~Whether 유아식 counts toward the venue's 보증인원.~~ Closed 2026-08-11
+      by `2026-08-11-decision-deletion-and-infant-meals.md` §B — we never adjust
+      the number for it; 유아식 is shown as its own count beside it.
 - [ ] When the couple configures meal types.
 - [ ] Retention policy for `GuestChange`.
 

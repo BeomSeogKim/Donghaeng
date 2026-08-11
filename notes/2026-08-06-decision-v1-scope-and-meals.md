@@ -118,7 +118,10 @@ in v1 for vendor-email paste **and for CSV import**, it just never queues.
 - [ ] **Screen and flow design** — still the only blocker before building.
 - [x] Whether the same person arriving via a second login provider is merged by
       email or kept as a separate account.
-- [ ] Whether 유아식 counts toward the venue's 보증인원 (likely venue-dependent).
+- [x] ~~Whether 유아식 counts toward the venue's 보증인원 (likely venue-dependent).~~
+      Closed 2026-08-11 by `2026-08-11-decision-deletion-and-infant-meals.md` §B —
+      venue-dependent was right, so we never adjust the number; 유아식 is shown
+      as its own count beside it.
 - [ ] When the couple configures meal types — onboarding, or on demand.
 - [x] Whether `Guest.group` is free text or a fixed list.
 - [x] Two 2026-08-05 defaults still unconfirmed: expected attendance defaults to

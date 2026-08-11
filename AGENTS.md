@@ -62,11 +62,14 @@ All three calls from the flow design were **confirmed on 2026-08-07**:
 
 Onboarding is therefore **date and names only.**
 
-Also still open, all small: where the import file hash lives, the initial
-contents of the 관계 synonym table, `GuestChange` retention, and whether
-유아식 counts toward 보증인원 (needs a real venue contract). These now live
-as `open-question` issues (`gh issue list --label open-question`) rather
-than as a bullet list here — see **Work tracking** below.
+Only one small item is still open: **`GuestChange` retention** — narrowed
+2026-08-11, since **deletion cannot be its trigger** (the couple deletes both
+for 오타 and for 못 온다, and we cannot tell which). The other three are closed:
+the import file hash (2026-08-10, by the soft-delete record), the 관계 synonym
+table and 유아식 against 보증인원 (both 2026-08-11, the synonym table **deleted
+rather than written**). Open items live as `open-question` issues
+(`gh issue list --label open-question`) rather than as a bullet list here —
+see **Work tracking** below.
 
 Working style for this project: **talk design through, don't hand over option
 menus.** The founder is the domain owner, and the biggest corrections have all
@@ -108,7 +111,10 @@ decision records in `notes/` (`2026-07-26-decision-core-scope.md`,
 `2026-08-10-decision-cross-tenant-status-code.md`,
 `2026-08-10-decision-design-value-enforcement.md`,
 `2026-08-10-decision-auth-gate-and-sequence.md`,
-`2026-08-10-decision-soft-delete.md`). Read them newest-first: the
+`2026-08-10-decision-soft-delete.md`,
+`2026-08-11-decision-baseline-schema-calls.md`,
+`2026-08-11-decision-import-row-rejection.md`,
+`2026-08-11-decision-deletion-and-infant-meals.md`). Read them newest-first: the
 2026-08-06 records supersede parts of nearly every earlier note — including
 each other — and every affected note carries a banner saying what changed.
 **Design has no remaining blocker.** Application code exists but no domain
@@ -317,9 +323,13 @@ wedding-scoped queries, aggregation, import, tokens) is unchanged.
 
 Full record: `notes/2026-08-07-decision-backend-architecture.md`.
 
-- **Packages are domain-based** (`wedding/`, `guest/`, `import/`, `auth/`),
+- **Packages are domain-based** (`wedding/`, `guest/`, `guestimport/`, `auth/`),
   each self-contained with its own Controller/Service/Repository/Entity —
-  not layer-based (`controllers/`, `services/`, `repositories/`).
+  not layer-based (`controllers/`, `services/`, `repositories/`). It is
+  `guestimport/` and not `import/` because **`import` is not a legal Kotlin
+  package name here** — it compiles, but ktlint's `standard:package-name`
+  rejects it. Named 2026-08-11 for the table; `intake` lost because it would
+  also plausibly hold `email_ingest`, which is a separate domain.
 - **Layers stay shallow**: Controller (DTO) → Service (tx boundary,
   invariants, aggregate recompute, `GuestChange` writes) → Repository (JPA
   + native aggregation queries). No hexagonal/ports-and-adapters layer.
@@ -529,6 +539,32 @@ that constrain everyday work:
   ≥128-bit CSPRNG, **stored SHA-256-hashed**, constant-time compared, masked
   in logs. Privileges and lifetimes differ per kind — the per-guest link can
   only respond as that guest, never read.
+- **Only a provider-*verified* email is an account merge key** (decided
+  2026-08-11, `notes/2026-08-11-decision-baseline-schema-calls.md` §A,
+  narrowing 2026-08-06 §3). Kakao returns `is_email_verified` as a field
+  separate from the address and can hand back an unverified one; Naver's is
+  user-editable. So merging on a raw email is a **full ledger takeover with no
+  token, no expiry and no invite** — the invite token was tightened to
+  single-use/72h for being the most dangerous thing here, and this granted the
+  same access for free. An unverified address is not stored: `app_user.email`
+  stays NULL, `email_verified_by` records whose word we took, and a CHECK binds
+  the two. **v1 has no account-linking flow**, so the second account simply
+  stands alone. Three constraints hold it, and each closes a way of writing a
+  merge key that is not one: **`email_verified_by in ('GOOGLE', 'KAKAO')`** —
+  Naver asserts nothing, so `'NAVER'` can never be true, and this is the one
+  value set in the project where "a new value is a deploy, not an `ALTER
+  TYPE`" cuts *for* the constraint, because each name is a claim that a company
+  checked mailbox control; **a shape CHECK** (`like '%_@_%'`, no whitespace),
+  because `''` is a legal varchar and a stored `''` is one `app_user` shared by
+  every stranger whose provider returned an empty email; and the unique index
+  on **`lower(email collate "C")`**, because the database's own `lower()` is
+  not injective (`lower('KİM@X.COM') = lower('KIM@X.COM')`) and an index over a
+  collatable expression can be silently invalidated by a glibc/ICU upgrade.
+  `#82` is the matching obligation on `#37` — an index that forbids the
+  duplicate does not make the lookup find it, the lookup must use the *same*
+  expression, and the app-side normalisation must be an **ASCII-only**
+  lowercase, since Kotlin's `String.lowercase()` is not `lower(... collate
+  "C")`.
 - **The auth gate is our resolver, not Spring Security's filter chain**
   (decided 2026-08-10, `notes/2026-08-10-decision-auth-gate-and-sequence.md`).
   `authorizeHttpRequests` stays `permitAll` in **every** environment; what
@@ -636,6 +672,17 @@ SUM already does. This is the first fixed point of the screen design.
   never adjust counts statistically — the headcount sums real responses and
   the couple's own expected values, nothing else. `Wedding` stores the
   contracted figure so the screen can show estimate against guarantee.
+  **유아식 does not adjust that number either** (decided 2026-08-11,
+  `notes/2026-08-11-decision-deletion-and-infant-meals.md` §B, closing the
+  question open since 2026-08-06). Children are priced differently by most
+  venues but not all, and we know a venue's child pricing exactly as well as
+  we know its buffer — not at all. So 유아식 is neither added nor subtracted;
+  it shows as **its own count beside** the 식대 인원, and the couple applies
+  their own contract. Deciding it globally would hand half our couples a wrong
+  number, and a wrong number here is money. The mechanism already exists —
+  it is the meal-type breakdown (`#18`), which this makes **not PC-rail-only**:
+  if 유아 인원 is how a couple reads their contract, it has to be reachable on
+  mobile.
 - **Couple entry is the primary intake path**, not a fallback — attendance
   normally reaches them via parents and KakaoTalk. Setting attendance in the
   ledger must stay a one-or-two-tap action.
@@ -649,10 +696,12 @@ SUM already does. This is the first fixed point of the screen design.
 - Accessibility needs (휠체어 etc.) are a **guest attribute**, free text —
   they belong to the person and carry forward to seat assignment later.
 - **Postgres enum types only where the value set is closed forever** — `side`
-  qualifies; `group_category`, `lifecycle`, `source`, `status`, `provider` do
+  qualifies; `group_category`, `source`, `status`, `provider` do
   not. Use varchar plus application-level validation, so adding a value is a
   deploy and not an `ALTER TYPE`. The guest-group list changed twice in one
-  day; assume it changes again.
+  day; assume it changes again. (`guest.lifecycle` was on this list and is not
+  in v1 at all — decided 2026-08-11, returns with the RSVP links; the varchar
+  rule binds it whenever it does.)
 - **Every mutation response carries the recomputed aggregate**, and the client
   handles out-of-order responses. Forced by "one screen" + "all computation
   server-side": a number lagging the tap by 100ms is fine, a number moving
@@ -661,11 +710,27 @@ SUM already does. This is the first fixed point of the screen design.
   It is the only v1 operation that is easy to get badly wrong.
 - **Every wedding-scoped aggregate root carries `wedding_id`**; anything
   reached only through its root does not. So `GuestChange` has it (queried
-  independently) and `GuestMealCount` does not (lives inside `Guest`). This
+  independently). This
   binds tables that don't exist yet — seating and 축의금 arrive as roots and
   carry it from the start. It is what makes "every wedding-scoped root
   filters on `wedding_id`" mechanically checkable instead of a per-query
   judgement, and a cross-wedding leak is not an ordinary bug here.
+  **Amended 2026-08-11** (`notes/2026-08-11-decision-baseline-schema-calls.md`):
+  a `wedding_id` present **for integrity is not a root marker**.
+  `guest_meal_count` was the stated example of a table without one and now
+  carries it — because `meal_type_id` arrives in a request body and so bypasses
+  `CurrentWedding`, and a row joining one wedding's guest to another's meal type
+  inserted cleanly. Composite FKs to `guest (id, wedding_id)` and
+  `meal_type (id, wedding_id)` make that row *unrepresentable*; the table is
+  still not a root. The distinction stays checkable rather than arguable — an
+  integrity-purpose column appears in a composite FK to a parent's
+  `(id, wedding_id)`, a root's does not — and `#80`'s allowlist test carries it
+  as an explicit exception. **An integrity `wedding_id` is an FK component and
+  never a query predicate**: `select sum(expected_count) from guest_meal_count
+  where wedding_id = ?` counts soft-deleted 하객's meals, because
+  `@SQLRestriction` cannot reach a native query — it does not throw, it
+  over-counts, and over-counting 보증인원 is money. Every read joins `guest` and
+  filters `guest.deleted_at`. Held by `GuestMealCountSchemaTest`.
 - **Every delete is soft** (decided 2026-08-10,
   `notes/2026-08-10-decision-soft-delete.md`) — but only on rows a *user* can
   delete. `guest`, `membership`, meal type and `wedding` carry `deleted_at`;
@@ -697,11 +762,23 @@ SUM already does. This is the first fixed point of the screen design.
   only — free labels fracture on typing variants. The categories ship as a
   **dropdown in the .xlsx template** so a parent classifies at the moment they
   know; but data validation is advisory and gets defeated, so **the importer
-  never assumes the column is clean**. Unmapped values are asked **by distinct
-  value, not by row** ("이모" ×40 is one question), pre-filled from a **static
-  synonym table we author and ship** — a dictionary, not inference, and not
-  learned from anyone's data. Unmapped still imports, as 기타 with the raw text
-  kept in the free label. Family is one bucket
+  never assumes the column is clean**. **A row whose 관계 is not one of the
+  seven does not import** (decided 2026-08-11,
+  `notes/2026-08-11-decision-import-row-rejection.md`) — the rest of the file
+  does, and the couple fixes those rows and uploads again. **Rejection is per
+  row, never per file**, and the rule is stated on the row, so an empty 이름
+  and a non-positive 참석 인원 are the same case. That record **supersedes the
+  shipped synonym table, the map-by-distinct-value screen, and "unmapped
+  imports as 기타 with the raw text in the free label"** — all three answered a
+  question nobody asks, because **the couple is a reviewer, not a courier**:
+  they open the file before uploading and can classify their own 이모. It does
+  not dent *"not sure" must never block*, which differs in the one way that
+  matters — whether anyone can answer. Identity ambiguity has nobody (so never
+  block; merge later, losslessly); a malformed 관계 has the couple, holding the
+  mouse. The notice beside the upload sets that expectation and cleans nothing:
+  the person who reads it is the couple, while the person filling the column is
+  a parent who never sees our screens — which is exactly why the .xlsx dropdown
+  stays. Family is one bucket
   deliberately: a finer list keeps producing members that fit nowhere
   (조부모 was the first), and every family category is single digits while
   혼주 손님 / 친구 / 직장동료 run to a hundred.

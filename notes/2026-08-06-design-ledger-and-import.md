@@ -121,5 +121,7 @@ the same job, and our reason to exist goes with it.
 
 - [ ] **Screen and flow design** — including how the import review screen behaves
       when a file brings in dozens of rows at once.
-- [ ] Whether 유아식 counts toward the venue's 보증인원.
+- [x] ~~Whether 유아식 counts toward the venue's 보증인원.~~ Closed 2026-08-11
+      by `2026-08-11-decision-deletion-and-infant-meals.md` §B — we never adjust
+      the number for it; 유아식 is shown as its own count beside it.
 - [ ] When the couple configures meal types — onboarding, or on demand.
