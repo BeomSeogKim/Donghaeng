@@ -3,7 +3,7 @@
 Wedding-journey companion web service for couples — centered on a guest
 ledger (하객·좌석·축의금). See README.md for the product pitch.
 
-## Pick up here (last session: 2026-08-10)
+## Pick up here (last session: 2026-08-11)
 
 **Substrate is one item from closed, and the order after it is decided.**
 Design, both implementors' methodologies, the tempo, the work tracker and the
@@ -16,23 +16,41 @@ only says where the work is.
 jobs plus the local merge gate (`#36`, `#57`, `#58`), schema ownership moved
 to hand-applied DDL (`#59`), a real-config boot test (`#41`), the RFC 9457
 error contract and Tomcat error-page hardening (`#4`), `web/`'s linter and
-the design-value checker (`#45`), and a liveness probe for a guard that could
-disable itself (`#60`).
+the design-value checker (`#45`), a liveness probe for a guard that could
+disable itself (`#60`), and — 2026-08-11, `#83` — the **v1 baseline schema**
+(`#3`), which was the last horizontal stop.
 
-So there is application code now, but **no domain code**: `api/src` is four
-config guards plus the error contract, `web/src` is App, the query client and
-the test harness.
+So there is application code and now a schema, but still **no domain code**:
+`api/src/main` is four config guards, the error contract, and one migration
+file; the only things that read the schema are three JDBC tests. `web/src` is
+App, the query client and the test harness. **The first entity is written in
+`#37`.**
+
+**The schema is merged but has not been applied to any real database.** Flyway
+runs in tests only (2026-08-09), so `#83` landing changed nothing in dev or
+prod — the founder types `V1__baseline_schema.sql` by hand, wrapped in an
+explicit `BEGIN; … COMMIT;` (Flyway supplies that transaction in tests, which
+is why the file does not contain one). Read the column sizes while typing:
+`ddl-auto: validate` compares JDBC type codes only, so a mistyped
+`varchar(20)` boots fine and fails later on a long 하객 이름. Until this is
+done, dev has no tables and `#37` cannot run against it.
 
 **The order from here** (decided 2026-08-10,
-`notes/2026-08-10-decision-auth-gate-and-sequence.md`):
+`notes/2026-08-10-decision-auth-gate-and-sequence.md`; `#80` inserted
+2026-08-11):
 
-    #3       baseline schema        ← next, and the last horizontal stop
-                                      unblocked 08-10: #32 closed by the
-                                      soft-delete record
+    #3       baseline schema        ✔ merged 2026-08-11 (#83)
+    #80      wedding_id allowlist meta test   ← next, and small
     #6/#37   social login — session issuance + CurrentUser
     #7       웨딩 만들기 — the first membership exists here
     #5       CurrentWedding resolution + cross-tenant 404
     #8~      vertical, all of it
+
+`#80` was not in the 08-10 order. It is inserted here because `#3` created
+the exception it has to carry (`guest_meal_count`'s integrity-only
+`wedding_id`), and because `#37` is where the **next new table** appears —
+standing the checker up first means it is watching when that table is
+written rather than after. It needs no entities, only `information_schema`.
 
 Auth lands **after** login rather than before it, because no v1 requirement
 can be built ahead of auth anyway — every one of `#7`–`#24` sits behind "who
@@ -242,6 +260,12 @@ board, no backlog file.** Full record:
 - **`Closes #N` (or `Refs #N`) in the commit body.** This is the whole
   mechanism: state updates as a by-product of a commit message that gets
   written anyway, so nothing depends on remembering to tidy a board.
+  **One keyword closes exactly one issue** — found the hard way on `#83`.
+  `Closes #33, #35` closes `#33` and silently leaves `#35` open; the keyword
+  has to be repeated (`Closes #33, closes #35`) or split across lines. Nothing
+  goes red, and the tracker is quietly wrong, which is the one failure this
+  mechanism was chosen to avoid. **Verify closure after a merge** whenever a
+  commit or PR names more than one issue.
 - **Two milestones** — `v1` and `post-v1` (deferred, never cancelled).
   **Four labels** — `api`, `web`, `infra`, `open-question`. Don't add more;
   labels stop meaning anything the moment they multiply.
