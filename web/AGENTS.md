@@ -5,9 +5,10 @@ binds** — this file adds what only applies inside `web/`, and never
 contradicts it. `notes/` remains the single source of truth for *why*; every
 section below names its record.
 
-**This file also carries the design system**, whose sources live in `design/`
-at the repo root — `web/` is where the tokens are consumed, so the rules sit
-here rather than in a third place.
+**The design system's own rules are `design/AGENTS.md`** — read it too, and
+before writing any component. This file carries only how that system is
+*consumed*: the `@theme` bridge, the value checker, and the Tailwind-specific
+consequences.
 
 - **v1 ships one bundle** (the couple app); the separate guest RSVP bundle
   arrives with the RSVP links. The rule holds whenever they land: **a guest
@@ -109,69 +110,25 @@ bridge's to close — it is closed by the checker below.
   scale — but the match is anchored, so `min-h-[calc(100dvh-44px)]` still
   fails on the hardcoded tap floor.
 
-## Design system (decided 2026-08-07)
+## Consuming the design system
 
-Tokens in [`design/tokens.css`](../design/tokens.css), components in
-`design/components/` (sources in `parts/`, built previews in `dist/` via
-`python3 design/components/build.py`), reasoning in
-`notes/2026-08-07-design-system.md`. The rendered library is mirrored to the
-claude.ai/design project *Donghaeng Design System* — **that is a view, not a
-store**: anything decided there comes back to this repo or it does not survive.
+**The system itself — the thesis, the palette, contrast, typography, the
+component inventory — is `design/AGENTS.md`. Read it before writing a
+component; it is not repeated here.** What follows is only what changes when
+those rules meet Tailwind.
 
-The thesis: **동행 is an instrument, not a celebration** — the thing to beat is
-a spreadsheet with a SUM in the next column, so we win by being as calm as one
-and requiring less work, never by being prettier. That rules out the
-wedding-stationery register entirely. But **restraint is not cheapness**
-(learned the hard way 2026-08-07: the first ground was `#f4f5f7`, the SaaS
-default, and it did not carry the positioning at all). Premium here is carried
-by **material, not saturation** — the same reason 백자 is prized for being
-*almost* white.
-
-- **Light is 백자 · 금박, dark is 나전칠기.** 유백색 ground, 먹 ink, **자적
-  `#73304e`** primary (the 비빈 rank colour), gold as metal. Dark inverts to
-  옻칠 ground with gold as primary. One system's day and night, not two
-  designs. **v1 ships light only** — but the tokens carry both, so it is never
-  a retrofit.
-- **Gold is 3.3:1 on porcelain and 7.8:1 on lacquer.** So in light it may
-  **never carry text** — hairlines, meter, brand mark only — and in dark it is
-  the primary text accent. The same token, opposite rules per theme; a token
-  name alone will not warn you.
 - **Gold is not a Tailwind colour utility** (decided 2026-08-08). Deliberately
-  absent from the `@theme` bridge's `--color-*` namespace, so `text-gold` does
-  not exist; the hairline, meter and brand mark reach for `var(--dh-gold)`
-  directly. This is the one case a token name provably cannot warn you about.
-- **Tokens are named for their role, never their colour.** The first version
-  used `--dh-cheong`/`--dh-hwang`/`--dh-hong` and one palette change made every
-  name a lie. Now `--dh-primary` / `--dh-attention` / `--dh-danger`.
-- **Nothing hardcodes a colour, size, radius, or duration.** Everything reads a
-  token.
-- **Every digit that can change in place is tabular** — headcount, meal counts,
-  축의금 later. This is 정직함·믿음직함 in typography: a number whose width
-  shifts as it counts reads as unstable. The mechanism is Tailwind's
-  **`tabular-nums`**, not `.dh-num` (decided 2026-08-08 — the same mandatory
-  rule must not be expressed two ways).
-- **불참 is neutral, never red; 참석 is 초록** (초록원삼, the robe of a 반가
-  bride). A guest who cannot come is a fact, not an error. Red belongs to
-  destroying data only — and destructive actions always carry a verb and are
-  outlined not filled, because 자적 and 대홍 are both reds.
-- **Ledger rows are flush, hairline-separated — never cards.** Per-row cards
-  cost ~8px of vertical rhythm each and break scanning at 400 rows. Radius is
-  for things genuinely detached: chips, buttons, sheets.
-- **Body text never goes below 15px.** Hangul packs more strokes into the em
-  than Latin. 13px is for metadata fragments, never sentences. Korean running
-  text gets 1.65 leading, not the Latin-typical 1.5. **No italics** — Korean
-  has no italic tradition and synthesised obliques look broken.
-- **Two faces: Pretendard for UI, RIDIBatang for display.** RIDIBatang is used
-  in exactly three places — the headcount, screen titles, the brand mark — and
-  **never the list**: Korean serif at 15px across 400 rows is slower to scan.
-  Both are in `design/fonts/` with licences and measurements; regenerate the
-  preview subsets with `design/fonts/subset.sh` when preview text changes.
-- **Typeface candidates are decided by measuring the font, not by taste.**
-  Arita Buri and Noto Serif KR were rejected for having no `tnum` (so they
-  cannot carry the headcount); Song Myung and Hahmlet for omitting most of the
-  11,172 Hangul syllables, and this product's content is people's names. Read
-  `GSUB`/`hmtx` before recommending a face.
-- Ten components plus four foundation cards cover v1 — inventory in the note.
+  absent from the `@theme` bridge's `--color-*` namespace, so **`text-gold`
+  does not exist**; the hairline, meter and brand mark reach for
+  `var(--dh-gold)` directly. Gold's contrast inverts between themes, so the
+  identical utility would be correct in dark and unreadable in light — **the
+  one case a token name provably cannot warn you about**, which is why the
+  utility is withheld rather than documented.
+- **Tabular figures are Tailwind's `tabular-nums` utility, not `.dh-num`**
+  (decided 2026-08-08 — two mechanisms existed, and the same mandatory rule
+  must not be expressed two ways).
+- **A component's visual rules come from `design/components/parts/`, not from
+  reading the built preview.** `dist/` is generated.
 
 ## Screen rules
 
@@ -181,11 +138,11 @@ what `web/` is required to do with them.
 - **Ledger + headcount on one screen is the first fixed point of the screen
   design** — splitting them turns one action into tap → navigate → check →
   return, which is exactly what a spreadsheet with a SUM already does.
-- **Search is on the ledger, as a Field variant**; the filter chips (side +
-  attendance) are a **Tag with a selected state**. Filters narrow a list; they
-  do not find a person. The real trigger is "김영수 못 온대" and that needs two
-  syllables, not a 400-row scroll — it is the second most-used control after
-  the attendance chip.
+- **Search belongs on the ledger, beside the side/attendance filters** — and it
+  is not the same control as them. Filters narrow a list; they do not find a
+  person. The real trigger is "김영수 못 온대" and that needs two syllables, not
+  a 400-row scroll — **the second most-used control after the attendance chip.**
+  (Which parts these map to is `design/AGENTS.md`.)
 - **유아 인원 must be reachable on mobile.** It renders as its own count beside
   the 식대 인원, via the meal-type breakdown (`#18`) — which this makes **not
   PC-rail-only**, because if 유아 인원 is how a couple reads their contract,

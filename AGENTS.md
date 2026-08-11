@@ -13,7 +13,8 @@ Tree-specific rules load lazily from the subtree you touch.
 |---|---|
 | `AGENTS.md` (here) | Product truth, tempo, work tracking, build workflow, agents |
 | `api/AGENTS.md` | Schema ownership, backend TDD/architecture/API conventions, security posture, domain mechanisms |
-| `web/AGENTS.md` | Frontend methodology/architecture, the token bridge, the design system, screen rules |
+| `web/AGENTS.md` | Frontend methodology/architecture, the token bridge, the value checker, screen rules |
+| `design/AGENTS.md` | The design system itself — thesis, tokens, contrast, typography, components, the build |
 | `notes/README.md` | Index of the decision records — the *why* behind all of it |
 
 `CLAUDE.md` is a symlink to `AGENTS.md` at each level; edit `AGENTS.md` only.

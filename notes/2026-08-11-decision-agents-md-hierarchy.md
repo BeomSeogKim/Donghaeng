@@ -34,6 +34,7 @@ Size alone is not the argument. Three specific costs:
     AGENTS.md          — binds regardless of tree
     api/AGENTS.md      — binds inside api/
     web/AGENTS.md      — binds inside web/
+    design/AGENTS.md   — binds inside design/
     notes/README.md    — the index of records
 
 `CLAUDE.md` is a symlink to `AGENTS.md` at each level, per the workspace
@@ -91,13 +92,21 @@ have evicted.
 
 ## Known gaps
 
-- **`design/` has no `AGENTS.md`.** Its rules live in `web/AGENTS.md` because
-  that is where the tokens are consumed, but a session working only in
-  `design/` will not load them lazily. Accepted for now; revisit if design work
-  starts happening outside `web/`.
 - **Lazy loading is reliable for the main session and less so for a subagent's
   *first* action.** Closed deterministically by naming the subtree file in each
   implementor's prompt rather than relying on the mechanism.
+- **`design/` is a fourth level, and the split there is authoring vs
+  consuming** (added later the same day, at the founder's call). The system's
+  own rules — thesis, palette, contrast, typography, component inventory,
+  the build — are `design/AGENTS.md`; how Tailwind consumes them stays in
+  `web/AGENTS.md`. The boundary is real rather than cosmetic: `text-gold`
+  not existing is a fact about our `@theme` bridge, while gold measuring
+  3.3:1 on porcelain is a fact about the colour.
+  **This is the one place lazy loading does not reach the agent that needs
+  it most** — `frontend-implementor` works in `web/` and so never touches
+  `design/` on its own. Closed the same way as the other subagent gap, by
+  naming the file in its prompt; noted here because it is the first case
+  where the load boundary and the need boundary genuinely differ.
 - **Root sits at 323 of its 350.** The remaining pressure is the
   `Standing product facts` section, roughly half of which is import rules that
   bind only when import is being built. Whether requirement-scoped domain facts
