@@ -101,6 +101,17 @@ the scale never materialises.
 
 ## 관계 — constrain at the source, map what leaks through
 
+> **SUPERSEDED IN PART 2026-08-11**
+> (`2026-08-11-decision-import-row-rejection.md`). A row whose 관계 is not one
+> of the seven categories **does not import** — the rest of the file does, and
+> the couple fixes those rows. So the three subsections below that describe
+> what happens to a leaked value are dead: **the shipped synonym table, the
+> map-by-distinct-value screen, and "unmapped imports as 기타 with the raw text
+> in the free label."** The couple is a reviewer, not a courier: they open the
+> file before uploading and can classify their own 이모. What survives is the
+> first half of this section — the dropdown in the template, and the rule that
+> the importer must not assume the column is clean.
+
 Decided the same day. The seven fixed categories go into the template **as a
 dropdown** (Excel data validation) on the 관계 column, with the free label as a
 separate, freely-typed column. Classification happens where the knowledge is: a
@@ -152,4 +163,5 @@ that on the export side only.
 - [ ] Storing the file hash: which entity holds it, and does the "already
       imported" screen offer a force-import escape hatch (for a couple who
       deleted rows and genuinely wants to re-run)?
-- [ ] The initial contents of the shipped synonym table.
+- [x] ~~The initial contents of the shipped synonym table.~~ Closed 2026-08-11
+      by `2026-08-11-decision-import-row-rejection.md` — there is no table.

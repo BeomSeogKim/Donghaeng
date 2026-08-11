@@ -125,6 +125,11 @@ behind a settings screen they must go find.
 
 - [ ] Storing the import file hash: which entity holds it, and whether the
       "already imported" screen offers a force-import escape hatch.
-- [ ] The initial contents of the shipped 관계 synonym table.
+- [x] ~~The initial contents of the shipped 관계 synonym table.~~ Closed
+      2026-08-11 by `2026-08-11-decision-import-row-rejection.md` — the table
+      is deleted rather than written; a row that does not match the template
+      is held back instead.
 - [ ] Retention policy for `GuestChange`.
-- [ ] Whether 유아식 counts toward the venue's 보증인원.
+- [x] ~~Whether 유아식 counts toward the venue's 보증인원.~~ Closed 2026-08-11
+      by `2026-08-11-decision-deletion-and-infant-meals.md` §B — we never adjust
+      the number for it; 유아식 is shown as its own count beside it.

@@ -74,6 +74,15 @@ queue, not the matching.
 
 ## 3. Login — merge by email, tolerate its absence
 
+> **NARROWED 2026-08-11** (`2026-08-11-decision-baseline-schema-calls.md` §A).
+> Merging by email survives, but only on an email the provider **asserts as
+> verified** — Kakao returns `is_email_verified` as a separate field and can
+> hand back an unverified address, Naver's is user-editable, and merging on
+> either grants the whole ledger with no token and no expiry. An unverified
+> address is not stored at all, so this section's "no key to merge on, accounts
+> stay separate" branch is now also where unverified emails land. The
+> no-account-linking call below is unchanged and was reaffirmed.
+
 The same person arriving via a second provider is merged into one account by email.
 
 But Kakao and Naver both treat email as an **optional consent scope**, so it may
@@ -112,5 +121,7 @@ the same job, and our reason to exist goes with it.
 
 - [ ] **Screen and flow design** — including how the import review screen behaves
       when a file brings in dozens of rows at once.
-- [ ] Whether 유아식 counts toward the venue's 보증인원.
+- [x] ~~Whether 유아식 counts toward the venue's 보증인원.~~ Closed 2026-08-11
+      by `2026-08-11-decision-deletion-and-infant-meals.md` §B — we never adjust
+      the number for it; 유아식 is shown as its own count beside it.
 - [ ] When the couple configures meal types — onboarding, or on demand.
