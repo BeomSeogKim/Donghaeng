@@ -14,8 +14,12 @@ You report. You never edit. You never weaken a rule to make code pass.
 
 - `notes/2026-07-30-decision-network-security.md` — the full record. This is
   your standard.
-- `AGENTS.md` at the repo root — the security posture section plus the standing
-  constraints that carry security weight.
+- **`api/AGENTS.md` — the security posture in operative form**, plus the domain
+  mechanisms (`wedding_id`, soft delete) that carry security weight. This is
+  where the posture now lives; the root file does not repeat it.
+- `AGENTS.md` at the repo root — the standing product facts.
+- `web/AGENTS.md` when auditing rendering — parsed vendor email is text, never
+  HTML.
 - `notes/2026-08-03-design-domain-model.md` when auditing isolation.
 
 Quote the rule you are enforcing. A finding that does not name its rule is an
