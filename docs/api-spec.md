@@ -124,6 +124,9 @@ shipped yet:
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | A request failed Bean Validation — a request body DTO, a query parameter, or a path variable alike. |
 | `MALFORMED_REQUEST_BODY` | 400 | The request body could not be parsed at all. |
+| `UNAUTHENTICATED` | 401 | The request carried no session, or one that has expired, been revoked, or does not match. |
+| `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. Not an error to apologise for — offer the login button again. |
+| `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND`, `UNSUPPORTED_MEDIA_TYPE` | as named | A framework-level error with no more specific code. |
 
@@ -171,7 +174,122 @@ own `Errors` section overrides this.
 has no roles, so **403 has no correct use today**. Reaching for it because "403
 is the authorization status" is the mistake this row exists to prevent.
 
+## Authentication
+
+_Added 2026-08-12 (`#37`). Google only for now; 카카오 · 네이버 arrive with `#89`
+and add nothing to this section but a second and third `provider` path segment._
+
+**The couple is authenticated; guests never are.** Login is OAuth at the
+provider, and what the browser ends up holding is an **opaque session token in an
+HttpOnly cookie** — not a JWT, not the provider's token, and nothing the frontend
+can read or needs to.
+
+### The cookie
+
+| | |
+|---|---|
+| Name | `DH_SESSION` |
+| Flags | `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`; `Secure` everywhere except local dev over `http://localhost` |
+| Lifetime | idle **14 days**, absolute **90 days** — whichever comes first |
+
+**`web/` never reads, writes, or parses this cookie.** It cannot: `HttpOnly`.
+Every request simply needs to be sent with credentials included
+(`fetch(..., { credentials: 'include' })`), and the answer to "am I logged in?"
+is `GET /auth/me`, never an inspection of `document.cookie`.
+
+**Two expiries, and they are different questions.** Idle is measured from the
+last request, absolute from the moment of login. A couple using the app daily is
+still signed out after 90 days and logs in again; that is intended.
+
+**The session is re-issued on every login.** Logging in while already holding a
+session invalidates the old token — so a second login in another tab makes the
+first tab's token dead. Treat a 401 as "log in again", never as an error state to
+report.
+
+### `GET /oauth2/authorization/google`
+
+Status: active (added 2026-08-12)
+Auth: none — this is where a logged-out person starts
+
+**A browser navigation, not a fetch.** Point the browser at it
+(`window.location.href = ...`, or a plain `<a href>`); an XHR cannot follow the
+redirect chain to Google and back, and calling it with `fetch` will fail on CORS
+at the provider rather than logging anyone in.
+
+Responds `302` to Google's consent screen.
+
+**In an environment with no Google credentials configured this answers 500**, and
+that is a server misconfiguration rather than a contract: the backend logs a
+warning naming the two missing variables at startup. Every other endpoint works
+normally there, so a frontend can be developed against a backend that cannot log
+anyone in.
+
+Not in the generated OpenAPI document — it is a Spring Security filter, not a
+controller. Same for the callback below.
+
+### `GET /login/oauth2/code/google`
+
+Status: active (added 2026-08-12)
+Auth: none — this is what the provider redirects the browser back to
+
+**Nothing calls this; Google does.** It is listed because its outcomes are the
+frontend's to handle, and because the exact URL
+`http://localhost:8080/login/oauth2/code/google` in dev is registered by hand in
+the Google console and must not change.
+
+On success: `302` to the configured frontend origin (dev: `http://localhost:3000`)
+with `Set-Cookie: DH_SESSION=...`. **The destination is server configuration.** It
+is never taken from the request, so there is no `returnTo` parameter and adding
+one would be an open redirect on the one request that has just been handed a
+session.
+
+Errors
+- 401 `OAUTH_LOGIN_DENIED` — consent refused at the provider
+- 401 `OAUTH_LOGIN_FAILED` — anything else: a `state` mismatch, a failed token
+  exchange, an ID token that did not validate
+
+Both arrive as **problem+json in a browser navigation**, which is a document the
+person is looking at rather than JSON a script is reading. `#38` decides what to
+do about that; the backend's promise is only that it is never an HTML page and
+never a redirect carrying `?error` in a query string.
+
+### `GET /auth/me`
+
+Status: active (added 2026-08-12)
+Auth: session cookie
+
+The first call on every page load: who is signed in, if anyone.
+
+Response 200
+```json
+{ "id": 12, "email": "kim@gmail.com", "name": "김테스터" }
+```
+
+`email` and `name` are **both nullable**. `email` is present only when the
+provider asserted the address as *verified*; an unverified address is not stored
+at all, so this is null more often than it looks. Neither field is a display
+guarantee — render a fallback.
+
+Carries the recomputed aggregate: **no.** It is a read, and it is not
+wedding-scoped: which wedding is a separate resolution that arrives with `#5`.
+
+Errors
+- 401 `UNAUTHENTICATED` — no cookie, or an expired, revoked or unrecognised one.
+  One code for all of those on purpose: distinguishing them would tell an
+  anonymous caller which session identifiers exist.
+
+### Not here yet
+
+- **Logout.** There is no endpoint; a session ends by expiring. Deleting the
+  cookie client-side is not logout — the server-side row stays valid. Filed for a
+  later stop.
+- **CORS.** The API sends no CORS headers today, so a browser at
+  `http://localhost:3000` cannot call it cross-origin yet. It lands before `#38`
+  can work.
+- **CSRF token.** v1's protection is `SameSite=Lax` plus no state-changing GET; a
+  token is `#48`.
+
 ## Endpoints
 
-_None yet — `api/` has no domain endpoints. The error contract above is already
-live and binding._
+_No wedding-scoped endpoints yet. The error contract and the authentication
+section above are live and binding._

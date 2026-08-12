@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import com.donghaeng.SharedPostgres
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -12,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import java.net.Socket
 
 /**
@@ -37,13 +40,20 @@ import java.net.Socket
     properties = [
         "donghaeng.profile=test",
         "server.tomcat.relaxed-path-chars=|",
-        "spring.autoconfigure.exclude=" +
-            "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
     ],
 )
 class MalformedPathContractTest {
+    companion object {
+        /**
+         * This test boots the whole application, which since #37 means a context
+         * that cannot be built without a DataSource. See [SharedPostgres] for why
+         * the autoconfiguration exclusions that used to stand here are gone.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun database(registry: DynamicPropertyRegistry) = SharedPostgres.publish(registry)
+    }
+
     @Autowired
     private lateinit var objectMapper: ObjectMapper
 

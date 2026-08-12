@@ -230,6 +230,88 @@ class ProfileConfigurationTest {
         assertThat(prod["springdoc.api-docs.enabled"]).isNotEqualTo(true)
     }
 
+    // --- the session cookie and the OAuth credentials (#37) ---------------
+
+    @Test
+    fun `the session cookie flags are pinned in the base, and only dev loosens Secure`() {
+        // `secure` is in the base because Boot defaults it to FALSE, so a profile
+        // that had to remember to tighten it would invert the standing direction —
+        // profiles loosen, the base is restrictive.
+        assertThat(base["server.servlet.session.cookie.secure"]).isEqualTo(true)
+        assertThat(base["server.servlet.session.cookie.http-only"]).isEqualTo(true)
+        assertThat(base["server.servlet.session.cookie.path"]).isEqualTo("/")
+
+        // `lax` and never `strict`: the OAuth callback is a top-level cross-site
+        // navigation, so `strict` withholds the cookie at exactly the moment of
+        // login (notes/2026-08-10-decision-auth-gate-and-sequence.md).
+        assertThat(base["server.servlet.session.cookie.same-site"]).isEqualTo("lax")
+
+        configFiles().forEach { path ->
+            val source = properties(path)
+            val isDev = path.fileName.toString().startsWith("application-dev.")
+
+            if (!isDev) {
+                assertThat(source["server.servlet.session.cookie.secure"])
+                    .describedAs("%s · only dev, which serves http://localhost, may drop Secure", path)
+                    .isIn(null, true, "true")
+            }
+            assertThat(source["server.servlet.session.cookie.http-only"])
+                .describedAs("%s · the session token is never readable by script", path)
+                .isIn(null, true, "true")
+            assertThat(source["server.servlet.session.cookie.same-site"])
+                .describedAs("%s · strict drops the cookie on the OAuth callback", path)
+                .isIn(null, "lax")
+        }
+        assertThat(dev["server.servlet.session.cookie.secure"]).isEqualTo(false)
+    }
+
+    @Test
+    fun `the session lifetimes are stated, and idle alone is never mistaken for both`() {
+        assertThat(base["donghaeng.session.idle"]).isEqualTo("14d")
+        assertThat(base["donghaeng.session.absolute"]).isEqualTo("90d")
+
+        // `server.servlet.session.timeout` expresses the IDLE half only, and it
+        // configures the container's JSESSIONID rather than our session. Setting it
+        // would look like the expiry decision while enforcing half of it against
+        // the wrong cookie, so no file may.
+        configFiles().forEach { path ->
+            assertThat(properties(path)["server.servlet.session.timeout"])
+                .describedAs("%s · session expiry is enforced by SessionService, not by a container timeout", path)
+                .isNull()
+        }
+    }
+
+    @Test
+    fun `no configuration file carries an OAuth client registration or its credentials`() {
+        // The credentials are read from the environment by
+        // com.donghaeng.auth.GoogleClientRegistration, and the registration itself
+        // is built there — so the whole namespace is absent rather than partly
+        // absent. A `${GOOGLE_CLIENT_ID}` line would also stop the application
+        // booting anywhere the variable is not set, which is every machine that has
+        // never seen a Google client, CI included.
+        configFiles().forEach { path ->
+            properties(path).forEach { (name, value) ->
+                assertThat(name)
+                    .describedAs("%s · OAuth client configuration belongs in code and the environment", path)
+                    .doesNotStartWith("spring.security.oauth2")
+                assertThat("$name=${value ?: ""}")
+                    .describedAs("%s · no file names an OAuth credential", path)
+                    .doesNotContain("GOOGLE_CLIENT")
+                    .doesNotContain("client-secret")
+            }
+        }
+    }
+
+    @Test
+    fun `only dev states where a completed login sends the browser`() {
+        // Never a value taken from the request, and never a guess: prod has no
+        // frontend origin yet, so it states none and a login there fails loudly
+        // rather than redirecting a freshly-issued session to invented text.
+        assertThat(dev["donghaeng.frontend.base-url"]).isEqualTo("http://localhost:3000")
+        assertThat(base["donghaeng.frontend.base-url"]).isNull()
+        assertThat(prod["donghaeng.frontend.base-url"]).isNull()
+    }
+
     @Test
     fun `dev opens the API document only on loopback`() {
         assertThat(dev["springdoc.api-docs.enabled"]).isEqualTo(true)

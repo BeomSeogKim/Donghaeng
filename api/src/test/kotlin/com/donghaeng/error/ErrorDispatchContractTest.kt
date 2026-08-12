@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import com.donghaeng.SharedPostgres
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.Filter
 import jakarta.servlet.ServletException
@@ -22,6 +23,8 @@ import org.springframework.context.annotation.Bean
 import org.springframework.core.Ordered
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import java.net.Socket
 
 /**
@@ -49,15 +52,20 @@ import java.net.Socket
         "donghaeng.profile=test",
         // So the OpenAPI assertion below reads the real generated document.
         "springdoc.api-docs.enabled=true",
-        // No database is involved in the error contract, and booting one here
-        // would make this test's failures depend on Testcontainers.
-        "spring.autoconfigure.exclude=" +
-            "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
     ],
 )
 class ErrorDispatchContractTest {
+    companion object {
+        /**
+         * This test boots the whole application, which since #37 means a context
+         * that cannot be built without a DataSource. See [SharedPostgres] for why
+         * the autoconfiguration exclusions that used to stand here are gone.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun database(registry: DynamicPropertyRegistry) = SharedPostgres.publish(registry)
+    }
+
     @Autowired
     private lateinit var restTemplate: TestRestTemplate
 

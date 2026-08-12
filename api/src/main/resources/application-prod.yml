@@ -74,6 +74,14 @@ logging:
     org.hibernate.SQL: 'OFF'
     org.hibernate.orm.jdbc.bind: 'OFF'
     org.hibernate.orm.jdbc.extract: 'OFF'
+# Deliberately absent, and this one is an OPEN ITEM rather than an inheritance:
+# `donghaeng.frontend.base-url`. This project has no production frontend origin
+# yet, and a guessed one would be committed text that sends a freshly-issued
+# session to the wrong host. Until the domain is decided, set
+# DONGHAENG_FRONTEND_BASE_URL in the deploy platform; without it the application
+# boots and serves normally, and only a completed OAuth login fails — which is
+# already impossible in an environment that has no Google credentials either.
+#
 # Deliberately absent: springdoc stays disabled by inheriting the base — no
 # machine-readable introspection surface is internet-reachable
 # (notes/2026-08-08-decision-scaffold-secrets-and-surface.md). Nothing here

@@ -1,0 +1,138 @@
+package com.donghaeng.auth
+
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
+import java.net.HttpCookie
+import java.time.Duration
+import java.time.Instant
+
+/**
+ * What a session must refuse. Each test here corresponds to one mechanism that
+ * would otherwise be a sentence in a record with nothing measuring it — idle
+ * expiry, absolute expiry, and the constant-time verifier comparison — and each
+ * fails if that mechanism is taken out.
+ *
+ * They drive `/auth/me` over HTTP rather than calling [SessionService], because a
+ * resolver that is not wired into Spring MVC would pass every direct call.
+ */
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+)
+@ActiveProfiles("dev")
+@Import(StubGoogleRegistration::class)
+internal class SessionResolutionTest : GoogleLoginFixture() {
+    @Autowired private lateinit var users: AppUserRepository
+
+    @Autowired private lateinit var identities: OauthIdentityRepository
+
+    @Autowired private lateinit var sessionRows: UserSessionRepository
+
+    @Autowired private lateinit var sessions: SessionService
+
+    @Autowired private lateinit var properties: SessionProperties
+
+    private var userId: Long = 0
+
+    @BeforeEach
+    fun clean() {
+        sessionRows.deleteAll()
+        identities.deleteAll()
+        users.deleteAll()
+        userId = users.save(AppUser(name = "테스터")).id
+    }
+
+    @Test
+    fun `the configured lifetimes are the ones the founder decided`() {
+        // A value nobody asserts is a value an environment variable can change
+        // without anything noticing.
+        assertThat(properties.idle).isEqualTo(Duration.ofDays(14))
+        assertThat(properties.absolute).isEqualTo(Duration.ofDays(90))
+    }
+
+    @Test
+    fun `a session that has not been used for longer than the idle window is refused`() {
+        val token = issueAt(created = Instant.now(), lastSeen = Instant.now().minus(Duration.ofDays(15)))
+
+        assertThat(me(token).statusCode()).isEqualTo(401)
+    }
+
+    @Test
+    fun `a session older than the absolute window is refused however recently it was used`() {
+        // The one expiry no configuration file can express:
+        // `server.servlet.session.timeout` gives idle only, so an application that
+        // set it and stopped there would have a session that lives forever as long
+        // as it is used — and would look configured.
+        val token = issueAt(created = Instant.now().minus(Duration.ofDays(91)), lastSeen = Instant.now())
+
+        assertThat(me(token).statusCode()).isEqualTo(401)
+    }
+
+    @Test
+    fun `a session inside both windows resolves, and using it moves the idle window`() {
+        val justInside = Instant.now().minus(Duration.ofDays(13))
+        val token = issueAt(created = Instant.now().minus(Duration.ofDays(89)), lastSeen = justInside)
+
+        assertThat(me(token).statusCode()).isEqualTo(200)
+
+        // Idle expiry means "since the last request", not "since login", and that
+        // is only true if resolving touches the row.
+        assertThat(sessionRows.findBySelector(selectorOf(token))!!.lastSeenAt).isAfter(justInside)
+    }
+
+    @Test
+    fun `a real selector with a wrong verifier is refused, and refused the same way an unknown one is`() {
+        // This is what the split token buys. The row is found by a value that
+        // carries no authority, so the verifier comparison is the entire gate —
+        // delete it and this test starts returning 200. It is also the only place
+        // in the design where a constant-time comparison is doing real work; a
+        // single `where token_hash = ?` would have moved it inside a btree, where
+        // the rule cannot be held or observed.
+        val genuine = sessions.issue(userId, presented = null)
+        val forged = HttpCookie(SessionTokens.COOKIE_NAME, "${genuine.selector}.not-the-verifier")
+
+        assertThat(me(forged).statusCode()).isEqualTo(401)
+        assertThat(me(HttpCookie(SessionTokens.COOKIE_NAME, "unknown-selector.whatever")).statusCode())
+            .isEqualTo(401)
+        // The genuine one still works, so the test above failed for the right
+        // reason.
+        assertThat(me(cookie(genuine)).statusCode()).isEqualTo(200)
+    }
+
+    @Test
+    fun `a malformed or absent cookie is simply not a session`() {
+        assertThat(get("/auth/me").statusCode()).isEqualTo(401)
+        assertThat(me(HttpCookie(SessionTokens.COOKIE_NAME, "no-separator")).statusCode()).isEqualTo(401)
+        assertThat(me(HttpCookie(SessionTokens.COOKIE_NAME, ".")).statusCode()).isEqualTo(401)
+    }
+
+    /** Issues a real session, then backdates its row — the timestamps are the subject. */
+    private fun issueAt(
+        created: Instant,
+        lastSeen: Instant,
+    ): HttpCookie {
+        val token = sessions.issue(userId, presented = null)
+        val row = sessionRows.findBySelector(token.selector)!!
+        sessionRows.save(
+            UserSession(
+                selector = row.selector,
+                verifierHash = row.verifierHash,
+                userId = row.userId,
+                createdAt = created,
+                lastSeenAt = lastSeen,
+                id = row.id,
+            ),
+        )
+        return cookie(token)
+    }
+
+    private fun cookie(token: SessionToken) = HttpCookie(SessionTokens.COOKIE_NAME, token.cookieValue)
+
+    private fun selectorOf(cookie: HttpCookie) = cookie.value.substringBefore('.')
+
+    private fun me(cookie: HttpCookie) = get("/auth/me", listOf(cookie))
+}

@@ -18,6 +18,27 @@
 # Profile selection: SPRING_PROFILES_ACTIVE (see README, Development).
 server:
   port: 8080
+  servlet:
+    session:
+      cookie:
+        # These four are the SESSION COOKIE's flags, and they are in the base
+        # because the base is where a setting whose wrong value is unsafe belongs.
+        # Boot defaults `secure` to false, so pinning it here and letting `dev`
+        # loosen it is the first case of "profiles only loosen" actually being
+        # exercised (issue #5's handover comment).
+        #
+        # They configure two cookies at once: the container's JSESSIONID, which
+        # carries the OAuth authorization request — `state`, the PKCE verifier, the
+        # nonce — across the round trip, and com.donghaeng.auth.SessionCookies,
+        # which reads `secure` from here for the session token itself.
+        secure: true
+        http-only: true
+        # NOT `strict`. The OAuth callback is a top-level cross-site navigation
+        # back from Google, so `strict` withholds the cookie at exactly the moment
+        # of login. `lax` is also half of v1's CSRF answer — the other half being
+        # that no GET changes state (com.donghaeng.auth.SecurityConfig).
+        same-site: lax
+        path: /
   error:
     # What the servlet container's error page may publish. Boot already defaults
     # all three to the safe value, and they are pinned anyway for the same reason
@@ -97,3 +118,28 @@ springdoc:
     # Off by default so a deploy never publishes the endpoint/DTO map; the seam
     # work re-enables it only where the document is actually generated.
     enabled: false
+
+donghaeng:
+  session:
+    # Idle and absolute, and they are two different questions. `idle` is measured
+    # from the last request, `absolute` from the moment the session was issued —
+    # so a session in daily use still ends after 90 days and has to be re-earned
+    # at the provider (notes/2026-07-30-decision-network-security.md, Tokens).
+    #
+    # `server.servlet.session.timeout` deliberately does NOT appear anywhere in
+    # this repo: it configures the container's JSESSIONID and only ever expresses
+    # the idle half, so setting it would look like this decision while enforcing
+    # half of it against the wrong cookie. Both values here are read by
+    # com.donghaeng.auth.SessionService, which is what actually applies them.
+    idle: 14d
+    absolute: 90d
+# Deliberately absent from the base: `donghaeng.frontend.base-url`, the origin a
+# completed login redirects the browser to. It has no value that is safe by
+# default — a wrong one sends a freshly-issued session somewhere it does not
+# belong — so each profile states its own, and an environment that has not is
+# refused at the moment of redirect rather than at startup.
+#
+# Also deliberately absent: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. They are
+# read from the environment by com.donghaeng.auth.GoogleClientRegistration, never
+# from a file, and no `spring.security.oauth2.client.*` key appears in this repo —
+# ProfileConfigurationTest holds both halves.

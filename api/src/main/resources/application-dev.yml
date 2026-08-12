@@ -5,6 +5,19 @@ donghaeng:
   # Required marker. Its absence is how a no-profile start fails fast — see
   # com.donghaeng.config.RequiredProfileMarker.
   profile: dev
+  frontend:
+    # Where a completed login sends the browser. A configured value and never one
+    # taken from the request, in any form — a `redirect_uri` parameter, a
+    # `Referer`, a URL smuggled through `state` — because the browser arrives here
+    # holding a session that was just issued, which is what makes an open redirect
+    # on this path worth more than one anywhere else.
+    #
+    # Vite's dev server (../../notes/local-infra.md). The matching value Google's
+    # console needs is the CALLBACK, which is a different URL:
+    # http://localhost:8080/login/oauth2/code/google — Spring Security's default
+    # path, kept at the default so that the string typed into the console and the
+    # string this application listens on are the same string.
+    base-url: http://localhost:3000
 
 server:
   # api-docs is on in this profile, so bind loopback only: on 0.0.0.0 the whole
@@ -13,6 +26,14 @@ server:
   # not breach — it is simply free to close in the one profile that opens it.
   address: 127.0.0.1
   # Tomcat's RemoteIpValve is deliberately absent here: nothing proxies this.
+  servlet:
+    session:
+      cookie:
+        # The one flag the base pins that this profile has to loosen: dev serves
+        # http://localhost, and a `Secure` cookie is simply not sent over it — so
+        # leaving the base's value here would break login on the developer's own
+        # machine while looking stricter. The other three flags are inherited.
+        secure: false
 
 spring:
   jpa:

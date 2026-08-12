@@ -12,6 +12,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -44,6 +45,15 @@ import org.springframework.web.server.ResponseStatusException
  * [ErrorDispatchContractTest].
  */
 @WebMvcTest(controllers = [ErrorContractController::class], properties = ["donghaeng.profile=test"])
+// Since #37 the application has a Spring Security filter chain, and a `@WebMvcTest`
+// slice does not include the `@Configuration` that declares ours — it auto-configures
+// Boot's default one instead, which answers 401 to everything and would make every
+// assertion below fail for a reason this file is not about. The real chain is
+// `permitAll` in every environment (notes/2026-08-10-decision-auth-gate-and-sequence.md),
+// so removing filters here restores what the application actually does rather than
+// papering over a difference. The chain as it really runs is asserted by
+// ErrorDispatchContractTest, which boots the whole application.
+@AutoConfigureMockMvc(addFilters = false)
 class GlobalErrorHandlerTest {
     @Autowired
     private lateinit var mockMvc: MockMvc

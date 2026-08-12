@@ -32,6 +32,18 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+
+    // Brings spring-boot-starter-security with it, so the filter chain in
+    // com.donghaeng.auth.SecurityConfig is not optional decoration — without that
+    // bean, Boot's default chain would demand authentication for every request and
+    // contradict the decision that the gate is our resolver
+    // (notes/2026-08-10-decision-auth-gate-and-sequence.md).
+    //
+    // The point of the starter is the parts nobody should hand-write: the `state`
+    // check, PKCE, and full ID-token validation — signature via JWKS, `iss`, `aud`,
+    // `exp`. "Any one of these missing is an account-takeover path"
+    // (notes/2026-07-30-decision-network-security.md).
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
