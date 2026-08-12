@@ -1,9 +1,14 @@
 package com.donghaeng.auth
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.donghaeng.auth.SecurityConfig.Companion.AUTHORIZATION_BASE_URI
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -270,15 +275,44 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
     }
 
     @Test
-    fun `a callback whose state was not issued here is refused`() {
+    fun `a callback whose state was not issued here is refused, and logs one line without a stack trace`() {
         // The `state` check is what stops a forged callback from logging a victim
         // into the attacker's account. Spring Security owns it; this asserts it is
         // still switched on, since our own success handler sits directly behind it.
-        val forged = get("${SecurityConfig.CALLBACK_PATH}?code=stub-authorization-code&state=not-ours")
+        val (forged, logged) =
+            capturingWarnings {
+                get("${SecurityConfig.CALLBACK_PATH}?code=stub-authorization-code&state=not-ours")
+            }
 
         assertThat(forged.statusCode()).isEqualTo(401)
         assertThat(forged.json()["code"].asText()).isEqualTo("OAUTH_LOGIN_FAILED")
         assertThat(sessions.findAll()).isEmpty()
+
+        // This request needs no cookie and no credentials, so anyone can repeat it
+        // forever. A stack trace per attempt is the same unbounded-log
+        // amplification `unknownProviderIsNotFound` was written to close, through a
+        // different door — and it drowns the 401/404/429 spike alerting that is the
+        // one detection capability the security record keeps. One line, no
+        // throwable, and the OAuth error code is all an incident needs.
+        assertThat(logged).hasSize(1)
+        assertThat(logged.single().throwableProxy)
+            .describedAs("a stack trace was logged for an unauthenticated request")
+            .isNull()
+        assertThat(logged.single().formattedMessage).contains("oauth login failed")
+    }
+
+    /** Same shape as ErrorDispatchContractTest's, narrowed to WARN. */
+    private fun <T> capturingWarnings(block: () -> T): Pair<T, List<ILoggingEvent>> {
+        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        root.addAppender(appender)
+        try {
+            val result = block()
+            return result to appender.list.filter { it.level == Level.WARN }
+        } finally {
+            root.detachAppender(appender)
+            appender.stop()
+        }
     }
 
     @Test

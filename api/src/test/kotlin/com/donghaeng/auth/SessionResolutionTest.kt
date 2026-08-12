@@ -1,6 +1,7 @@
 package com.donghaeng.auth
 
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.within
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -10,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles
 import java.net.HttpCookie
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 /**
  * What a session must refuse. Each test here corresponds to one mechanism that
@@ -70,6 +72,30 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
         val token = issueAt(created = Instant.now().minus(Duration.ofDays(91)), lastSeen = Instant.now())
 
         assertThat(me(token).statusCode()).isEqualTo(401)
+    }
+
+    @Test
+    fun `resolving does not write the idle stamp again until it has gone stale`() {
+        // The throttle had no test, and deleting the `if` left the suite green:
+        // the only assertion touching it backdated the row far past the threshold,
+        // so the condition was always true there. A check nobody has watched fail
+        // is not a check — and this is a session path, where that standard is not
+        // negotiable.
+        val issuedAt = Instant.now()
+        val token = sessions.issue(userId, presented = null, now = issuedAt)
+
+        // A second later: inside the window, so nothing is written. Every
+        // authenticated request taking a row lock is what this exists to avoid.
+        sessions.resolve(token, now = issuedAt.plusSeconds(1))
+        assertThat(sessionRows.findBySelector(token.selector)!!.lastSeenAt)
+            .isCloseTo(issuedAt, within(1, ChronoUnit.MILLIS))
+
+        // Past the threshold: written, or idle expiry would measure from login
+        // rather than from the last request.
+        val later = issuedAt.plus(properties.touchAfter).plusSeconds(60)
+        sessions.resolve(token, now = later)
+        assertThat(sessionRows.findBySelector(token.selector)!!.lastSeenAt)
+            .isCloseTo(later, within(1, ChronoUnit.MILLIS))
     }
 
     @Test

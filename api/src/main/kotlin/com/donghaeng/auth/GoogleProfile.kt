@@ -29,13 +29,38 @@ internal object GoogleProfile {
      */
     private const val NAME_LIMIT = 100
 
+    /**
+     * `app_user.email` is `varchar(255)` and no provider promises to stay inside
+     * it. This is [NAME_LIMIT]'s failure one field over, and it cannot be solved
+     * the same way: an address is a KEY, so truncating it would merge two people
+     * who share a 255-character prefix — which is the takeover this whole file
+     * exists to prevent, arrived at by tidiness.
+     *
+     * The safe answer is already designed. An address that cannot be stored is an
+     * address we have no merge key for, and an account with no merge key simply
+     * stands alone (2026-08-11 §A) — a degraded login rather than an impossible
+     * one.
+     */
+    private const val MERGE_KEY_LIMIT = 255
+
     fun of(user: OidcUser): ProviderProfile =
         ProviderProfile(
             provider = PROVIDER,
             subject = user.subject,
-            name = user.fullName?.take(NAME_LIMIT),
+            name = user.fullName?.let(::truncateName),
             mergeKey = mergeKey(user.email, user.emailVerified == true),
         )
+
+    /**
+     * By CODE POINT, not by `String.take`, which counts UTF-16 units and will
+     * happily cut an emoji in half. A lone surrogate is not text: the driver
+     * encodes it as a replacement byte, and `varchar(100)` counts code points
+     * anyway, so the obvious version is both wrong and needlessly strict.
+     */
+    private fun truncateName(name: String): String {
+        val codePoints = name.codePointCount(0, name.length)
+        return if (codePoints <= NAME_LIMIT) name else name.substring(0, name.offsetByCodePoints(0, NAME_LIMIT))
+    }
 
     /**
      * The one place a Google address may become a merge key, and the four ways it
@@ -56,6 +81,8 @@ internal object GoogleProfile {
      *   and the lookup would miss the row it just wrote.
      * - **No whitespace, after trimming**, because to the schema
      *   `' kim@gmail.com'` and `'kim@gmail.com'` are two people.
+     * - **At most 255 characters**, the column's width — see [MERGE_KEY_LIMIT] for
+     *   why this one yields `null` instead of truncating like a name does.
      * - **One `@` with something on each side**, because `""` is a legal varchar
      *   and a provider that returns it for an absent optional field would otherwise
      *   write an empty VERIFIED address — one `app_user` shared by every stranger
@@ -72,6 +99,7 @@ internal object GoogleProfile {
         if (!verified) return null
         val candidate = email?.trim()?.let(::asciiLowercase) ?: return null
         if (candidate.any(Char::isWhitespace)) return null
+        if (candidate.length > MERGE_KEY_LIMIT) return null
         val at = candidate.indexOf('@')
         return candidate.takeIf { at > 0 && at < candidate.length - 1 }
     }

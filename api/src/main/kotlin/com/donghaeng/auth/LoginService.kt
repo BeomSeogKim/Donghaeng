@@ -12,8 +12,10 @@ import java.time.Instant
  * only if that misses, an account only if both do.
  *
  * Nothing here names a provider. Which one spoke is carried by
- * [ProviderProfile.provider], so `#89` adds a mapper and changes no logic in this
- * file.
+ * [ProviderProfile.provider], so `#89` adds mappers and changes no logic in THIS
+ * file — which is a claim about this file only. `#89` still restructures
+ * [OAuthLoginSuccessHandler], because Naver is plain OAuth 2.0 and produces no
+ * `OidcUser` to map from (notes/2026-08-12-decision-login-slice-by-provider.md).
  */
 @Service
 internal class LoginService(

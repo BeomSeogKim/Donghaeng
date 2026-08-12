@@ -64,9 +64,23 @@ internal class UnauthenticatedException :
  * bypass of the session check but a replacement for it, chosen by the attacker.
  *
  * `#5`'s planned interceptor cannot catch that either: to it, such a handler HAS
- * declared a principal. Matching on the type is what makes the two agree —
- * mentioning [AuthenticatedUser] in a signature means exactly one thing, and it
- * cannot be spelled a second, weaker way.
+ * declared a principal.
+ *
+ * ## What the type match does NOT close
+ *
+ * It closes the case above — the parameter written bare — and that is the case an
+ * author reaches by FORGETTING something, which is why it was the urgent one.
+ *
+ * It does not make [AuthenticatedUser] unspellable in a weaker way. Spring adds
+ * custom resolvers after its whole annotation- and type-based block, so
+ * `@ModelAttribute caller: AuthenticatedUser`, `@RequestBody caller:
+ * AuthenticatedUser`, and an [AuthenticatedUser]-typed property on a
+ * `@RequestBody` class each win the parameter before this class is asked, and
+ * [SessionService.resolve] is never called. Every one of those requires an author
+ * to ADD an annotation rather than omit one, and `#5` is where the rest lives —
+ * a build-time sweep of handler signatures, which is the only thing that can see
+ * them, since a `HandlerInterceptor` sees a handler that has declared a principal
+ * either way.
  */
 internal class CurrentUserArgumentResolver(
     private val sessions: ObjectProvider<SessionService>,

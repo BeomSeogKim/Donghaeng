@@ -2,7 +2,6 @@ package com.donghaeng.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -49,7 +48,7 @@ internal class SecurityConfig {
         logins: LoginService,
         cookies: SessionCookies,
         objectMapper: ObjectMapper,
-        @Value("\${donghaeng.frontend.base-url:}") frontendBaseUrl: String,
+        frontend: FrontendProperties,
     ): SecurityFilterChain {
         http {
             authorizeHttpRequests { authorize(anyRequest, permitAll) }
@@ -93,7 +92,7 @@ internal class SecurityConfig {
                 // serves JSON only, and there is exactly one provider to pick.
                 loginPage = AUTHORIZATION_PATH
                 authorizationEndpoint { authorizationRequestResolver = pkceResolver(registrations) }
-                authenticationSuccessHandler = OAuthLoginSuccessHandler(logins, cookies, frontendBaseUrl)
+                authenticationSuccessHandler = OAuthLoginSuccessHandler(logins, cookies, frontend)
                 authenticationFailureHandler = OAuthLoginFailureHandler(objectMapper)
             }
         }

@@ -23,9 +23,23 @@ browser arrives with no cookie and leaves with a session that `CurrentUser`
 resolves.
 
 The provider axis is vertical because each provider is a complete round trip.
-Stop 2 repeats stop 1's shape with different URIs and a different user-info
-payload, which is why it is expected to land as **established pattern** rather
-than earning another explanation document.
+
+**Corrected 2026-08-12, after stop 1 shipped.** This section first said stop 2
+"repeats stop 1's shape with different URIs and a different user-info payload".
+That is wrong, and it was wrong in the direction that matters — it makes `#89`
+sound like a mapper and two constants.
+
+**네이버 is plain OAuth 2.0, not OIDC.** No `openid` scope, no ID token, no
+nonce, and therefore nothing for `OidcIdTokenValidator` to check. A Naver login
+produces an `OAuth2User`, not an `OidcUser`, so it does not merely bypass stop
+1's ID-token validation — it walks into the success handler's `OidcUser` cast and
+comes out as a masked 500. Kakao is OIDC *if* `openid` is in the scope, which is
+its own trap (`#6`: without it Kakao issues no ID token at all and the validation
+is a silent no-op).
+
+So `#89` restructures the success handler and has to answer a question stop 1
+never faced: what replaces signature-`iss`-`aud`-`exp` validation when the
+provider hands back no signed assertion. That is a new concept, not a repeat.
 
 ## Why the email merge stays in stop 1
 

@@ -190,7 +190,7 @@ can read or needs to.
 |---|---|
 | Name | `DH_SESSION` |
 | Flags | `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`; `Secure` everywhere except local dev over `http://localhost` |
-| Lifetime | idle **14 days**, absolute **90 days** — whichever comes first |
+| Lifetime | idle **13–14 days**, absolute **90 days** — whichever comes first |
 
 **`web/` never reads, writes, or parses this cookie.** It cannot: `HttpOnly`.
 Every request simply needs to be sent with credentials included
@@ -201,10 +201,19 @@ is `GET /auth/me`, never an inspection of `document.cookie`.
 last request, absolute from the moment of login. A couple using the app daily is
 still signed out after 90 days and logs in again; that is intended.
 
-**The session is re-issued on every login.** Logging in while already holding a
-session invalidates the old token — so a second login in another tab makes the
-first tab's token dead. Treat a 401 as "log in again", never as an error state to
-report.
+The idle window is a **range, not 14 days exactly.** The server does not rewrite
+the "last seen" stamp on every request — that would make every read a write — so
+the stamp can lag real activity by up to 14 hours, and a session expires
+somewhere between 13.4 and 14 days after its last use. Nothing expires *later*
+than 14 days. Do not build a countdown from this number; ask the server.
+
+**The session is re-issued on every login**, which invalidates the token the
+browser presented. Tabs share one cookie jar, so a second login in another tab
+simply replaces the cookie for both — the first tab is not signed out. **A second
+device is a separate session and is not revoked**, by design: signing in on a
+laptop does not sign the phone out.
+
+Treat a 401 as "log in again", never as an error state to report.
 
 ### `GET /oauth2/authorization/google`
 

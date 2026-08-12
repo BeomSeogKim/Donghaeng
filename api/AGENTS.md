@@ -116,7 +116,11 @@ and tokens.
   reason `wedding_id` sits on every root: a default cannot be forgotten, a
   judgement call can.
 - **DTO naming**: `XxxRequest` / `XxxResponse`, mapped via extension functions
-  in the domain package. Entities never serialize directly.
+  in the domain package. Entities never serialize directly. **The Service returns
+  the response DTO**, and the DTO owns its file — a Controller that mapped an
+  entity itself would be reading associations after the transaction closed, and
+  `open-in-view: false` makes that a `LazyInitializationException` in whichever
+  domain first has associations, not in the one that set the pattern.
 - **No `/v1` prefix** — no second API version planned; free to add later.
 - **ktlint** via the standard Gradle plugin, default ruleset.
 - **`docs/api-spec.md` is written in the same change as the code** — new,

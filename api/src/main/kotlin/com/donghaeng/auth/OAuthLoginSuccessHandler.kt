@@ -13,7 +13,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
  * `state`, the PKCE verifier and the ID token: the person becomes an `app_user`,
  * a session is issued, and the browser is sent to the frontend.
  *
- * **[frontendBaseUrl] is configuration and never comes from the request** — not
+ * **[FrontendProperties.baseUrl] is configuration and never comes from the request** — not
  * from a parameter, not from a `Referer`, and not smuggled through `state`. Any of
  * those is an open redirect, and an open redirect on the login callback hands an
  * attacker a page that has just been given a valid session. Spring's own default
@@ -25,18 +25,28 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 internal class OAuthLoginSuccessHandler(
     private val logins: LoginService,
     private val cookies: SessionCookies,
-    private val frontendBaseUrl: String,
+    private val frontend: FrontendProperties,
 ) : AuthenticationSuccessHandler {
     override fun onAuthenticationSuccess(
         request: HttpServletRequest,
         response: HttpServletResponse,
         authentication: Authentication,
     ) {
-        // Not a defensive check on a supported case: `oauth2Login` with an
-        // `openid` scope always produces an OidcUser, so anything else means the
-        // registration was rebuilt without `openid` — and with it goes the whole
-        // ID-token validation. Failing loudly beats logging someone in on an
-        // unvalidated userinfo response.
+        // Google is OIDC, so `oauth2Login` produces an OidcUser and the ID token
+        // was validated (signature, iss, aud, exp) before this line ran. Anything
+        // else means that validation did not happen, and the two ways to get here
+        // are worth telling apart:
+        //
+        //   * the registration was rebuilt without `openid` — a mistake; or
+        //   * THE PROVIDER IS NOT OIDC AT ALL. Naver is plain OAuth 2.0 — no
+        //     `openid`, no ID token, no nonce — so a Naver login reaches this cast
+        //     and dies here as a masked 500. That is #89's actual work, and it is
+        //     a restructuring of this class rather than a second mapper; see
+        //     notes/2026-08-12-decision-login-slice-by-provider.md.
+        //
+        // Failing loudly beats logging someone in on an unvalidated userinfo
+        // response, so this stays an error until #89 decides what replaces the
+        // signed assertion.
         val principal =
             authentication.principal as? OidcUser
                 ?: error("OAuth login produced ${authentication.principal?.javaClass?.name}, not an OidcUser")
@@ -45,7 +55,7 @@ internal class OAuthLoginSuccessHandler(
         // browser, so an environment that has not configured it still boots and
         // still serves the API. Checked here rather than at startup for that
         // reason.
-        check(frontendBaseUrl.isNotBlank()) {
+        check(frontend.baseUrl.isNotBlank()) {
             "donghaeng.frontend.base-url is not configured, so a completed login has nowhere to land"
         }
 
@@ -59,7 +69,7 @@ internal class OAuthLoginSuccessHandler(
         // that nothing in this application reads.
         request.getSession(false)?.invalidate()
 
-        response.sendRedirect(frontendBaseUrl)
+        response.sendRedirect(frontend.baseUrl)
     }
 
     /**

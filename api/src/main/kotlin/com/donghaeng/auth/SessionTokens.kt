@@ -30,7 +30,15 @@ internal object SessionTokens {
      * later write landing in the attacker's ledger and nothing looking wrong to
      * either party.
      *
-     * Refusing the ambiguous case costs a re-login and closes it. The stronger
+     * Refusing the ambiguous case closes it, and the cost is worse than a
+     * re-login — say so plainly, because the mitigation is easy to overstate. The
+     * planted cookie stays in the jar, so every later request still carries two
+     * and this still returns `null`, including the request right after logging in
+     * again. The session is unusable until the person clears cookies. That is a
+     * denial of service, and it is the right trade against sitting silently
+     * inside a stranger's ledger — but it is not "costs a re-login".
+     *
+     * The stronger
      * answer is the `__Host-` cookie prefix, which the browser itself refuses to
      * let a sibling set — but `__Host-` requires `Secure`, and dev serves
      * `http://localhost`, so it cannot be the mechanism in every environment.

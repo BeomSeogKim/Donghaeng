@@ -41,11 +41,26 @@ internal class OAuthLoginFailureHandler(
         val denied = (exception as? OAuth2AuthenticationException)?.error?.errorCode == ACCESS_DENIED
         val code = if (denied) "OAUTH_LOGIN_DENIED" else "OAUTH_LOGIN_FAILED"
 
-        // A refused consent is the user's decision, not an incident; everything
-        // else — a `state` mismatch, a token exchange that failed, an ID token
-        // that did not validate — is worth a line, because it is also what an
-        // attack against the callback looks like.
-        if (denied) logger.info("oauth login denied by the user") else logger.warn("oauth login failed", exception)
+        // ONE LINE, AND NEVER A STACK TRACE. This path needs no cookie and no
+        // credentials: `GET /login/oauth2/code/google?code=x&state=not-ours` reaches
+        // it from anywhere, so logging the exception would hand an anonymous caller
+        // unbounded WARN volume — the same amplification against the same 401/404/429
+        // spike alerting that `SecurityConfig.unknownProviderIsNotFound` was written
+        // to close, through a different door.
+        //
+        // What survives is what an incident actually needs: which of the two
+        // outcomes it was, and OAuth's own error code. The code is a short fixed
+        // vocabulary; `error_description` is authored by the provider and is not
+        // logged, for the same reason it is not published.
+        //
+        // The rate-limit unit for a pre-authentication path has no answer yet — the
+        // standing rule is per wedding and per link token, and this request has
+        // neither. That is #98's, and it is load-bearing rather than tidy-up.
+        if (denied) {
+            logger.info("oauth login denied by the user")
+        } else {
+            logger.warn("oauth login failed: ${errorCode(exception)}")
+        }
 
         val problem =
             ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, DETAIL).apply {
@@ -64,8 +79,14 @@ internal class OAuthLoginFailureHandler(
         objectMapper.writeValue(response.outputStream, problem)
     }
 
+    /** Truncated: the code is short by specification, and a provider is not a trusted author of length. */
+    private fun errorCode(exception: AuthenticationException): String =
+        (exception as? OAuth2AuthenticationException)?.error?.errorCode?.take(CODE_LOG_LIMIT)
+            ?: exception.javaClass.simpleName
+
     private companion object {
         const val ACCESS_DENIED = "access_denied"
+        const val CODE_LOG_LIMIT = 64
         const val DETAIL = "The OAuth login did not complete."
     }
 }

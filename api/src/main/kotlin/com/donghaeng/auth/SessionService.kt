@@ -24,9 +24,15 @@ internal data class SessionProperties(
      * wrong one: it makes every authenticated GET an UPDATE holding a row lock, so
      * requests from one session serialise behind each other — on a product whose
      * defining interaction is a run of rapid attendance taps, each returning a
-     * recomputed aggregate. It also makes "no state-changing GET", the half of
-     * v1's CSRF answer that has to be true for the other half to work, false in
-     * the first domain code that states it.
+     * recomputed aggregate.
+     *
+     * **Be precise about the CSRF half, because this is the file later domains
+     * copy.** A GET that writes once every fourteen hours is still a
+     * state-changing GET; throttling does not make v1's "no state-changing GET"
+     * true. What is true is narrower: the only state this particular write
+     * changes is the victim's own idle stamp, so a cross-site GET gains an
+     * attacker nothing — it refreshes a session they cannot read. That is an
+     * argument about THIS write and does not extend to the next one.
      *
      * Derived from [idle] rather than configured, because it is not an independent
      * decision — it is a resolution, and the only thing it can be wrong about is

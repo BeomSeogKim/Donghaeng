@@ -62,6 +62,15 @@ internal class GoogleProfileTest : BaselineSchemaFixture() {
         assertThat(GoogleProfile.mergeKey("@gmail.com", verified = true)).isNull()
         assertThat(GoogleProfile.mergeKey("kim@", verified = true)).isNull()
 
+        // Longer than the column. NOT truncated like a name is: an address is a
+        // KEY, so cutting it would merge two people sharing a 255-character
+        // prefix — the takeover this file exists to prevent, reached by tidiness.
+        // No key means the account stands alone, which is a designed outcome.
+        val tooLong = "a".repeat(250) + "@gmail.com"
+        assertThat(tooLong).hasSizeGreaterThan(255)
+        assertThat(GoogleProfile.mergeKey(tooLong, verified = true)).isNull()
+        assertThat(GoogleProfile.mergeKey("a".repeat(245) + "@gmail.com", verified = true)).isNotNull()
+
         // What it must still do: trim, fold, and let an ordinary address through.
         assertThat(GoogleProfile.mergeKey(" Kim@Gmail.com ", verified = true)).isEqualTo("kim@gmail.com")
     }
@@ -76,8 +85,25 @@ internal class GoogleProfileTest : BaselineSchemaFixture() {
         val long = "가".repeat(300)
 
         assertThat(GoogleProfile.of(oidcUser(name = long)).name).hasSize(100)
-        assertThat(GoogleProfile.of(oidcUser(name = "김테스터")).name).isEqualTo("김테스터")
-        assertThat(GoogleProfile.of(oidcUser(name = null)).name).isNull()
+
+        // BY CODE POINT, and the case has to STRADDLE the boundary to prove it.
+        // `String.take` counts UTF-16 units, so a name whose 100th code point is
+        // an emoji gets cut between the surrogates and ends with a lone high
+        // surrogate — not text, and encoded by the driver as a replacement byte.
+        // An emoji sitting past the limit would be discarded by either version and
+        // proves nothing, which is what the first version of this test did.
+        val bride = "\uD83D\uDC70" // one code point, two UTF-16 units
+        val straddling = "가".repeat(99) + bride + "나".repeat(10)
+
+        val cut = GoogleProfile.of(oidcUser(name = straddling)).name!!
+
+        assertThat(cut.codePointCount(0, cut.length)).isEqualTo(100)
+        assertThat(cut).endsWith(bride)
+        assertThat(cut.last().isHighSurrogate()).isFalse()
+
+        // And a name exactly at the limit is left alone, emoji included.
+        val exact = "가".repeat(99) + bride
+        assertThat(GoogleProfile.of(oidcUser(name = exact)).name).isEqualTo(exact)
     }
 
     @Test

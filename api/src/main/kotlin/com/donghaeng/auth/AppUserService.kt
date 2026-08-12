@@ -17,6 +17,13 @@ import org.springframework.transaction.annotation.Transactional
 internal class AppUserService(
     private val users: AppUserRepository,
 ) {
+    /**
+     * Returns the DTO rather than the entity, deliberately (api/AGENTS.md, API
+     * conventions). Mapping in the controller instead would put the read outside
+     * this transaction, and with `open-in-view: false` the first domain that has
+     * associations — `guest`, not `app_user` — would find that out as a
+     * `LazyInitializationException` rather than as a rule.
+     */
     @Transactional(readOnly = true)
     fun profile(userId: Long): MeResponse {
         // A resolved session names a row a foreign key guarantees exists, so its

@@ -10,24 +10,6 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * The signed-in person. `email` and `name` are whatever the provider told us and
- * may both be absent — `email` is only ever present when a provider asserted it as
- * verified (notes/2026-08-11-decision-baseline-schema-calls.md §A).
- *
- * Public, like the controller that returns it: it is the wire shape `web/`
- * generates a type from, so it is part of the cross-tree contract rather than an
- * internal of this package.
- */
-data class MeResponse(
-    val id: Long,
-    val email: String?,
-    val name: String?,
-)
-
-/** Entities never serialize directly, and the mapping lives in the domain package. */
-internal fun AppUser.toMeResponse() = MeResponse(id = id, email = email, name = name)
-
-/**
  * Public, and its constructor is not: the architecture record makes the controller
  * the one public type in a domain package, while everything it depends on stays
  * `internal`. Kotlin will not let a public constructor name an internal type, so

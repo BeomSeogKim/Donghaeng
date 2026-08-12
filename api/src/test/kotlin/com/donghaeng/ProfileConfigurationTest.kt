@@ -2,6 +2,9 @@ package com.donghaeng
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.boot.context.properties.bind.Bindable
+import org.springframework.boot.context.properties.bind.Binder
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource
 import org.springframework.boot.env.PropertiesPropertySourceLoader
 import org.springframework.boot.env.PropertySourceLoader
 import org.springframework.boot.env.YamlPropertySourceLoader
@@ -354,42 +357,37 @@ class ProfileConfigurationTest {
 
     @Test
     fun `CORS denies by default, allows one exact origin in dev, and never a wildcard`() {
-        // #97/#6. The base denies because an environment that has declared nothing
-        // must not be reachable from a page it did not authorise.
-        // An explicit empty list, which Spring's property loader flattens to "".
-        // Stated in the file rather than omitted, so that a reader can see the
-        // decision was made — and asserted here so nobody "tidies" it away and
-        // leaves the base saying nothing.
-        assertThat(base["donghaeng.cors.allowed-origins"]).isEqualTo("")
-        assertThat(base["donghaeng.cors.allowed-origins[0]"]).isNull()
-        assertThat(dev["donghaeng.cors.allowed-origins[0]"]).isEqualTo("http://localhost:3000")
-        assertThat(dev["donghaeng.cors.allowed-origins[1]"]).isNull()
-        assertThat(prod["donghaeng.cors.allowed-origins[0]"]).isNull()
+        // BOUND, not read as keys, and that is the whole point of this version
+        // (notes/2026-08-12-decision-cors.md). The first one inspected
+        // `allowed-origins[0]`, `[1]`, … — and Spring binds a List<String> from a
+        // comma-delimited scalar just as happily, so `allowed-origins: "https://a,https://b"`
+        // produces a single un-indexed key, skips the guard, and every assertion
+        // below goes vacuous. Binding is the form that cannot be spelled twice.
+        assertThat(corsOrigins("application.yml")).isEmpty()
+        assertThat(corsOrigins("application-dev.yml")).containsExactly("http://localhost:3000")
+        assertThat(corsOrigins("application-prod.yml")).isEmpty()
 
         configFiles().forEach { path ->
-            properties(path).forEach { (name, value) ->
-                // Indexed entries only: the un-indexed key is how an EMPTY list
-                // arrives, and "deny everything" is not an origin to validate.
-                if (!name.startsWith("donghaeng.cors.allowed-origins[")) return@forEach
-                val origin = value?.toString() ?: return@forEach
-
+            corsOrigins(path).forEach { origin ->
                 // `*` is illegal beside allowCredentials anyway, so a browser
-                // would refuse it — but it is named here so nobody "fixes" that by
-                // reaching for allowedOriginPatterns.
+                // would refuse it — it is named so nobody "fixes" that by reaching
+                // for allowedOriginPatterns, which works and fails open.
                 assertThat(origin)
-                    .describedAs("%s · %s is a wildcard origin", path, name)
-                    .isNotEqualTo("*")
-                // A pattern is the shape that admits donghaeng.kr.evil.com when
-                // written slightly wrong. Exact strings only.
-                assertThat(origin)
-                    .describedAs("%s · %s is a pattern, not an exact origin", path, name)
+                    .describedAs("%s · %s is a wildcard or pattern origin", path, origin)
                     .doesNotContain("*")
                 assertThat(origin)
-                    .describedAs("%s · %s is not an origin (scheme and host, no path)", path, name)
+                    .describedAs("%s · %s is not an origin (scheme and host, no path)", path, origin)
                     .matches("https?://[^/]+")
             }
         }
     }
+
+    private fun corsOrigins(fileName: String): List<String> = corsOrigins(resourceRoot.resolve(fileName))
+
+    private fun corsOrigins(path: Path): List<String> =
+        Binder(MapConfigurationPropertySource(properties(path).filterValues { it != null }))
+            .bind("donghaeng.cors.allowed-origins", Bindable.listOf(String::class.java))
+            .orElse(emptyList())
 
     @Test
     fun `only dev states where a completed login sends the browser`() {

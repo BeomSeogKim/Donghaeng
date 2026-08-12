@@ -232,15 +232,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --network host so the container reaches the service container's published
-      # port, and so its own 8080 is reachable from the runner. The credentials
-      # repeat the service block's on purpose — they are throwaway literals, and
-      # a level of indirection would only hide which value is being used.
-      #
-      # TLS to Postgres is deliberately not asserted here: this connection is
-      # loopback inside one runner, so `sslmode=verify-full` has nothing to
-      # verify. Asserting it needs a real prod environment and belongs to the
-      # deploy stop.
       # Issue #55, and it comes due exactly now. Flyway is disabled in every
       # environment (notes/2026-08-09-decision-schema-ownership.md), so the image
       # brings no schema with it — and from #37 onward there are @Entity classes,
@@ -277,6 +268,15 @@ jobs:
               --single-transaction -v ON_ERROR_STOP=1 -f "/repo/$migration"
           done
 
+      # --network host so the container reaches the service container's published
+      # port, and so its own 8080 is reachable from the runner. The credentials
+      # repeat the service block's on purpose — they are throwaway literals, and
+      # a level of indirection would only hide which value is being used.
+      #
+      # TLS to Postgres is deliberately not asserted here: this connection is
+      # loopback inside one runner, so `sslmode=verify-full` has nothing to
+      # verify. Asserting it needs a real prod environment and belongs to the
+      # deploy stop.
       - name: Run the image against Postgres
         run: |
           docker run -d --name donghaeng-api --network host \
