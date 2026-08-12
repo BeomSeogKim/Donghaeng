@@ -8,10 +8,15 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.transaction.support.TransactionTemplate
 import java.net.HttpCookie
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 /**
  * What a session must refuse. Each test here corresponds to one mechanism that
@@ -37,6 +42,8 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
     @Autowired private lateinit var sessions: SessionService
 
     @Autowired private lateinit var properties: SessionProperties
+
+    @Autowired private lateinit var transactions: TransactionTemplate
 
     private var userId: Long = 0
 
@@ -162,6 +169,83 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
     }
 
     @Test
+    fun `logging out with two session cookies ends both, so signing out cannot complete a takeover`() {
+        // The attack this closes, in order (notes/2026-08-12-decision-session-cookie-ambiguity.md):
+        //
+        //   1. a sibling host plants a `Domain`-scoped cookie holding the
+        //      ATTACKER's own valid token;
+        //   2. every request now carries two, so resolution refuses and the couple
+        //      see a broken app;
+        //   3. they press sign-out — or the frontend calls logout on a 401.
+        //
+        // With logout reading the single unambiguous token, step 3 revoked NOTHING
+        // and then cleared our cookie. A `Set-Cookie` without a `Domain` can only
+        // delete the host-only one, so the planted cookie was left alone in the jar
+        // and still valid — and the next request resolved cleanly as the attacker.
+        // The sign-out gesture was the last step of the takeover.
+        val attacker = users.save(AppUser(name = "공격자")).id
+        val victimSession = sessions.issue(userId, presented = null)
+        val plantedSession = sessions.issue(attacker, presented = null)
+        val both = listOf(cookie(victimSession), cookie(plantedSession))
+
+        // Step 2: ambiguity is still refused on the read path, and must stay so.
+        assertThat(get("/auth/me", both).statusCode()).isEqualTo(401)
+
+        assertThat(post("/auth/logout", both).statusCode()).isEqualTo(204)
+
+        // Revocation is greedy where resolution is strict. Both rows die.
+        assertThat(sessionRows.findBySelector(victimSession.selector)!!.revokedAt).isNotNull()
+        assertThat(sessionRows.findBySelector(plantedSession.selector)!!.revokedAt).isNotNull()
+
+        // And the outcome that matters: the cookie we cannot delete now carries a
+        // token that is worth nothing.
+        assertThat(me(cookie(plantedSession)).statusCode()).isEqualTo(401)
+    }
+
+    @Test
+    fun `a resolve that lands mid-logout cannot bring the session back`() {
+        // Two transactions, because one cannot show this. Hibernate writes every
+        // updatable column of a dirty entity from ITS OWN snapshot, so a resolve
+        // that loaded the row before the logout committed would write
+        // `revoked_at = null` back over it — a lost update that answers 204 and
+        // leaves the token alive for the rest of its 180 days.
+        //
+        // The realistic shape, and it is the case logout exists for: someone opens
+        // the app on a device after days away and taps sign-out while the page's
+        // first /auth/me is still in flight.
+        val token = sessions.issue(userId, presented = null)
+        backdate(token, lastSeen = Instant.now().minus(Duration.ofHours(31)))
+
+        val resolveLoaded = CountDownLatch(1)
+        val logoutCommitted = CountDownLatch(1)
+        val failure = AtomicReference<Throwable>()
+
+        val resolving =
+            thread {
+                runCatching {
+                    transactions.execute {
+                        // Loads the row and dirties `last_seen_at` — the touch is
+                        // due, which is what makes this transaction a writer.
+                        sessions.resolve(token)
+                        resolveLoaded.countDown()
+                        check(logoutCommitted.await(10, TimeUnit.SECONDS)) { "logout never committed" }
+                    }
+                }.onFailure(failure::set)
+            }
+
+        check(resolveLoaded.await(10, TimeUnit.SECONDS)) { "resolve never loaded the row" }
+        transactions.execute { sessions.revoke(token) }
+        logoutCommitted.countDown()
+        resolving.join()
+        failure.get()?.let { throw it }
+
+        assertThat(sessionRows.findBySelector(token.selector)!!.revokedAt)
+            .describedAs("the resolve wrote its snapshot back over the revocation")
+            .isNotNull()
+        assertThat(me(cookie(token)).statusCode()).isEqualTo(401)
+    }
+
+    @Test
     fun `logging out with a guessed selector cannot end someone else's session`() {
         // Logout takes the same constant-time verifier comparison the read path
         // does, and for a reason that is easy to miss: the selector is a PUBLIC
@@ -192,6 +276,15 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
         lastSeen: Instant,
     ): HttpCookie {
         val token = sessions.issue(userId, presented = null)
+        backdate(token, lastSeen = lastSeen, created = created)
+        return cookie(token)
+    }
+
+    private fun backdate(
+        token: SessionToken,
+        lastSeen: Instant,
+        created: Instant = Instant.now(),
+    ) {
         val row = sessionRows.findBySelector(token.selector)!!
         sessionRows.save(
             UserSession(
@@ -203,7 +296,6 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
                 id = row.id,
             ),
         )
-        return cookie(token)
     }
 
     private fun cookie(token: SessionToken) = HttpCookie(SessionTokens.COOKIE_NAME, token.cookieValue)

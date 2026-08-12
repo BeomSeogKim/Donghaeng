@@ -154,6 +154,12 @@ inline. The parts that constrain everyday backend work:
   duplicate does not make the lookup find it. The lookup must use the *same*
   expression, and the app-side normalisation must be an **ASCII-only**
   lowercase — Kotlin's `String.lowercase()` is not `lower(... collate "C")`.
+- **A session token is read through `SessionTokens` and nowhere else**, and its
+  two functions are deliberately asymmetric: reading refuses a request carrying
+  more than one cookie, revoking ends all of them (decided 2026-08-12,
+  `notes/2026-08-12-decision-session-cookie-ambiguity.md`). Making them consistent
+  turns a denial of service into session fixation — the logout path did exactly
+  that before review caught it.
 - **The auth gate is our resolver, not Spring Security's filter chain**
   (decided 2026-08-10, `notes/2026-08-10-decision-auth-gate-and-sequence.md`).
   `authorizeHttpRequests` stays `permitAll` in **every** environment; what

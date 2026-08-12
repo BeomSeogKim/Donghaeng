@@ -320,10 +320,14 @@ button that leaves people signed in:
   `<img>` on any page the couple visit. Under POST the cookie is withheld
   cross-site and the request cannot revoke anything.
 - **It always answers 204**, whatever it finds: no cookie, an unparseable cookie,
-  an expired session, one already revoked, one revoked from another device. All
-  of them mean "you are not logged in on this device", which is what the caller
-  asked for. There is no error path to write, and it is idempotent — calling it
-  twice is not a mistake.
+  several at once, an expired session, one already revoked, one revoked from
+  another device. All of them mean "you are not logged in on this device", which
+  is what the caller asked for. There is no error path to write, and it is
+  idempotent — calling it twice is not a mistake.
+- **If the browser somehow presents more than one session cookie, every one of
+  them is ended.** Reads refuse an ambiguous request (that is where a 401 with
+  more than one cookie comes from); logout is the opposite and deliberately so.
+  This is the right thing to call when the app is wedged on 401s.
 - **It does two things, and the client needs both.** The server revokes the
   session row, which is what makes the token dead everywhere; the response clears
   the cookie, which is what stops the browser from presenting a dead token on

@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.hibernate.annotations.DynamicUpdate
 import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Duration
 import java.time.Instant
@@ -16,8 +17,29 @@ import java.time.Instant
  *
  * Nothing here can be replayed if the table leaks: [selector] carries no
  * authority on its own and [verifierHash] is a hash.
+ *
+ * ## Why `@DynamicUpdate`, which is a correctness fix rather than a performance one
+ *
+ * By default Hibernate writes **every** updatable column of a dirty entity from
+ * the snapshot that transaction loaded. Two of this row's columns are written by
+ * two different operations that legitimately race — `last_seen_at` by a resolve,
+ * `revoked_at` by a logout — so under READ COMMITTED the resolve's UPDATE carried
+ * `revoked_at = null` from a snapshot taken before the logout committed, and
+ * **silently un-revoked the session** while the caller was told 204.
+ *
+ * The shape is not exotic: someone opens the app on a device after days away and
+ * taps sign-out while the page's first `/auth/me` is still in flight. That is the
+ * walked-away-device case logout exists for, and the consequence was a token that
+ * outlived its own logout for the rest of its 180 days — on the one device they
+ * cannot reach again.
+ *
+ * It also defeats the sentence the lifetime record buys the new numbers with:
+ * "the row can be marked and the token dies on the next request"
+ * (notes/2026-08-12-decision-session-lifetimes.md). Held by a two-transaction
+ * test; nothing else would notice this regressing.
  */
 @Entity
+@DynamicUpdate
 @Table(name = "user_session")
 internal class UserSession(
     @Column(name = "selector", nullable = false, length = 32)

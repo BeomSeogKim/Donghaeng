@@ -79,13 +79,21 @@ internal class SecurityConfig {
             // redirect. Belt to OAuthLoginSuccessHandler's braces.
             requestCache { requestCache = NullRequestCache() }
 
-            // A JSON API has no login form, no browser-prompt realm, and — until
-            // its own logout endpoint exists — no `/logout`. Each of these is
-            // registered by default and each would be a surface answering for
-            // behaviour this application does not implement.
+            // A JSON API has no login form and no browser-prompt realm; both are
+            // registered by default and both would answer for behaviour this
+            // application does not implement.
+            //
+            // `/logout` stays disabled UNCONDITIONALLY, and now that
+            // `POST /auth/logout` exists that is more load-bearing rather than
+            // less. With `csrf { disable() }` above, Spring Security 6's
+            // LogoutConfigurer stops narrowing its matcher to POST and registers
+            // `/logout` for GET, PUT and DELETE as well — a state-changing GET,
+            // which is precisely the half of v1's CSRF pair that has to be true
+            // for the other half to mean anything. Our logout is a POST and lives
+            // in AuthController.
+            logout { disable() }
             formLogin { disable() }
             httpBasic { disable() }
-            logout { disable() }
 
             oauth2Login {
                 // Suppresses Spring Security's generated HTML login page: this API

@@ -62,10 +62,10 @@ class AuthController internal constructor(
      * handlers `#5`'s fail-closed mechanism has to be able to call PUBLIC on
      * purpose rather than treat as an omission.
      *
-     * **Always 204, whatever it finds.** No cookie, an unparseable one, a session
-     * that expired, one already revoked, one revoked by another device — every one
-     * of them means "you are not logged in on this device", which is precisely
-     * what the caller asked for. A logout that answers 401 is a logout the client
+     * **Always 204, whatever it finds.** No cookie, an unparseable one, several at
+     * once, a session that expired, one already revoked, one revoked by another
+     * device — every one of them means "you are not logged in on this device",
+     * which is precisely what the caller asked for. A logout that answers 401 is a logout the client
      * has to write error handling for, and error handling for "you are already
      * logged out" is how a sign-out button ends up leaving people signed in. It is
      * idempotent for the same reason.
@@ -82,7 +82,15 @@ class AuthController internal constructor(
     )
     @PostMapping("/auth/logout")
     fun logout(request: HttpServletRequest): ResponseEntity<Void> {
-        SessionTokens.of(request)?.let(sessions::revoke)
+        // EVERY token, not the single unambiguous one. `SessionTokens.of` answers
+        // `null` when the browser presents more than one `DH_SESSION`, and on that
+        // path this used to revoke nothing and then clear the cookie — deleting
+        // only the host-only one, since a `Set-Cookie` without a `Domain` cannot
+        // touch a sibling's. A planted cookie was left alone in the jar and still
+        // valid, so the next request resolved cleanly AS THE ATTACKER: the sign-out
+        // gesture completed the takeover the ambiguity rule exists to prevent
+        // (notes/2026-08-12-decision-session-cookie-ambiguity.md).
+        SessionTokens.all(request).forEach(sessions::revoke)
         return ResponseEntity
             .noContent()
             .header(HttpHeaders.SET_COOKIE, cookies.expire().toString())
