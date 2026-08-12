@@ -22,6 +22,8 @@ run "after then"        'if true; then gh'' pr merge; fi' 2
 run "unrelated command" 'git status' 0
 run "inside a quote"    'echo "run gh'' pr merge later"' 0
 run "grep for the rule" 'grep -rn "gh'' pr merge" notes/' 0
+run "permission rule string" 'jq -e ".permissions.ask|index(\"Bash(gh"" pr merge*)\")" .claude/settings.json' 0
+run "subshell is still a merge" '(gh'' pr merge 9)' 2
 run "commit prose"      "git commit -F - <<'MSG'
 훅이 gh"" pr merge를 막는다
 gh"" pr merge 5

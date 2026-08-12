@@ -85,61 +85,17 @@ test for every decision here:
 ### 3. Convention and complexity
 
 Convention is per area — match what the codebase already does, and treat an
-inconsistency as a finding even when both forms are defensible. The items
-below are named because they're decided, checkable rules, not because the
-list is exhaustive; anything else convention-shaped still gets judged
-against the code around it.
+inconsistency as a finding even when both forms are defensible.
 
-**Backend** (`notes/2026-08-07-decision-backend-architecture.md`,
-`notes/2026-08-07-decision-backend-api-conventions.md`):
+**The decided conventions live in the tree files, not here** — `api/AGENTS.md`,
+`web/AGENTS.md`, `design/AGENTS.md`. Read the one the diff touches and judge
+against it. This prompt used to carry a copy of those lists, and the copy went
+stale without anything going red. That is the whole reason it is gone.
 
-- Domain-based packages, not layer-based — a class under `controllers/`,
-  `services/`, or `repositories/` is a finding on sight.
-- `internal` visibility inside a domain package by default. A `public`
-  class that doesn't need to be, or a direct reach into another domain's
-  entity or repository, is the bug the visibility rule exists to make
-  impossible.
-- No response envelope (`{data: ...}`); errors are RFC 9457 Problem Details
-  with a `code` extension member — not a hand-shaped error body, and not a
-  bare `detail` string the frontend would have to parse.
-- Transaction boundary, invariant enforcement, and `GuestChange` writes live
-  in the Service, not the Controller or Repository.
-
-**Frontend** (`notes/2026-08-08-decision-frontend-architecture.md`,
-`notes/2026-08-08-decision-frontend-testing-methodology.md`):
-
-- Server state — anything that's a client-side copy of API/DB data — goes
-  through React Query. A hand-rolled `useEffect` + `fetch` + `useState` for
-  data the API owns is a finding, not a style preference.
-- `useEffect` synchronizes with something outside React. One that derives a
-  value, resets state on navigation, or reacts to a user action instead of
-  living in that action's own event handler is a finding — name what it
-  should have been instead.
-- Client state reaching for Context or a state library without the cheaper
-  rungs (`useState` → lift → `useReducer`) having actually failed first is
-  premature, not just a preference.
-- No barrel files (`index.ts` re-exports). A `Container`/`View` split
-  instead of a custom hook is the pre-hooks pattern this codebase
-  deliberately doesn't use.
-- Tests query by role/label/text first. A `data-testid` reached for before
-  those fail, or `container.querySelector` on a class name, is a finding.
-
-Then the refactoring gate. **Complexity that has passed the point where a
-refactor was due, and was not refactored, is a finding — not a nice-to-have.**
-Say so plainly and say what the refactor is. Concrete triggers:
-
-- A function doing two or more of: fetching, computing, formatting.
-- A component holding both layout and data-fetching.
-- The third copy of the same block. Two is a coincidence; three is a shape.
-- A conditional nested three deep, or a boolean parameter that switches the
-  function's meaning.
-- A file past ~300 lines holding more than one responsibility.
-- Any number computed in two places. This one is not a threshold — it is a
-  violation, on either side of the seam.
-
-These are triggers, not laws. If a trigger fires and the code is still the
-clearest thing available, say that and move on. What you may not do is stay
-silent because the change "works".
+Complexity is the other half of this pass. The Green Gate says refactor with the
+suite green, so a stop that left a class doing two distinct things, or
+duplicated a query that already exists, is a finding even when every test
+passes. Name the refactor you would have done.
 
 ## Output
 
