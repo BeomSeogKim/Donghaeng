@@ -78,10 +78,10 @@ and tokens.
   the Controller and an explicit cross-domain contract are `public`.
   Cross-domain access always goes through that contract, never straight into
   another domain's entities or repository.
-- **One file per concept, named after it** — an entity with its repository, a
-  resolver with the annotation it reads. Never a layer bucket
-  (`AuthRepositories.kt`): that is the package rule's own mistake at file scale,
-  and it is how a domain package quietly becomes three layer packages.
+- **Never a layer bucket** (`AuthRepositories.kt`) — the package rule's mistake
+  at file scale. **A repository gets its own file**: JetBrains' Spring shape,
+  and a two-type file is not named after what it contains. A properties class
+  or an extension still lives with its subject.
 - **Tests mirror the domain tree**, not the layer tree. Three kinds, chosen by
   where a requirement's risk lives: Service unit tests (no DB), Repository
   Testcontainers tests (mandatory for the paths named above), Controller
