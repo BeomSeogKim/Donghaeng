@@ -1,5 +1,8 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
+import com.donghaeng.auth.session.SessionCookies
+import com.donghaeng.auth.session.SessionTokens
+import com.donghaeng.config.FrontendProperties
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpHeaders

@@ -1,6 +1,8 @@
 package com.donghaeng.auth
 
 import com.donghaeng.SharedPostgres
+import com.donghaeng.auth.login.GoogleClientRegistration
+import com.donghaeng.auth.session.SessionTokens
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.boot.test.context.TestConfiguration

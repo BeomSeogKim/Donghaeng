@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

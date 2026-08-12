@@ -73,15 +73,13 @@ and tokens.
 - **Layers stay shallow**: Controller (DTO) → Service (tx boundary,
   invariants, aggregate recompute, `GuestChange` writes) → Repository (JPA +
   native aggregation queries). No hexagonal/ports-and-adapters layer.
-- **Split a class when it starts doing two distinct things, not before.**
-  Kotlin `internal` is the default visibility inside a domain package; only
-  the Controller and an explicit cross-domain contract are `public`.
-  Cross-domain access always goes through that contract, never straight into
-  another domain's entities or repository.
-- **Never a layer bucket** (`AuthRepositories.kt`) — the package rule's mistake
-  at file scale. **A repository gets its own file**: JetBrains' Spring shape,
-  and a two-type file is not named after what it contains. A properties class
-  or an extension still lives with its subject.
+- **Split a class when it starts doing two distinct things, not before.** Only
+  the Controller and a declared cross-domain contract are `public`. `internal`
+  is the default, but it is MODULE-scoped and `api/` is one module — it hides
+  nothing between packages and enforces no boundary. `ArchitectureTest` and
+  `SourceShapeTest` are the boundary: package edges, no reaching into another
+  domain's entities or repositories, and file shape
+  (`notes/2026-08-12-decision-auth-package-structure.md`).
 - **Tests mirror the domain tree**, not the layer tree. Three kinds, chosen by
   where a requirement's risk lives: Service unit tests (no DB), Repository
   Testcontainers tests (mandatory for the paths named above), Controller

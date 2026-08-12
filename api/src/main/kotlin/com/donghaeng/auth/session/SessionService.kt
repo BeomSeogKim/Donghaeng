@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.stereotype.Service
@@ -126,7 +126,7 @@ internal class SessionService(
      * an unknown selector, a wrong verifier and an already-revoked row are all
      * "you are not logged in on this device", which is the outcome the caller
      * asked for. Reporting them apart would make a logout that can fail, and a
-     * logout that can fail is one nobody can rely on — see [AuthController].
+     * logout that can fail is one nobody can rely on — see `com.donghaeng.auth.AuthController`.
      */
     @Transactional
     fun revoke(

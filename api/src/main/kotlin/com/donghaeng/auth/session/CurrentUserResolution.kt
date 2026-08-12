@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
 import com.donghaeng.error.DomainException
 import io.swagger.v3.oas.annotations.Parameter

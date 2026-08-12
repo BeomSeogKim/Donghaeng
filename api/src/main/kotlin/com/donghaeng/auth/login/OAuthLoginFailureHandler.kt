@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 import com.donghaeng.error.DomainException
 import com.donghaeng.error.ProblemDocuments

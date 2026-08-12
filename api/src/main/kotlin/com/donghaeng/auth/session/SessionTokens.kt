@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
 import jakarta.servlet.http.HttpServletRequest
 

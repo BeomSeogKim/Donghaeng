@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 /**
  * What one completed login tells us about a person, reduced to what `app_user`

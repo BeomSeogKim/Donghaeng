@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
 import java.security.MessageDigest
 import java.security.SecureRandom

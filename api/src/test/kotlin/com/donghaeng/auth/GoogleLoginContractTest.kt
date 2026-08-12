@@ -5,6 +5,12 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.donghaeng.auth.SecurityConfig.Companion.AUTHORIZATION_BASE_URI
+import com.donghaeng.auth.login.AppUser
+import com.donghaeng.auth.login.AppUserRepository
+import com.donghaeng.auth.login.OauthIdentityRepository
+import com.donghaeng.auth.session.AuthenticatedUser
+import com.donghaeng.auth.session.SessionTokens
+import com.donghaeng.auth.session.UserSessionRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

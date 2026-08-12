@@ -1,5 +1,7 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
+import com.donghaeng.auth.session.SessionService
+import com.donghaeng.auth.session.SessionToken
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant

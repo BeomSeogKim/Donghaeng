@@ -1,5 +1,12 @@
 package com.donghaeng.auth
 
+import com.donghaeng.auth.login.GoogleClientRegistration
+import com.donghaeng.auth.login.LoginService
+import com.donghaeng.auth.login.OAuthLoginFailureHandler
+import com.donghaeng.auth.login.OAuthLoginSuccessHandler
+import com.donghaeng.auth.session.CurrentUser
+import com.donghaeng.auth.session.SessionCookies
+import com.donghaeng.config.FrontendProperties
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.context.annotation.Bean

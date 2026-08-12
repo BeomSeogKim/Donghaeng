@@ -1,6 +1,6 @@
 package com.donghaeng
 
-import com.donghaeng.auth.CorsProperties
+import com.donghaeng.config.CorsProperties
 import com.donghaeng.config.RequiredProfileMarker
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test

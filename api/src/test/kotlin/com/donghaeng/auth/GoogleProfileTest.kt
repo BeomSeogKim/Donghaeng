@@ -1,6 +1,7 @@
 package com.donghaeng.auth
 
 import com.donghaeng.BaselineSchemaFixture
+import com.donghaeng.auth.login.GoogleProfile
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.security.oauth2.core.oidc.IdTokenClaimNames

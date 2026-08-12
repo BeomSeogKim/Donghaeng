@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 /**
  * The signed-in person: the id, and a display name that may be absent.

@@ -55,6 +55,12 @@ dependencies {
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 
+    // The package boundary has no compiler behind it: `internal` is MODULE-scoped
+    // and `api/` is one module, so every package can see every other package's
+    // `internal` types (notes/2026-08-12-decision-auth-package-structure.md).
+    // ArchitectureTest is the barrier instead, and this is what it is built from.
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.4.1")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:junit-jupiter")

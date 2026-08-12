@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 import org.apache.commons.logging.LogFactory
 import org.springframework.beans.factory.annotation.Value
@@ -13,7 +13,7 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
  * `spring.security.oauth2.client.registration.*`.
  *
  * Its own file so that `#89` adds Kakao and Naver beside it instead of editing
- * [SecurityConfig] — the filter chain is where the security posture lives, and a
+ * `com.donghaeng.auth.SecurityConfig` — the filter chain is where the security posture lives, and a
  * stop that only adds a provider should not have to touch it.
  *
  * The reason it is code at all is the two credentials. A yml line reading

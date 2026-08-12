@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
 

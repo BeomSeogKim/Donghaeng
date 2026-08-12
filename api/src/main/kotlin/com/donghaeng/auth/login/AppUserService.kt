@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

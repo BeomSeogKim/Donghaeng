@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseCookie
@@ -15,7 +15,7 @@ import java.time.Duration
  * - **`HttpOnly`** — the token must be unreadable to script.
  * - **`SameSite=Lax`**, and NOT `Strict`: the OAuth callback is a top-level
  *   cross-site navigation, so `Strict` withholds the cookie at exactly the moment
- *   of login. `Lax` is also half of v1's CSRF answer — see [SecurityConfig].
+ *   of login. `Lax` is also half of v1's CSRF answer — see `com.donghaeng.auth.SecurityConfig`.
  * - **`Path=/` with no `Domain`**, so the cookie is never widened to siblings of
  *   this host.
  *
