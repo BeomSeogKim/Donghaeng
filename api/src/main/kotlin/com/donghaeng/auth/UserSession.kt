@@ -37,6 +37,19 @@ import java.time.Instant
  * "the row can be marked and the token dies on the next request"
  * (notes/2026-08-12-decision-session-lifetimes.md). Held by a two-transaction
  * test; nothing else would notice this regressing.
+ *
+ * **The criterion for the next entity, and the limit that comes with it.** The
+ * reasoning generalises: any row whose columns are written by more than one
+ * operation wants this, and in this domain that is most of them — `guest` alone
+ * has attendance, meal counts and a soft delete arriving by different paths.
+ *
+ * But it closes **column-disjoint** races only. Two operations writing the SAME
+ * column still end in last-writer-wins, and `@DynamicUpdate` will not say so —
+ * two people tapping attendance on one 하객 from two phones is the couple's
+ * ordinary usage, not an edge case, and that needs `@Version`. Copying this
+ * annotation forward while believing concurrency is handled would be worse than
+ * not copying it: unknown debt turned into false confidence. The row-level
+ * concurrency policy is a decision this stop does not make.
  */
 @Entity
 @DynamicUpdate

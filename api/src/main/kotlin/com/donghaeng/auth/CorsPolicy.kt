@@ -66,6 +66,20 @@ internal class CorsPolicy {
     }
 
     private companion object {
+        /**
+         * How long a browser may skip the preflight for a given request shape.
+         *
+         * The trade is latency against how long a policy change takes to reach a
+         * page that is already open: every non-simple request pays an extra round
+         * trip when this expires, and a shortened origin list keeps being honoured
+         * by open tabs until it does. Thirty minutes is short enough that a
+         * mistake is corrected within one working session and long enough that a
+         * burst of edits pays the preflight once.
+         *
+         * It is deliberately not the browser's maximum (Chromium caps this at two
+         * hours regardless): the cache is the only part of this policy we cannot
+         * revoke, so it is the one number to keep small.
+         */
         val PREFLIGHT_CACHE: Duration = Duration.ofMinutes(30)
     }
 }

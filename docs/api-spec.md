@@ -199,7 +199,9 @@ is `GET /auth/me`, never an inspection of `document.cookie`.
 
 **Two expiries, and they are different questions.** Idle is measured from the
 last request, absolute from the moment of login. A couple using the app daily is
-still signed out after 90 days and logs in again; that is intended.
+still signed out after 180 days and logs in again; that is intended — the
+absolute window is not extended by use, which is the whole difference between the
+two.
 
 The numbers come from how the product is used, not from a security threshold
 (`notes/2026-08-12-decision-session-lifetimes.md`): **a wedding is planned over

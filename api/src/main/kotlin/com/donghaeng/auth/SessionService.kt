@@ -45,6 +45,26 @@ internal data class SessionProperties(
     val touchAfter: Duration get() = idle.dividedBy(TOUCH_DIVISOR)
 
     private companion object {
+        /**
+         * A twenty-fourth of the idle window, and the number resolves one trade:
+         * **how often an authenticated read takes a row lock, against how much of
+         * the published idle window we are willing to hand back.**
+         *
+         * Larger (a hundredth) writes more often — at 30 days idle that is every
+         * seven hours, and the write is per session, on the request path, for a
+         * stamp nobody reads until expiry. Smaller (a quarter) writes rarely and
+         * spends a week and a half of the window, so a session advertised as 30
+         * days could die at 22.
+         *
+         * 24 costs 30 hours out of 30 days: about 4% of the window, and infrequent
+         * enough that a couple's burst of attendance taps writes once.
+         *
+         * **It is a ratio, so it moves when `idle` moves** — that is the point of
+         * deriving it rather than configuring it, and it is the thing to check
+         * when the idle number changes. `docs/api-spec.md` publishes the resulting
+         * RANGE rather than the round number, so the frontend is never told a
+         * precision the server does not keep.
+         */
         const val TOUCH_DIVISOR = 24L
     }
 }

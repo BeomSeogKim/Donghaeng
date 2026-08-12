@@ -158,8 +158,16 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
         //
         // Taking the first match would seat the victim inside the attacker's
         // session: every write they make lands in the attacker's ledger, and
-        // nothing looks wrong to either party. Refusing the ambiguous case costs a
-        // re-login.
+        // nothing looks wrong to either party.
+        //
+        // Refusing the ambiguous case does NOT cost "a re-login", and the record
+        // corrects that phrasing deliberately
+        // (notes/2026-08-12-decision-session-cookie-ambiguity.md): the planted
+        // cookie stays in the jar, so every later request still carries two and is
+        // still refused — including the one right after logging in again. The
+        // session is unusable until the person clears cookies or logs out, which
+        // is the trade being made, and it is why logout revokes every token rather
+        // than the single unambiguous one.
         val genuine = sessions.issue(userId, presented = null)
         val planted = sessions.issue(userId, presented = null)
 
