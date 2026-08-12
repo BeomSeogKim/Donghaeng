@@ -13,7 +13,7 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
  * `spring.security.oauth2.client.registration.*`.
  *
  * Its own file so that `#89` adds Kakao and Naver beside it instead of editing
- * `com.donghaeng.auth.SecurityConfig` — the filter chain is where the security posture lives, and a
+ * [com.donghaeng.auth.SecurityConfig] — the filter chain is where the security posture lives, and a
  * stop that only adds a provider should not have to touch it.
  *
  * The reason it is code at all is the two credentials. A yml line reading
@@ -65,7 +65,7 @@ internal class GoogleClientRegistration {
     }
 
     companion object {
-        const val REGISTRATION_ID = "google"
-        const val ISSUER_URI = "https://accounts.google.com"
+        val REGISTRATION_ID = "google"
+        val ISSUER_URI = "https://accounts.google.com"
     }
 }

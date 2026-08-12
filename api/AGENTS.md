@@ -75,11 +75,12 @@ and tokens.
   native aggregation queries). No hexagonal/ports-and-adapters layer.
 - **Split a class when it starts doing two distinct things, not before.** Only
   the Controller and a declared cross-domain contract are `public`. `internal`
-  is the default, but it is MODULE-scoped and `api/` is one module — it hides
-  nothing between packages and enforces no boundary. `ArchitectureTest` and
-  `SourceShapeTest` are the boundary: package edges, no reaching into another
-  domain's entities or repositories, and file shape
+  is MODULE-scoped and `api/` is one module, so it enforces no package boundary;
+  `ArchitectureTest` and `SourceShapeTest` do
   (`notes/2026-08-12-decision-auth-package-structure.md`).
+- **Never a layer bucket** — `AuthRepositories.kt`, `AuthEntities.kt`. The checks
+  catch a persistence or configuration type sharing a file, and a misnamed
+  single-type file; two ordinary types sharing one is still your judgement.
 - **Tests mirror the domain tree**, not the layer tree. Three kinds, chosen by
   where a requirement's risk lives: Service unit tests (no DB), Repository
   Testcontainers tests (mandatory for the paths named above), Controller

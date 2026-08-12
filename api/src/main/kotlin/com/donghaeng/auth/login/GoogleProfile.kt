@@ -13,7 +13,7 @@ internal object GoogleProfile {
      * `app_user.email_verified_by` — where `ck_app_user_email_verifier_known`
      * admits only `GOOGLE` and `KAKAO`.
      */
-    const val PROVIDER = "GOOGLE"
+    val PROVIDER = "GOOGLE"
 
     /**
      * `app_user.name` is `varchar(100)`, and nothing bounds what a provider puts

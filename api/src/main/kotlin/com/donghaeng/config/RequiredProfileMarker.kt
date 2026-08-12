@@ -39,6 +39,6 @@ internal class RequiredProfileMarker : EnvironmentPostProcessor {
     }
 
     companion object {
-        const val MARKER_PROPERTY = "donghaeng.profile"
+        val MARKER_PROPERTY = "donghaeng.profile"
     }
 }

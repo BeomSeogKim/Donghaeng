@@ -14,6 +14,6 @@ abstract class DomainException(
     }
 
     companion object {
-        const val CODE = "code"
+        val CODE = "code"
     }
 }

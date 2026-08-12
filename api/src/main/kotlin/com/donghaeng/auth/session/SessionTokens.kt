@@ -14,7 +14,7 @@ import jakarta.servlet.http.HttpServletRequest
  * whole property the rule asks for.
  */
 internal object SessionTokens {
-    const val COOKIE_NAME = "DH_SESSION"
+    val COOKIE_NAME = "DH_SESSION"
 
     /**
      * The one session this request is making a claim with — `null` for no cookie,

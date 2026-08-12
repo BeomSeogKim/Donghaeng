@@ -93,6 +93,70 @@ verification run must clear the output directory. An incremental compile can
 leave a mutated class behind and make the *next* run report a violation that is
 no longer in the source.
 
+## What the checks cannot see, stated so nobody reads green as covered
+
+Three gaps were found by a reviewer running mutations against the first version
+of these rules. Each is real, none is closed, and the first is the reason this
+section exists at all.
+
+**`const val` is invisible to every bytecode rule.** Kotlin inlines it at the call
+site, so a sibling package reaching for `SecurityConfig.CALLBACK_PATH` leaves
+nothing referencing `SecurityConfig` in its own class file — a real dependency
+that ArchUnit provably could not see. The record argued bytecode over source
+because a fully-qualified reference has no import; this is the converse, and it
+was unstated. Closed by conversion (`val` compiles to a field read) and by a
+`SourceShapeTest` rule forbidding a non-private `const val`. **`inline` functions
+have the same property and are not closed** — they cannot be forbidden by fiat.
+
+**Reaching into another domain's SERVICE is not caught.** The persistence rule
+names entities and repositories, and `WeddingProbe(private val users: AppUserService)`
+passes. `api/AGENTS.md` says only the Controller and a declared contract are
+`public`, and with `internal` now correctly admitted to enforce nothing, **that
+sentence has no mechanism behind it.** It is a convention, held by review.
+
+**The persistence heuristic is a heuristic.** It matches `@Entity` and a simple
+name ending in `Repository`. `@MappedSuperclass`, `@Embeddable`, and any
+repository named otherwise are missed. Harmless while `auth/` is the only domain;
+`#17`/`#80`'s aggregation repositories are where a miss stops being cosmetic and
+becomes a wrong number.
+
+## "It is mechanically checked, so the prose goes" — hollow twice
+
+The rules-about-rules say a mechanically checkable rule belongs in the check and
+then *not* also in prose. Applied twice in this stop, it removed a rule both
+times.
+
+**`api/AGENTS.md` said "never a layer bucket".** It was deleted on the grounds
+that `SourceShapeTest` replaced it. It did not: the check fires only when a
+persistence or configuration type shares a file, so appending an unrelated class
+to `GoogleProfile.kt` — the exact defect that justified splitting `AppUser.kt` —
+stayed green. Kotlin's convention permits several declarations per file when they
+are *closely related*, and relatedness is a judgement no regex has.
+
+The rule to draw from it, and it is the general one: **before deleting prose,
+state the case the check does not cover and check whether it is the case the
+prose was written about.** A check that replaces the special case and drops the
+general rule leaves the rule nowhere. The prose is back, narrowed to the
+judgement, and `SourceShapeTest`'s own comment names what it misses.
+
+## The rules that were verified, and how
+
+Every rule was checked by breaking it and reading **which test fired** — not by
+watching the suite go red, which was itself the trap. Three separate mistakes
+were caught this way and none by reading:
+
+- three custom conditions inert under `noClasses().should(...)`, with the cycle
+  rule catching the deliberate violations instead;
+- the cycle rule naming `auth` under a comment claiming it derived the pair, so a
+  mutual cycle between two inner packages of a *future* domain passed both levels;
+- a guard test whose justification — "an empty import satisfies every rule" — was
+  false, since ArchUnit 1.4.1 defaults `failOnEmptyShould` to true and an empty
+  import fails all six.
+
+**ArchUnit reads `build/classes`.** A verification run must clear the output
+directory, or an incremental compile leaves a mutated class behind and the *next*
+run reports a violation that is no longer in the source. That cost an hour once.
+
 ## What this does not decide
 
 - **Not the other domains' internal shape.** `wedding/` and `guest/` may be flat;

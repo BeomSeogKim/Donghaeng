@@ -12,8 +12,8 @@ import java.net.URI
  * `/error`. `docs/api-spec.md` promises one shape for both.
  */
 internal object ProblemDocuments {
-    const val MASKED_DETAIL = "An unexpected error occurred."
-    const val INTERNAL_ERROR = "INTERNAL_ERROR"
+    val MASKED_DETAIL = "An unexpected error occurred."
+    val INTERNAL_ERROR = "INTERNAL_ERROR"
 
     /**
      * The 5xx document, built from the status and the path and nothing else.

@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
 import com.donghaeng.auth.session.SessionCookies
 import com.donghaeng.auth.session.SessionProperties

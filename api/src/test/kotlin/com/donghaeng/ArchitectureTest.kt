@@ -39,17 +39,18 @@ import org.junit.jupiter.api.Test
  * rule written before the package existed.
  */
 class ArchitectureTest {
-    private val classes: JavaClasses =
-        ClassFileImporter()
-            .withImportOption(ImportOption.DoNotIncludeTests())
-            .importPackages(ROOT)
-
     @Test
     fun `the importer found the application, so nothing below passes vacuously`() {
-        // Every rule here is a "should NOT" over the imported classes, which an
-        // empty import satisfies perfectly. This is the guard on the whole file —
-        // and the classpath it reads is `build/classes`, not the source tree, so
-        // an import that silently found nothing would make the rest decorative.
+        // What this does and does not catch, stated correctly at the second
+        // attempt — the first version claimed an empty import "satisfies every
+        // rule perfectly", and that is false: ArchUnit 1.4.1 defaults
+        // `failOnEmptyShould` to true, so a wholly empty import makes all five
+        // rules fail loudly on their own.
+        //
+        // What it catches is the case that stays quiet: a PARTIALLY stale or
+        // narrowed import. `failOnEmptyShould` sees classes and is satisfied,
+        // while the classes that would have violated a rule are the ones missing.
+        // The classpath read is `build/classes`, not the source tree.
         assertThat(classes).isNotEmpty()
         assertThat(classes.map { it.name })
             .contains(
@@ -120,8 +121,13 @@ class ArchitectureTest {
             .should()
             .beFreeOfCycles()
             .check(classes)
+        // `(*).(*)` DERIVES the inner pair. The first version named `auth` here,
+        // under this same comment — which left #7's `wedding/planning` and
+        // `wedding/venue` unexamined by the inner rule and lumped into one slice by
+        // the outer one, so a mutual cycle between them passed both. Verified with
+        // a throwaway pair of packages.
         slices()
-            .matching("$ROOT.auth.(*)..")
+            .matching("$ROOT.(*).(*)..")
             .should()
             .beFreeOfCycles()
             .check(classes)
@@ -207,6 +213,17 @@ class ArchitectureTest {
 
     private companion object {
         const val ROOT = "com.donghaeng"
+
+        /**
+         * Imported once for the class, not once per test method: scanning the
+         * classpath five times a run is what `archunit-junit5`'s `@AnalyzeClasses`
+         * exists to avoid, and a companion buys the same thing without giving up
+         * test names this repo can read.
+         */
+        val classes: JavaClasses =
+            ClassFileImporter()
+                .withImportOption(ImportOption.DoNotIncludeTests())
+                .importPackages(ROOT)
 
         /** Packages that are underneath every domain rather than beside them. */
         val SUBSTRATE = setOf("config", "error")

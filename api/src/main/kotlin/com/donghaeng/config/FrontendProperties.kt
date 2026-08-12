@@ -18,7 +18,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * in exactly that state (`#96`).
  *
  * **The value is never taken from a request** — not a parameter, not a `Referer`,
- * not smuggled through `state`. See `com.donghaeng.auth.login.OAuthLoginSuccessHandler`.
+ * not smuggled through `state`. See [com.donghaeng.auth.login.OAuthLoginSuccessHandler].
  */
 @ConfigurationProperties("donghaeng.frontend")
 internal data class FrontendProperties(

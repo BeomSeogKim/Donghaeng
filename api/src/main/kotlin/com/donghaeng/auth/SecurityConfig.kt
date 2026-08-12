@@ -203,16 +203,16 @@ internal class SecurityConfig {
         }
 
     internal companion object {
-        const val AUTHORIZATION_BASE_URI = "/oauth2/authorization"
+        val AUTHORIZATION_BASE_URI = "/oauth2/authorization"
 
         /** Spring Security's default, restated because `web/` links to it. */
-        const val AUTHORIZATION_PATH = "$AUTHORIZATION_BASE_URI/${GoogleClientRegistration.REGISTRATION_ID}"
+        val AUTHORIZATION_PATH = "$AUTHORIZATION_BASE_URI/${GoogleClientRegistration.REGISTRATION_ID}"
 
         /**
          * Spring Security's default redirection endpoint, and the value the
          * founder types into the Google console — where it is matched exactly.
          * Kept at the default precisely so those two are the same string.
          */
-        const val CALLBACK_PATH = "/login/oauth2/code/${GoogleClientRegistration.REGISTRATION_ID}"
+        val CALLBACK_PATH = "/login/oauth2/code/${GoogleClientRegistration.REGISTRATION_ID}"
     }
 }

@@ -1,5 +1,7 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.session
 
+import com.donghaeng.auth.GoogleLoginFixture
+import com.donghaeng.auth.StubGoogleRegistration
 import com.donghaeng.auth.login.AppUser
 import com.donghaeng.auth.login.AppUserRepository
 import com.donghaeng.auth.login.OauthIdentityRepository
