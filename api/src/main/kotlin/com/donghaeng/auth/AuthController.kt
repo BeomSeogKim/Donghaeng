@@ -10,19 +10,33 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * The signed-in person. `email` and `name` are whatever Google told us and may
- * both be absent — `email` is only ever present when a provider asserted it as
+ * The signed-in person. `email` and `name` are whatever the provider told us and
+ * may both be absent — `email` is only ever present when a provider asserted it as
  * verified (notes/2026-08-11-decision-baseline-schema-calls.md §A).
+ *
+ * Public, like the controller that returns it: it is the wire shape `web/`
+ * generates a type from, so it is part of the cross-tree contract rather than an
+ * internal of this package.
  */
-internal data class MeResponse(
+data class MeResponse(
     val id: Long,
     val email: String?,
     val name: String?,
 )
 
+/** Entities never serialize directly, and the mapping lives in the domain package. */
+internal fun AppUser.toMeResponse() = MeResponse(id = id, email = email, name = name)
+
+/**
+ * Public, and its constructor is not: the architecture record makes the controller
+ * the one public type in a domain package, while everything it depends on stays
+ * `internal`. Kotlin will not let a public constructor name an internal type, so
+ * the visibility split lands on the constructor — which Spring calls reflectively
+ * and does not care about.
+ */
 @RestController
-internal class AuthController(
-    private val users: AppUserRepository,
+class AuthController internal constructor(
+    private val users: AppUserService,
 ) {
     /**
      * "Am I logged in, and as whom?" — the frontend's first call on every load,
@@ -44,13 +58,5 @@ internal class AuthController(
     @GetMapping("/auth/me")
     fun me(
         @CurrentUser caller: AuthenticatedUser,
-    ): MeResponse {
-        // A resolved session names a row a foreign key guarantees exists, so its
-        // absence is a corrupted database rather than a request to answer.
-        val user =
-            users.findById(caller.id).orElseThrow {
-                IllegalStateException("session resolved to app_user ${caller.id}, which does not exist")
-            }
-        return MeResponse(id = user.id, email = user.email, name = user.name)
-    }
+    ): MeResponse = users.profile(caller.id)
 }

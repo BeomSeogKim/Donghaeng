@@ -3,6 +3,12 @@ package com.donghaeng.auth
 import com.donghaeng.BaselineSchemaFixture
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.security.oauth2.core.oidc.IdTokenClaimNames
+import org.springframework.security.oauth2.core.oidc.OidcIdToken
+import org.springframework.security.oauth2.core.oidc.OidcUserInfo
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser
+import org.springframework.security.oauth2.core.oidc.user.OidcUser
+import java.time.Instant
 
 /**
  * The merge key, on both sides of the seam.
@@ -58,5 +64,38 @@ internal class GoogleProfileTest : BaselineSchemaFixture() {
 
         // What it must still do: trim, fold, and let an ordinary address through.
         assertThat(GoogleProfile.mergeKey(" Kim@Gmail.com ", verified = true)).isEqualTo("kim@gmail.com")
+    }
+
+    @Test
+    fun `a display name longer than the column is truncated rather than refused`() {
+        // Google documents no bound on the `name` claim and `app_user.name` is
+        // varchar(100). Untruncated, a 101-character name reaches Postgres as
+        // `value too long`, inside the login success handler, as a masked 500 —
+        // and that person can never log in, forever, for having a long name.
+        // Display text is truncatable; a login is not.
+        val long = "가".repeat(300)
+
+        assertThat(GoogleProfile.of(oidcUser(name = long)).name).hasSize(100)
+        assertThat(GoogleProfile.of(oidcUser(name = "김테스터")).name).isEqualTo("김테스터")
+        assertThat(GoogleProfile.of(oidcUser(name = null)).name).isNull()
+    }
+
+    @Test
+    fun `the profile carries the provider that spoke, not a constant`() {
+        assertThat(GoogleProfile.of(oidcUser(name = "김테스터")).provider).isEqualTo("GOOGLE")
+    }
+
+    private fun oidcUser(name: String?): OidcUser {
+        val claims =
+            buildMap<String, Any> {
+                put(IdTokenClaimNames.SUB, "google-subject")
+                name?.let { put("name", it) }
+            }
+        val idToken = OidcIdToken(TOKEN_VALUE, Instant.now(), Instant.now().plusSeconds(60), claims)
+        return DefaultOidcUser(emptyList(), idToken, OidcUserInfo(claims))
+    }
+
+    private companion object {
+        const val TOKEN_VALUE = "stub-id-token"
     }
 }

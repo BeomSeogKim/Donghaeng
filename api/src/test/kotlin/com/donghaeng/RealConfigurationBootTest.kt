@@ -104,6 +104,11 @@ abstract class RealConfigurationBootTest(
         assertThat(serverProperties.error.includeMessage).isEqualTo(ErrorProperties.IncludeAttribute.NEVER)
         assertThat(serverProperties.error.includeStacktrace).isEqualTo(ErrorProperties.IncludeAttribute.NEVER)
         assertThat(serverProperties.error.isIncludeException).isFalse()
+
+        // Same class, added with #37: the access log writes the request line, so
+        // an environment that turns it on files the OAuth callback's `code` and
+        // `state`. The file sweep cannot see SERVER_TOMCAT_ACCESSLOG_ENABLED=true.
+        assertThat(serverProperties.tomcat.accesslog.isEnabled).isFalse()
     }
 
     @Test

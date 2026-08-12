@@ -74,8 +74,16 @@ logging:
     org.hibernate.SQL: 'OFF'
     org.hibernate.orm.jdbc.bind: 'OFF'
     org.hibernate.orm.jdbc.extract: 'OFF'
-# Deliberately absent, and this one is an OPEN ITEM rather than an inheritance:
-# `donghaeng.frontend.base-url`. This project has no production frontend origin
+# Deliberately absent, and both are the SAME open item rather than an
+# inheritance: `donghaeng.frontend.base-url` and `donghaeng.cors.allowed-origins`.
+# Neither can be guessed — a wrong CORS origin either breaks the frontend or
+# admits a host we do not control — and both take the production web origin as
+# their value. They are set together, in the deploy platform
+# (DONGHAENG_FRONTEND_BASE_URL, DONGHAENG_CORS_ALLOWED_ORIGINS) or here once the
+# domain is decided (#96, #97). Until then this profile denies every cross-origin
+# request, which is the correct behaviour for an environment with no frontend.
+#
+# On `donghaeng.frontend.base-url` specifically: this project has no production frontend origin
 # yet, and a guessed one would be committed text that sends a freshly-issued
 # session to the wrong host. Until the domain is decided, set
 # DONGHAENG_FRONTEND_BASE_URL in the deploy platform; without it the application

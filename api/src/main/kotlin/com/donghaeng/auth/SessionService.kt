@@ -16,7 +16,32 @@ import java.time.Instant
 internal data class SessionProperties(
     val idle: Duration,
     val absolute: Duration,
-)
+) {
+    /**
+     * How stale `last_seen_at` may get before a resolve bothers to write.
+     *
+     * Touching the row on every request is the obvious implementation and the
+     * wrong one: it makes every authenticated GET an UPDATE holding a row lock, so
+     * requests from one session serialise behind each other — on a product whose
+     * defining interaction is a run of rapid attendance taps, each returning a
+     * recomputed aggregate. It also makes "no state-changing GET", the half of
+     * v1's CSRF answer that has to be true for the other half to work, false in
+     * the first domain code that states it.
+     *
+     * Derived from [idle] rather than configured, because it is not an independent
+     * decision — it is a resolution, and the only thing it can be wrong about is
+     * how much of the idle window it spends. The cost is stated exactly: a session
+     * can expire up to this long before a full [idle] period of true inactivity
+     * has passed, so the effective idle window is between 13 days and 14. Nothing
+     * expires LATER than the record allows, which is the direction that would
+     * matter.
+     */
+    val touchAfter: Duration get() = idle.dividedBy(TOUCH_DIVISOR)
+
+    private companion object {
+        const val TOUCH_DIVISOR = 24L
+    }
+}
 
 /**
  * Issues and resolves sessions. The only thing in the application that turns a
@@ -70,8 +95,8 @@ internal class SessionService(
      * indistinguishable to the caller on purpose; telling them apart would let an
      * anonymous caller learn which selectors exist.
      *
-     * Writes, on a read path: touching `last_seen_at` is what makes idle expiry
-     * mean "since the last request" rather than "since login".
+     * Writes only when the idle stamp has actually gone stale — see
+     * [SessionProperties.touchAfter] for why a read path may not write every time.
      */
     @Transactional
     fun resolve(
@@ -81,7 +106,7 @@ internal class SessionService(
         val session = sessions.findBySelector(token.selector) ?: return null
         if (!token.matches(session.verifierHash)) return null
         if (!session.isUsableAt(now, properties.idle, properties.absolute)) return null
-        session.lastSeenAt = now
+        if (now.isAfter(session.lastSeenAt.plus(properties.touchAfter))) session.lastSeenAt = now
         return session.userId
     }
 }

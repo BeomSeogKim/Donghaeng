@@ -86,12 +86,12 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
 
     @Test
     fun `a real selector with a wrong verifier is refused, and refused the same way an unknown one is`() {
-        // This is what the split token buys. The row is found by a value that
-        // carries no authority, so the verifier comparison is the entire gate —
-        // delete it and this test starts returning 200. It is also the only place
-        // in the design where a constant-time comparison is doing real work; a
-        // single `where token_hash = ?` would have moved it inside a btree, where
-        // the rule cannot be held or observed.
+        // This is what the split token buys, and the claim is narrow: the row is
+        // found by a value that carries no authority, so the verifier comparison
+        // is the entire gate — delete it and this test starts returning 200. A
+        // single `where token_hash = ?` would not have been INSECURE; it would
+        // have put the only comparison inside a btree, where nothing can watch it
+        // fail (notes/2026-08-12-decision-session-token-shape.md).
         val genuine = sessions.issue(userId, presented = null)
         val forged = HttpCookie(SessionTokens.COOKIE_NAME, "${genuine.selector}.not-the-verifier")
 
@@ -101,6 +101,26 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
         // The genuine one still works, so the test above failed for the right
         // reason.
         assertThat(me(cookie(genuine)).statusCode()).isEqualTo(200)
+    }
+
+    @Test
+    fun `two session cookies are refused rather than one of them being picked`() {
+        // Our cookie carries no Domain, but a sibling host under the same
+        // registrable domain can set one WITH a Domain that covers us — and the
+        // deployment shape invites it: `web/` on Cloudflare Pages, this API on a
+        // VPS, one registrable domain. The browser then sends both, in an order
+        // no RFC fixes and with no way for us to tell which host set which.
+        //
+        // Taking the first match would seat the victim inside the attacker's
+        // session: every write they make lands in the attacker's ledger, and
+        // nothing looks wrong to either party. Refusing the ambiguous case costs a
+        // re-login.
+        val genuine = sessions.issue(userId, presented = null)
+        val planted = sessions.issue(userId, presented = null)
+
+        assertThat(me(cookie(genuine)).statusCode()).isEqualTo(200)
+        assertThat(get("/auth/me", listOf(cookie(planted), cookie(genuine))).statusCode()).isEqualTo(401)
+        assertThat(get("/auth/me", listOf(cookie(genuine), cookie(planted))).statusCode()).isEqualTo(401)
     }
 
     @Test

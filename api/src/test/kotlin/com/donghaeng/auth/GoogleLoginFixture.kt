@@ -1,5 +1,6 @@
 package com.donghaeng.auth
 
+import com.donghaeng.SharedPostgres
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.boot.test.context.TestConfiguration
@@ -11,7 +12,6 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.testcontainers.containers.PostgreSQLContainer
 import java.net.HttpCookie
 import java.net.URI
 import java.net.URLDecoder
@@ -26,6 +26,12 @@ internal const val STUB_CLIENT_SECRET = "stub-client-secret"
 /**
  * One provider for the whole suite, started before any Spring context is built so
  * [StubGoogleRegistration] can read its port.
+ *
+ * It is mutable process-global state, and that is safe for exactly one reason:
+ * nothing in this suite runs in parallel. JUnit's parallel execution is off by
+ * default and no `junit-platform.properties` turns it on — the day one does, the
+ * per-test `subject`/`email` assignments in the login tests start racing each
+ * other and the failures will look like flaky OAuth rather than like this.
  */
 internal val STUB_PROVIDER =
     StubOidcProvider(STUB_CLIENT_ID, STUB_CLIENT_SECRET).apply {
@@ -169,25 +175,19 @@ internal abstract class GoogleLoginFixture {
 
     companion object {
         /**
-         * Same shape as RealConfigurationBootTest's, and for the same reason:
-         * publishing the container under the three names production supplies keeps
-         * `application.yml`'s placeholders on the code path, where
-         * `@ServiceConnection` would bypass them.
+         * [SharedPostgres], not a container of this fixture's own — which is what
+         * this used to start, three lines above a verbatim copy of
+         * [SharedPostgres.publish]. Two containers for one job, in a class named
+         * for sharing.
          *
-         * Flyway runs here too — the suite is the only place it ever does
+         * Flyway runs against it, because the suite is the only place it ever does
          * (notes/2026-08-09-decision-schema-ownership.md) — so these tests run
          * against `V1` and `V2` exactly as the founder will type them, and the dev
          * profile's `ddl-auto: validate` compares the entity mappings to the
          * result.
          */
-        private val postgres = PostgreSQLContainer("postgres:16-alpine").apply { start() }
-
         @JvmStatic
         @DynamicPropertySource
-        fun productionShapedEnvironment(registry: DynamicPropertyRegistry) {
-            registry.add("DATABASE_URL") { postgres.jdbcUrl }
-            registry.add("DB_USERNAME") { postgres.username }
-            registry.add("DB_PASSWORD") { postgres.password }
-        }
+        fun productionShapedEnvironment(registry: DynamicPropertyRegistry) = SharedPostgres.publish(registry)
     }
 }

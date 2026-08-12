@@ -16,8 +16,11 @@ import org.springframework.web.method.support.ModelAndViewContainer
  * anonymously — resolution failing IS the rejection
  * (notes/2026-08-10-decision-auth-gate-and-sequence.md).
  *
- * Annotate with `@Parameter(hidden = true)` wherever it appears, or springdoc
- * documents it as a query parameter and `web/` generates a client that sends one.
+ * **`@CurrentUser` is documentation, not the match.** [CurrentUserArgumentResolver]
+ * keys on the parameter TYPE alone, and the annotation is optional in every sense
+ * that matters; see that class for why making it required was a vulnerability.
+ * Write it anyway — it says at the call site what the parameter is — but nothing
+ * depends on remembering it.
  */
 @Parameter(hidden = true)
 @Target(AnnotationTarget.VALUE_PARAMETER)
@@ -45,14 +48,31 @@ internal class UnauthenticatedException :
  * an anonymous request is a handler having *declared* that it needs a caller. The
  * shape is chosen so `#5` can still close the hole it leaves — a handler that
  * declares nothing is open — with either an interceptor over declared handlers or
- * a build-time sweep of handler signatures. Both read this annotation.
+ * a build-time sweep of handler signatures.
+ *
+ * ## Why the match is on the TYPE and not on the annotation
+ *
+ * Requiring both was the first version, and it failed **open**, which is the one
+ * direction this design may not fail in.
+ *
+ * Spring registers custom argument resolvers ahead of its own catch-all
+ * `ServletModelAttributeMethodProcessor`, but only for parameters they claim. A
+ * handler written `fun handle(caller: AuthenticatedUser)` with the annotation
+ * forgotten was therefore not an error: this resolver declined it, the catch-all
+ * took it, and Spring populated `AuthenticatedUser` from **request parameters** —
+ * so `?id=42` arrived at the handler as a fully-formed caller identity. Not a
+ * bypass of the session check but a replacement for it, chosen by the attacker.
+ *
+ * `#5`'s planned interceptor cannot catch that either: to it, such a handler HAS
+ * declared a principal. Matching on the type is what makes the two agree —
+ * mentioning [AuthenticatedUser] in a signature means exactly one thing, and it
+ * cannot be spelled a second, weaker way.
  */
 internal class CurrentUserArgumentResolver(
     private val sessions: ObjectProvider<SessionService>,
 ) : HandlerMethodArgumentResolver {
     override fun supportsParameter(parameter: MethodParameter): Boolean =
-        parameter.hasParameterAnnotation(CurrentUser::class.java) &&
-            AuthenticatedUser::class.java.isAssignableFrom(parameter.parameterType)
+        AuthenticatedUser::class.java.isAssignableFrom(parameter.parameterType)
 
     override fun resolveArgument(
         parameter: MethodParameter,
@@ -67,21 +87,4 @@ internal class CurrentUserArgumentResolver(
         val userId = sessions.getObject().resolve(token) ?: throw UnauthenticatedException()
         return AuthenticatedUser(userId)
     }
-}
-
-/**
- * Where the session token is read from, as one named seam.
- *
- * The standing client rule is that lookup extracts a token **from the request**
- * rather than reading a cookie, so that a native couple app can carry the same
- * opaque token in a header without a redesign
- * (notes/2026-07-30-decision-client-strategy.md). This function is that seam. It
- * implements exactly one transport today, because exactly one client exists;
- * adding `Authorization: Bearer` is a branch here and nothing else, which is the
- * whole property the rule asks for.
- */
-internal object SessionTokens {
-    const val COOKIE_NAME = "DH_SESSION"
-
-    fun of(request: HttpServletRequest): SessionToken? = SessionToken.parse(request.cookies?.firstOrNull { it.name == COOKIE_NAME }?.value)
 }

@@ -244,6 +244,27 @@ class ErrorDispatchContractTest {
         ).doesNotContain("/error")
     }
 
+    @Test
+    fun `a resolved caller is never published as a request parameter`() {
+        // The other side of the same seam. `AuthenticatedUser` is supplied by our
+        // argument resolver, but springdoc cannot know that: to it an un-annotated
+        // complex parameter is a bag of query parameters, so it would expand the
+        // type and publish `id` — and `web/` would generate a client that SENDS a
+        // caller id to an endpoint whose whole job is to derive one from the
+        // session. Nothing else goes red if the suppression stops working, because
+        // the server ignores the parameter either way.
+        val document = restTemplate.getForEntity("/v3/api-docs", String::class.java)
+
+        val parameters =
+            objectMapper
+                .readTree(document.body)
+                .at("/paths/~1auth~1me/get/parameters")
+
+        assertThat(parameters.isMissingNode || parameters.isEmpty)
+            .describedAs("GET /auth/me declares parameters: %s", parameters)
+            .isTrue()
+    }
+
     /** Bypasses every HTTP client, so a request line no client would send can be put on the wire. */
     private fun rawRequest(requestLine: String): String =
         Socket("127.0.0.1", port).use { socket ->

@@ -256,13 +256,24 @@ jobs:
       # so no `flyway_schema_history` appears — which keeps the "the packaged image
       # still refuses to write DDL" step below meeting the guard rather than
       # Flyway's non-empty-schema complaint.
+      #
+      # The password travels as PGPASSWORD and never inside the connection string.
+      # This value is a throwaway that lives and dies with the job, so nothing is
+      # at risk either way — the SHAPE is the point. "A secret never travels inside
+      # a connection string" (notes/2026-08-08-decision-scaffold-secrets-and-surface.md)
+      # exists because HikariCP prints the whole jdbcUrl on its failure path, and
+      # the same is true of psql in a job log. A file that argues that sixty lines
+      # below, in its own voice, does not get to write the counter-example.
+      # ProfileConfigurationTest's credential-URI sweep walks this file.
       - name: Apply the migration files by hand, as a real database gets them
+        env:
+          PGPASSWORD: donghaeng_ci_throwaway
         run: |
           set -euo pipefail
           for migration in $(ls api/src/main/resources/db/migration/V*.sql | sort -V); do
             echo "applying $migration"
-            docker run --rm --network host -v "$PWD:/repo" postgres:16-alpine \
-              psql 'postgresql://donghaeng_ci:donghaeng_ci_throwaway@127.0.0.1:5432/donghaeng' \
+            docker run --rm --network host -v "$PWD:/repo" -e PGPASSWORD postgres:16-alpine \
+              psql -h 127.0.0.1 -p 5432 -U donghaeng_ci -d donghaeng \
               --single-transaction -v ON_ERROR_STOP=1 -f "/repo/$migration"
           done
 

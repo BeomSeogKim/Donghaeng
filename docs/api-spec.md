@@ -218,11 +218,13 @@ at the provider rather than logging anyone in.
 
 Responds `302` to Google's consent screen.
 
-**In an environment with no Google credentials configured this answers 500**, and
-that is a server misconfiguration rather than a contract: the backend logs a
-warning naming the two missing variables at startup. Every other endpoint works
-normally there, so a frontend can be developed against a backend that cannot log
-anyone in.
+Errors
+- 404 — there is no such login provider **here**. Two things produce it and they
+  are deliberately indistinguishable: a provider name we do not support, and an
+  environment where Google credentials are not configured. In the second case the
+  backend logs a warning naming the two missing variables at startup; every other
+  endpoint works normally, so a frontend can be developed against a backend that
+  cannot log anyone in.
 
 Not in the generated OpenAPI document — it is a Spring Security filter, not a
 controller. Same for the callback below.
@@ -278,14 +280,37 @@ Errors
   One code for all of those on purpose: distinguishing them would tell an
   anonymous caller which session identifiers exist.
 
+### Calling the API from the browser (CORS)
+
+_Added 2026-08-12 (`#97`)._
+
+The API and `web/` are different origins in every environment, so **every call
+from the browser is a cross-origin call** and two things have to be true at once.
+
+1. **The origin must be on the server's list.** It is an exact string — scheme,
+   host and port — and there is no wildcard and no pattern. In dev the list is
+   exactly `http://localhost:3000`. `http://127.0.0.1:3000` is a *different*
+   origin to a browser and is not on it; use `localhost`.
+2. **The request must be sent with credentials.** `fetch(url, { credentials:
+   'include' })`, or `withCredentials` on whatever client you use. Without it the
+   browser sends no cookie, the server sees an anonymous request, and `/auth/me`
+   answers 401 — which looks exactly like "not logged in" and is the single most
+   likely way to lose an afternoon here.
+
+Allowed methods are `GET, POST, PATCH, PUT, DELETE`; allowed request headers are
+`Content-Type` and `Accept`. **A custom header needs a backend change** — adding
+one to a request without it being on that list fails the preflight, and does so
+before any application code on either side runs.
+
+An origin that is not on the list gets no `Access-Control-Allow-Origin`, and the
+browser discards the response before your code sees it. Production has no origin
+configured yet, for the same reason it has no frontend URL (`#96`).
+
 ### Not here yet
 
 - **Logout.** There is no endpoint; a session ends by expiring. Deleting the
   cookie client-side is not logout — the server-side row stays valid. Filed for a
   later stop.
-- **CORS.** The API sends no CORS headers today, so a browser at
-  `http://localhost:3000` cannot call it cross-origin yet. It lands before `#38`
-  can work.
 - **CSRF token.** v1's protection is `SameSite=Lax` plus no state-changing GET; a
   token is `#48`.
 

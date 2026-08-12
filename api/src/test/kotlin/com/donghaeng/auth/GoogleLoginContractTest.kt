@@ -1,5 +1,6 @@
 package com.donghaeng.auth
 
+import com.donghaeng.auth.SecurityConfig.Companion.AUTHORIZATION_BASE_URI
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -7,6 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RestController
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 
 /**
  * THE RED GATE OF `#37`: a browser holding no cookie completes a Google
@@ -22,7 +29,7 @@ import org.springframework.test.context.ActiveProfiles
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 )
 @ActiveProfiles("dev")
-@Import(StubGoogleRegistration::class)
+@Import(StubGoogleRegistration::class, BareCurrentUserProbeController::class)
 internal class GoogleLoginContractTest : GoogleLoginFixture() {
     @Autowired private lateinit var users: AppUserRepository
 
@@ -89,6 +96,20 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         // so the generated page must not exist — asserted rather than assumed,
         // because it appears by default rather than by decision.
         assertThat(get("/login").statusCode()).isEqualTo(404)
+    }
+
+    @Test
+    fun `every response tells the browser to forward no referrer`() {
+        // In the token baseline (notes/2026-07-30-decision-network-security.md)
+        // and NOT in Spring Security's default header set, which writes
+        // X-Content-Type-Options, X-Frame-Options and the cache headers and no
+        // Referrer-Policy at all. Tokens travel in URLs here — the callback
+        // carries `code` and `state`, and the RSVP links will carry a per-guest
+        // token — so without this the landing page hands that URL to whatever it
+        // loads next.
+        listOf(get("/auth/me"), get(SecurityConfig.AUTHORIZATION_PATH)).forEach { response ->
+            assertThat(response.headers().firstValue("Referrer-Policy")).hasValue("no-referrer")
+        }
     }
 
     @Test
@@ -259,4 +280,91 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         assertThat(forged.json()["code"].asText()).isEqualTo("OAUTH_LOGIN_FAILED")
         assertThat(sessions.findAll()).isEmpty()
     }
+
+    @Test
+    fun `an unknown provider is a 404, not a logged 500 anyone can generate`() {
+        // Unwrapped, Spring Security answers an unrecognised registration id with
+        // sendError(500) and a logged stack trace — an anonymous, unauthenticated,
+        // unrateable ERROR-log generator, against the one detection capability the
+        // security record keeps (401/404/429 spikes). It is also the shape an
+        // environment with no Google credentials is in, so this is not a
+        // hypothetical path.
+        val unknown = get("$AUTHORIZATION_BASE_URI/kakao")
+
+        assertThat(unknown.statusCode()).isEqualTo(404)
+        assertThat(unknown.headers().firstValue("Content-Type").orElseThrow())
+            .startsWith("application/problem+json")
+    }
+
+    @Test
+    fun `an AuthenticatedUser parameter is resolved even without the annotation`() {
+        // The resolver keys on the TYPE, and this is the assertion that keeps it
+        // that way. Matching on the annotation as well used to fail OPEN: Spring's
+        // catch-all ModelAttribute processor took the parameter instead and built
+        // an AuthenticatedUser from request parameters, so `?id=42` was an
+        // identity. The probe controller below declares the parameter bare.
+        val impersonation = get("/test-current-user/bare?id=42")
+
+        assertThat(impersonation.statusCode()).isEqualTo(401)
+        assertThat(impersonation.json()["code"].asText()).isEqualTo("UNAUTHENTICATED")
+
+        // And it still resolves a real session, so the 401 above is the resolver
+        // refusing rather than the parameter being unreachable.
+        val session = login()
+        val resolved = get("/test-current-user/bare", listOf(session))
+        assertThat(resolved.statusCode()).isEqualTo(200)
+        assertThat(resolved.body()).isEqualTo(
+            users
+                .findAll()
+                .single()
+                .id
+                .toString(),
+        )
+    }
+
+    @Test
+    fun `the browser may call the API from the dev frontend origin, and from nowhere else`() {
+        // #97. Credentials are involved because the session rides a cookie, so the
+        // pairing matters: a response without Allow-Credentials is one the browser
+        // discards even when the origin matches.
+        val allowed = preflight("http://localhost:3000")
+        assertThat(allowed.headers().firstValue("Access-Control-Allow-Origin")).hasValue("http://localhost:3000")
+        assertThat(allowed.headers().firstValue("Access-Control-Allow-Credentials")).hasValue("true")
+
+        // Never `*`, which is illegal alongside credentials anyway, and never a
+        // suffix match — `donghaeng.kr.evil.com` is an origin an attacker
+        // registers, and it is the case the pattern API exists to get wrong.
+        listOf("https://evil.example", "http://localhost:3001", "https://donghaeng.kr.evil.com")
+            .forEach { origin ->
+                assertThat(preflight(origin).headers().firstValue("Access-Control-Allow-Origin"))
+                    .describedAs("Allow-Origin for %s", origin)
+                    .isEmpty()
+            }
+    }
+
+    private fun preflight(origin: String) =
+        HttpClient
+            .newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build()
+            .send(
+                HttpRequest
+                    .newBuilder(URI.create("http://localhost:$port/auth/me"))
+                    .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                    .header("Origin", origin)
+                    .header("Access-Control-Request-Method", "GET")
+                    .build(),
+                HttpResponse.BodyHandlers.ofString(),
+            )
+}
+
+/**
+ * Exists only to declare `AuthenticatedUser` WITHOUT `@CurrentUser`, which is the
+ * shape a future handler will write by accident and which must still route through
+ * the resolver.
+ */
+@RestController
+internal class BareCurrentUserProbeController {
+    @GetMapping("/test-current-user/bare")
+    fun bare(caller: AuthenticatedUser): String = caller.id.toString()
 }

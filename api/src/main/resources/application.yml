@@ -18,6 +18,16 @@
 # Profile selection: SPRING_PROFILES_ACTIVE (see README, Development).
 server:
   port: 8080
+  tomcat:
+    accesslog:
+      # Off, and pinned rather than left at Boot's default, for the same reason as
+      # the `server.error.*` keys below: the environment outranks every yml, so
+      # SERVER_TOMCAT_ACCESSLOG_ENABLED=true in a deploy platform turns it on with
+      # the whole suite green. What it would then write to a file is every request
+      # line — including the OAuth callback, whose query string carries `code` and
+      # `state`, and any future link token that travels in a path.
+      # RealConfigurationBootTest asserts the RESOLVED value.
+      enabled: false
   servlet:
     session:
       cookie:
@@ -133,6 +143,17 @@ donghaeng:
     # com.donghaeng.auth.SessionService, which is what actually applies them.
     idle: 14d
     absolute: 90d
+  cors:
+    # EMPTY MEANS DENY, and the base is the environment that has declared nothing —
+    # so it denies. Stated rather than omitted, because a reader has to be able to
+    # see that the decision was made (#6, #97).
+    #
+    # Exact origins only. Never `*`: the session rides a cookie, so
+    # `allowCredentials` is true and the CORS spec makes the pair illegal — but
+    # more to the point, never `allowedOriginPatterns` either, which is the API
+    # that lets `https://*.donghaeng.kr` be written slightly wrong and match
+    # `donghaeng.kr.evil.com`. See com.donghaeng.auth.CorsPolicy.
+    allowed-origins: []
 # Deliberately absent from the base: `donghaeng.frontend.base-url`, the origin a
 # completed login redirects the browser to. It has no value that is safe by
 # default — a wrong one sends a freshly-issued session somewhere it does not

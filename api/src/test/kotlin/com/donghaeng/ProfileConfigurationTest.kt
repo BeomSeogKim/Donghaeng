@@ -96,6 +96,40 @@ class ProfileConfigurationTest {
         }
     }
 
+    @Test
+    fun `the CI workflows do not carry a credential inside a URI either`() {
+        // The rule was mechanised over `application*.yml` and stopped there, so a
+        // `psql 'postgresql://user:pw@host/db'` in a workflow walked straight past
+        // it — which is exactly what the schema step of the `docker` job was
+        // written as, sixty lines below the file's own argument against it. The
+        // values there are throwaway, so what this defends is the SHAPE: a job log
+        // publishes a connection string on any failure path, the same way
+        // HikariCP does.
+        //
+        // Line-based rather than parsed: a workflow is a shell script wearing YAML,
+        // and the credential would be inside a `run:` block that no property
+        // binder ever looks at.
+        val credentialUri = Regex("""://[^/\s:]+:[^/\s@]+@""")
+        val workflows = Path.of("../.github/workflows")
+        val files =
+            Files
+                .walk(workflows)
+                .asSequence()
+                .filter { Files.isRegularFile(it) && it.toString().endsWith(".yml") }
+                .toList()
+
+        // Without this the sweep passes vacuously if the directory moves.
+        assertThat(files).isNotEmpty()
+
+        files.forEach { path ->
+            Files.readAllLines(path).forEachIndexed { index, line ->
+                assertThat(line)
+                    .describedAs("%s:%d embeds credentials in a URI", path, index + 1)
+                    .doesNotMatch { credentialUri.containsMatchIn(it) }
+            }
+        }
+    }
+
     // --- the decisions of issue #50 --------------------------------------
 
     @Test
@@ -169,6 +203,15 @@ class ProfileConfigurationTest {
                 .isIn(null, "never")
             assertThat(source["server.error.include-exception"])
                 .describedAs("%s · an error page never publishes an exception class name", path)
+                .isIn(null, false, "false")
+
+            // Same class as the three above, and the payload is what makes it
+            // belong here: Tomcat's access log writes the request line, so the
+            // OAuth callback's `code` and `state` — and any future token that
+            // travels in a path — land in a file. Boot defaults it off; a default
+            // is not a decision.
+            assertThat(source["server.tomcat.accesslog.enabled"])
+                .describedAs("%s · the access log would write the OAuth callback's code and state", path)
                 .isIn(null, false, "false")
 
             // dev is the one profile that generates the OpenAPI document, and
@@ -270,13 +313,20 @@ class ProfileConfigurationTest {
         assertThat(base["donghaeng.session.idle"]).isEqualTo("14d")
         assertThat(base["donghaeng.session.absolute"]).isEqualTo("90d")
 
-        // `server.servlet.session.timeout` expresses the IDLE half only, and it
-        // configures the container's JSESSIONID rather than our session. Setting it
-        // would look like the expiry decision while enforcing half of it against
-        // the wrong cookie, so no file may.
+        // `server.servlet.session.timeout` configures the container's JSESSIONID,
+        // NOT the session above, and it expresses only an idle window. Setting it
+        // would read as this decision while binding a different cookie, so no file
+        // states it today.
+        //
+        // Read the ban narrowly. It says nothing about whether JSESSIONID should
+        // have a timeout of its own — and there is now a case that it should, since
+        // that cookie holds the OAuth authorization request (`state`, the PKCE
+        // verifier, the nonce) for the length of a round trip and then nothing.
+        // That question is #98's, and the day it is answered this assertion is what
+        // has to move.
         configFiles().forEach { path ->
             assertThat(properties(path)["server.servlet.session.timeout"])
-                .describedAs("%s · session expiry is enforced by SessionService, not by a container timeout", path)
+                .describedAs("%s · OUR session's expiry is SessionService's; JSESSIONID's own is #98", path)
                 .isNull()
         }
     }
@@ -298,6 +348,45 @@ class ProfileConfigurationTest {
                     .describedAs("%s · no file names an OAuth credential", path)
                     .doesNotContain("GOOGLE_CLIENT")
                     .doesNotContain("client-secret")
+            }
+        }
+    }
+
+    @Test
+    fun `CORS denies by default, allows one exact origin in dev, and never a wildcard`() {
+        // #97/#6. The base denies because an environment that has declared nothing
+        // must not be reachable from a page it did not authorise.
+        // An explicit empty list, which Spring's property loader flattens to "".
+        // Stated in the file rather than omitted, so that a reader can see the
+        // decision was made — and asserted here so nobody "tidies" it away and
+        // leaves the base saying nothing.
+        assertThat(base["donghaeng.cors.allowed-origins"]).isEqualTo("")
+        assertThat(base["donghaeng.cors.allowed-origins[0]"]).isNull()
+        assertThat(dev["donghaeng.cors.allowed-origins[0]"]).isEqualTo("http://localhost:3000")
+        assertThat(dev["donghaeng.cors.allowed-origins[1]"]).isNull()
+        assertThat(prod["donghaeng.cors.allowed-origins[0]"]).isNull()
+
+        configFiles().forEach { path ->
+            properties(path).forEach { (name, value) ->
+                // Indexed entries only: the un-indexed key is how an EMPTY list
+                // arrives, and "deny everything" is not an origin to validate.
+                if (!name.startsWith("donghaeng.cors.allowed-origins[")) return@forEach
+                val origin = value?.toString() ?: return@forEach
+
+                // `*` is illegal beside allowCredentials anyway, so a browser
+                // would refuse it — but it is named here so nobody "fixes" that by
+                // reaching for allowedOriginPatterns.
+                assertThat(origin)
+                    .describedAs("%s · %s is a wildcard origin", path, name)
+                    .isNotEqualTo("*")
+                // A pattern is the shape that admits donghaeng.kr.evil.com when
+                // written slightly wrong. Exact strings only.
+                assertThat(origin)
+                    .describedAs("%s · %s is a pattern, not an exact origin", path, name)
+                    .doesNotContain("*")
+                assertThat(origin)
+                    .describedAs("%s · %s is not an origin (scheme and host, no path)", path, name)
+                    .matches("https?://[^/]+")
             }
         }
     }

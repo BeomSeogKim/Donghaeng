@@ -26,13 +26,17 @@ internal class SessionToken private constructor(
     val verifierHash: String get() = sha256Hex(verifier)
 
     /**
-     * Constant-time, and it is the gate rather than a formality: the row was found
-     * by [selector], which is a public handle, so this comparison is the only thing
-     * standing between a guessed selector and someone else's session.
+     * The gate rather than a formality: the row was found by [selector], which is
+     * a public handle, so this comparison is the only thing standing between a
+     * guessed selector and someone else's session.
      *
-     * [MessageDigest.isEqual] reads both arrays fully whatever it finds; `==` on
-     * the hex strings returns at the first differing character and leaks, one byte
-     * at a time, how much of a guess was right.
+     * [MessageDigest.isEqual] rather than `==` because the record asks for a
+     * constant-time comparison of tokens. Be precise about what that buys here:
+     * both sides are already SHA-256 digests, so a variable-time compare would
+     * leak how many leading *hash* bytes matched, and a hash prefix is not a route
+     * to a 256-bit preimage. It costs nothing and it is what the rule says; the
+     * load-bearing property is that the comparison exists at all and can be
+     * observed failing (notes/2026-08-12-decision-session-token-shape.md).
      */
     fun matches(storedVerifierHash: String): Boolean =
         MessageDigest.isEqual(

@@ -1,80 +1,21 @@
 package com.donghaeng.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.commons.logging.LogFactory
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.annotation.web.invoke
-import org.springframework.security.config.oauth2.client.CommonOAuth2Provider
-import org.springframework.security.oauth2.client.registration.ClientRegistration
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
 import org.springframework.security.web.savedrequest.NullRequestCache
-
-/**
- * The Google registration, built in code rather than bound from
- * `spring.security.oauth2.client.registration.*`.
- *
- * The reason is the two credentials. A yml line reading `${GOOGLE_CLIENT_ID}`
- * makes the whole application refuse to start where that variable is absent — CI,
- * a fresh checkout, every machine that has never seen a Google client — and the
- * only way to soften that is an inline default, which is exactly the shape
- * `ProfileConfigurationTest` forbids for values that reference the environment.
- * Reading them here instead makes "unconfigured" an ordinary state: the app boots,
- * serves, and answers 404 at the login endpoint because there is no registration
- * to start a flow with.
- *
- * The URIs come from [CommonOAuth2Provider], which is Spring Security's own
- * maintained copy of them. [ClientRegistration.ProviderDetails.getIssuerUri] is
- * restated anyway because it is not decoration: `OidcIdTokenValidator` checks the
- * `iss` claim **only when it is set**, so a null there silently reduces "full
- * ID-token validation" (notes/2026-07-30-decision-network-security.md) to
- * signature and expiry.
- */
-@Configuration
-internal class GoogleClientRegistration {
-    private val logger = LogFactory.getLog(javaClass)
-
-    @Bean
-    fun clientRegistrationRepository(
-        @Value("\${GOOGLE_CLIENT_ID:}") clientId: String,
-        @Value("\${GOOGLE_CLIENT_SECRET:}") clientSecret: String,
-    ): ClientRegistrationRepository {
-        val google =
-            if (clientId.isBlank() || clientSecret.isBlank()) {
-                // Said at startup rather than discovered at the first login
-                // attempt, where it surfaces as a masked 500 and an operator has to
-                // read a stack trace to learn that a variable is missing. The
-                // credential itself is never logged — only whether it is there.
-                logger.warn(
-                    "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not both set, so Google login cannot run " +
-                        "in this environment. Every other endpoint is unaffected.",
-                )
-                null
-            } else {
-                CommonOAuth2Provider.GOOGLE
-                    .getBuilder(REGISTRATION_ID)
-                    .clientId(clientId)
-                    .clientSecret(clientSecret)
-                    .issuerUri(ISSUER_URI)
-                    .build()
-            }
-
-        return ClientRegistrationRepository { requested -> google?.takeIf { it.registrationId == requested } }
-    }
-
-    companion object {
-        const val REGISTRATION_ID = "google"
-        const val ISSUER_URI = "https://accounts.google.com"
-    }
-}
 
 /**
  * One filter chain, and every deviation from Spring Security's defaults below is
@@ -100,7 +41,6 @@ internal class GoogleClientRegistration {
  */
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(SessionProperties::class)
 internal class SecurityConfig {
     @Bean
     fun filterChain(
@@ -113,11 +53,28 @@ internal class SecurityConfig {
     ): SecurityFilterChain {
         http {
             authorizeHttpRequests { authorize(anyRequest, permitAll) }
+
             // Never silent: the substitute is `SameSite=Lax` plus no
             // state-changing GET, stated in full above and held by
             // SessionCookies. A token is #48
             // (notes/2026-08-10-decision-auth-gate-and-sequence.md, CSRF).
             csrf { disable() }
+
+            // The CORS policy is a bean so a profile can widen it and no profile
+            // can widen it silently — see CorsPolicy.
+            cors { }
+
+            headers {
+                // In the token baseline (notes/2026-07-30-decision-network-security.md)
+                // and in Spring Security's default header set, which is not the
+                // same thing — it writes X-Content-Type-Options, X-Frame-Options
+                // and the cache headers, and no Referrer-Policy at all. Tokens
+                // necessarily travel in URLs in this system: the OAuth callback
+                // carries `code` and `state`, and the RSVP links will carry a
+                // per-guest token when they return. Without this a browser
+                // forwards that URL to whatever the landing page loads next.
+                referrerPolicy { policy = ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER }
+            }
 
             // Nothing is cached, so nothing cached can steer the post-login
             // redirect. Belt to OAuthLoginSuccessHandler's braces.
@@ -154,10 +111,81 @@ internal class SecurityConfig {
      * on its way back — a leaky proxy, a browser extension, a rogue app holding the
      * redirect — cannot be exchanged, because the exchange also demands the
      * verifier that never left this server.
+     *
+     * Wrapped in [unknownProviderIsNotFound] for a reason unrelated to PKCE; see
+     * there.
      */
     private fun pkceResolver(registrations: ClientRegistrationRepository): OAuth2AuthorizationRequestResolver =
-        DefaultOAuth2AuthorizationRequestResolver(registrations, AUTHORIZATION_BASE_URI).apply {
-            setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce())
+        unknownProviderIsNotFound(
+            DefaultOAuth2AuthorizationRequestResolver(registrations, AUTHORIZATION_BASE_URI).apply {
+                setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce())
+            },
+            registrations,
+        )
+
+    /**
+     * Makes `/oauth2/authorization/{anything-else}` a 404 instead of a 500.
+     *
+     * Unguarded, [DefaultOAuth2AuthorizationRequestResolver] throws for an id it
+     * does not know, and `OAuth2AuthorizationRequestRedirectFilter` turns that into
+     * `sendError(500)` plus a logged stack trace. That is an **anonymous 500
+     * generator on an unauthenticated path** — unbounded ERROR-log volume against
+     * the one detection capability the security record keeps (alerting on
+     * 401/404/429 spikes), and unrateable, since the standing rate-limit unit is
+     * per wedding and per link token and this request has neither.
+     * `.github/workflows/ci.yml` already makes this exact argument about `/error`;
+     * this is the same hole with a different door.
+     *
+     * Asked of the repository rather than caught, because the exception Spring
+     * raises for it is package-private and so cannot be named here — and catching
+     * its public supertype would also swallow real faults as 404s.
+     *
+     * Returning `null` means "not an authorization request", so the filter falls
+     * through and the path 404s like any other unmapped one. It also gives the
+     * unconfigured environment an honest answer — there is no such provider here —
+     * rather than an incident report.
+     */
+    private fun unknownProviderIsNotFound(
+        delegate: OAuth2AuthorizationRequestResolver,
+        registrations: ClientRegistrationRepository,
+    ): OAuth2AuthorizationRequestResolver =
+        object : OAuth2AuthorizationRequestResolver {
+            // Each overload guards and then calls THE SAME overload on the
+            // delegate. Routing the one-argument call through the two-argument one
+            // looks equivalent and is not: Spring expands `{action}` in the
+            // registration's redirect-uri template to "login" for the first and
+            // "authorize" for the second, so the shortcut silently turns the
+            // callback into `/authorize/oauth2/code/google` — a URL that is not the
+            // one registered in the Google console, which matches it exactly. The
+            // login tests assert the redirect_uri for this reason.
+            override fun resolve(request: HttpServletRequest): OAuth2AuthorizationRequest? =
+                registrationIdOf(request)?.takeIf(::known)?.let { delegate.resolve(request) }
+
+            override fun resolve(
+                request: HttpServletRequest,
+                clientRegistrationId: String,
+            ): OAuth2AuthorizationRequest? =
+                clientRegistrationId
+                    .takeIf(::known)
+                    ?.let { delegate.resolve(request, clientRegistrationId) }
+
+            private fun known(registrationId: String) = registrations.findByRegistrationId(registrationId) != null
+
+            /**
+             * The `{registrationId}` of `/oauth2/authorization/{registrationId}`.
+             *
+             * This duplicates a path match Spring also does, and the duplication is
+             * safe in both directions: a `null` here means the delegate is never
+             * called and the filter falls through to a 404, while a non-null one is
+             * only ever used to ask whether that registration exists — after which
+             * Spring does its own matching on the real request.
+             */
+            private fun registrationIdOf(request: HttpServletRequest): String? {
+                val prefix = "$AUTHORIZATION_BASE_URI/"
+                val path = request.requestURI.removePrefix(request.contextPath)
+                if (!path.startsWith(prefix)) return null
+                return path.removePrefix(prefix).takeIf { it.isNotEmpty() && !it.contains('/') }
+            }
         }
 
     internal companion object {

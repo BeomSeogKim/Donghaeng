@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.springframework.data.jpa.repository.JpaRepository
 import java.time.Instant
 
 /**
@@ -33,3 +34,10 @@ internal class OauthIdentity(
     @Column(name = "id")
     val id: Long = 0,
 )
+
+internal interface OauthIdentityRepository : JpaRepository<OauthIdentity, Long> {
+    fun findByProviderAndProviderUserId(
+        provider: String,
+        providerUserId: String,
+    ): OauthIdentity?
+}

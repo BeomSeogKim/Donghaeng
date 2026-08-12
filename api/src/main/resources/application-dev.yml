@@ -18,6 +18,13 @@ donghaeng:
     # path, kept at the default so that the string typed into the console and the
     # string this application listens on are the same string.
     base-url: http://localhost:3000
+  cors:
+    # The one origin `web/` runs on in dev, written out in full. One entry, exact,
+    # scheme and port included — a browser compares the Origin header as a string,
+    # so `localhost` and `127.0.0.1` are different origins and only the one Vite
+    # actually serves belongs here.
+    allowed-origins:
+      - http://localhost:3000
 
 server:
   # api-docs is on in this profile, so bind loopback only: on 0.0.0.0 the whole
