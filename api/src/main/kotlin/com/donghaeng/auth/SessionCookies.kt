@@ -3,6 +3,7 @@ package com.donghaeng.auth
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.ResponseCookie
 import org.springframework.stereotype.Component
+import java.time.Duration
 
 /**
  * Builds the cookie the session travels in.
@@ -30,19 +31,38 @@ internal class SessionCookies(
     private val properties: SessionProperties,
 ) {
     /**
+     * The same cookie with no value and `Max-Age=0`, which is how a cookie is
+     * deleted — there is no other mechanism.
+     *
+     * **Every attribute has to match the one that was set**, `Path` above all: a
+     * browser keys a cookie on name, domain and path, so an expiry written with a
+     * different path deletes nothing and leaves the original sitting in the jar.
+     * That is why this is built here rather than at the call site.
+     *
+     * It is the client half of logout and never the mechanism: the row is revoked
+     * server-side, so a caller who ignores this header still holds a dead token.
+     */
+    fun expire(): ResponseCookie = cookie(value = "", maxAge = Duration.ZERO)
+
+    /**
      * `Max-Age` is the absolute lifetime, never the idle one: a cookie that
-     * expired 14 days after issuance would log out a couple who used the app
+     * expired 30 days after issuance would log out a couple who used the app
      * yesterday. It is a convenience for the browser in any case — expiry is
      * decided by [SessionService.resolve] against the row, and a client that keeps
      * a stale cookie forever gains nothing by it.
      */
-    fun issue(token: SessionToken): ResponseCookie =
+    fun issue(token: SessionToken): ResponseCookie = cookie(token.cookieValue, properties.absolute)
+
+    private fun cookie(
+        value: String,
+        maxAge: Duration,
+    ): ResponseCookie =
         ResponseCookie
-            .from(SessionTokens.COOKIE_NAME, token.cookieValue)
+            .from(SessionTokens.COOKIE_NAME, value)
             .httpOnly(true)
             .secure(secure)
             .sameSite("Lax")
             .path("/")
-            .maxAge(properties.absolute)
+            .maxAge(maxAge)
             .build()
 }

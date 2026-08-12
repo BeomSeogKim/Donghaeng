@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
+import java.net.HttpCookie
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -74,8 +75,10 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         // carrying nothing but the cookie the server just set.
         val me = get("/auth/me", listOf(session))
         assertThat(me.statusCode()).isEqualTo(200)
-        assertThat(me.json()["email"].asText()).isEqualTo("kim@gmail.com")
         assertThat(me.json()["name"].asText()).isEqualTo("김테스터")
+        // No `email` on the wire — a decision, not an omission (MeResponse). What
+        // was STORED is asserted below, and that is the part #82 is about.
+        assertThat(me.json().has("email")).isFalse()
 
         // And the two rows the login was supposed to write.
         assertThat(users.findAll()).singleElement().satisfies({ user ->
@@ -86,6 +89,57 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
             assertThat(identity.provider).isEqualTo("GOOGLE")
             assertThat(identity.providerUserId).isEqualTo("google-subject-42")
         })
+    }
+
+    @Test
+    fun `logging out ends this device's session and clears the cookie`() {
+        val session = login()
+        assertThat(get("/auth/me", listOf(session)).statusCode()).isEqualTo(200)
+
+        val loggedOut = post("/auth/logout", listOf(session))
+
+        assertThat(loggedOut.statusCode()).isEqualTo(204)
+        assertThat(get("/auth/me", listOf(session)).statusCode()).isEqualTo(401)
+
+        // Both halves matter. The row is revoked, which is what makes the token
+        // dead; the cookie is expired, which is what stops the browser presenting
+        // a dead token on every later request.
+        assertThat(sessions.findAll().single().revokedAt).isNotNull()
+        val cleared = loggedOut.setCookieHeader(SessionTokens.COOKIE_NAME) ?: error("cookie not cleared")
+        assertThat(cleared).contains("Max-Age=0")
+        // Every attribute must match the cookie that was set, Path above all — a
+        // browser keys on name, domain and path, so an expiry with a different
+        // path deletes nothing.
+        assertThat(cleared).contains("Path=/").contains("HttpOnly").contains("SameSite=Lax")
+    }
+
+    @Test
+    fun `logging out answers 204 whatever it finds, and does so every time`() {
+        // A logout that can fail is a logout nobody can rely on, and error
+        // handling for "you are already logged out" is how a sign-out button ends
+        // up leaving people signed in. Each of these means the same thing to the
+        // caller: you are not logged in on this device.
+        assertThat(post("/auth/logout").statusCode()).isEqualTo(204)
+        assertThat(post("/auth/logout", listOf(HttpCookie(SessionTokens.COOKIE_NAME, "not-a-token"))).statusCode())
+            .isEqualTo(204)
+
+        val session = login()
+        assertThat(post("/auth/logout", listOf(session)).statusCode()).isEqualTo(204)
+        // Idempotent.
+        assertThat(post("/auth/logout", listOf(session)).statusCode()).isEqualTo(204)
+    }
+
+    @Test
+    fun `logging out on one device leaves the other device signed in`() {
+        // The couple share one ledger and use each other's phones, so signing out
+        // means "this device, now". Signing out everywhere is a separate feature.
+        val phone = login()
+        val laptop = login()
+
+        post("/auth/logout", listOf(laptop))
+
+        assertThat(get("/auth/me", listOf(laptop)).statusCode()).isEqualTo(401)
+        assertThat(get("/auth/me", listOf(phone)).statusCode()).isEqualTo(200)
     }
 
     @Test
@@ -252,7 +306,7 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         val user = users.findAll().single()
         assertThat(user.email).isNull()
         assertThat(user.emailVerifiedBy).isNull()
-        assertThat(get("/auth/me", listOf(session)).json()["email"].isNull).isTrue()
+        assertThat(get("/auth/me", listOf(session)).statusCode()).isEqualTo(200)
     }
 
     @Test

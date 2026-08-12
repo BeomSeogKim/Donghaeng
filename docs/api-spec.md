@@ -190,7 +190,7 @@ can read or needs to.
 |---|---|
 | Name | `DH_SESSION` |
 | Flags | `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`; `Secure` everywhere except local dev over `http://localhost` |
-| Lifetime | idle **13–14 days**, absolute **90 days** — whichever comes first |
+| Lifetime | idle **28.75–30 days**, absolute **180 days** — whichever comes first |
 
 **`web/` never reads, writes, or parses this cookie.** It cannot: `HttpOnly`.
 Every request simply needs to be sent with credentials included
@@ -201,11 +201,16 @@ is `GET /auth/me`, never an inspection of `document.cookie`.
 last request, absolute from the moment of login. A couple using the app daily is
 still signed out after 90 days and logs in again; that is intended.
 
-The idle window is a **range, not 14 days exactly.** The server does not rewrite
+The numbers come from how the product is used, not from a security threshold
+(`notes/2026-08-12-decision-session-lifetimes.md`): **a wedding is planned over
+about a year and the couple open this a few times a month.** A short idle window
+would sign a monthly user out on every single visit.
+
+The idle window is a **range, not 30 days exactly.** The server does not rewrite
 the "last seen" stamp on every request — that would make every read a write — so
-the stamp can lag real activity by up to 14 hours, and a session expires
-somewhere between 13.4 and 14 days after its last use. Nothing expires *later*
-than 14 days. Do not build a countdown from this number; ask the server.
+the stamp can lag real activity by up to 30 hours, and a session expires
+somewhere between 28.75 and 30 days after its last use. Nothing expires *later*
+than 30 days. Do not build a countdown from this; ask the server.
 
 **The session is re-issued on every login**, which invalidates the token the
 browser presented. Tabs share one cookie jar, so a second login in another tab
@@ -273,13 +278,17 @@ The first call on every page load: who is signed in, if anyone.
 
 Response 200
 ```json
-{ "id": 12, "email": "kim@gmail.com", "name": "김테스터" }
+{ "id": 12, "name": "김테스터" }
 ```
 
-`email` and `name` are **both nullable**. `email` is present only when the
-provider asserted the address as *verified*; an unverified address is not stored
-at all, so this is null more often than it looks. Neither field is a display
-guarantee — render a fallback.
+`name` is **nullable** — a provider may return none — so render a fallback rather
+than assuming a string.
+
+**There is deliberately no `email`** (decided 2026-08-12). No v1 screen shows the
+couple their own address, and publishing a field nothing consumes would be a seam
+commitment with no requirement behind it. Ask if a screen needs it; do not work
+around its absence. This says nothing about what the server *stores* — the
+verified-email account merge is untouched and is not visible here.
 
 Carries the recomputed aggregate: **no.** It is a read, and it is not
 wedding-scoped: which wedding is a separate resolution that arrives with `#5`.
@@ -288,6 +297,44 @@ Errors
 - 401 `UNAUTHENTICATED` — no cookie, or an expired, revoked or unrecognised one.
   One code for all of those on purpose: distinguishing them would tell an
   anonymous caller which session identifiers exist.
+
+### `POST /auth/logout`
+
+Status: active (added 2026-08-12)
+Auth: session cookie, but see below — it never demands one
+
+Ends the session **on this device**.
+
+Request: no body.
+
+Response 204, with no body and a `Set-Cookie` that clears `DH_SESSION`.
+
+Carries the recomputed aggregate: **no** — it changes no ledger data.
+
+Three properties, and each exists because its absence would produce a sign-out
+button that leaves people signed in:
+
+- **It is a POST, and a GET will not do.** v1's CSRF protection is
+  `SameSite=Lax` plus no state-changing GET, and Lax *does* send the cookie on
+  top-level GET navigation — so a logout reachable by GET could be triggered by an
+  `<img>` on any page the couple visit. Under POST the cookie is withheld
+  cross-site and the request cannot revoke anything.
+- **It always answers 204**, whatever it finds: no cookie, an unparseable cookie,
+  an expired session, one already revoked, one revoked from another device. All
+  of them mean "you are not logged in on this device", which is what the caller
+  asked for. There is no error path to write, and it is idempotent — calling it
+  twice is not a mistake.
+- **It does two things, and the client needs both.** The server revokes the
+  session row, which is what makes the token dead everywhere; the response clears
+  the cookie, which is what stops the browser from presenting a dead token on
+  every later request. Deleting the cookie client-side alone is *not* logout — the
+  row stays valid and the token would still work if it were ever presented again.
+
+**It signs out this device only.** The couple share one ledger and use each
+other's phones, so a laptop logout leaves the phone signed in — by design. Signing
+out everywhere is a separate, not-yet-built feature; do not present this as one.
+
+Errors: none. Handle 204 and nothing else.
 
 ### Calling the API from the browser (CORS)
 
@@ -317,9 +364,9 @@ configured yet, for the same reason it has no frontend URL (`#96`).
 
 ### Not here yet
 
-- **Logout.** There is no endpoint; a session ends by expiring. Deleting the
-  cookie client-side is not logout — the server-side row stays valid. Filed for a
-  later stop.
+- **Signing out of every device.** `POST /auth/logout` ends this device's session
+  only. A "log out everywhere" action is filed and not built; do not label the
+  existing button as though it were one.
 - **CSRF token.** v1's protection is `SameSite=Lax` plus no state-changing GET; a
   token is `#48`.
 

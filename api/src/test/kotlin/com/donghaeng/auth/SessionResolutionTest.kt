@@ -50,15 +50,27 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
 
     @Test
     fun `the configured lifetimes are the ones the founder decided`() {
-        // A value nobody asserts is a value an environment variable can change
-        // without anything noticing.
-        assertThat(properties.idle).isEqualTo(Duration.ofDays(14))
-        assertThat(properties.absolute).isEqualTo(Duration.ofDays(90))
+        // notes/2026-08-12-decision-session-lifetimes.md — and the record exists
+        // because THIS TEST NAME used to assert a provenance that did not. The
+        // numbers had been picked by an implementor and then pinned by a test
+        // claiming a founder had chosen them.
+        //
+        // The reasoning the numbers hang on: a wedding is planned over about a
+        // year and the couple open this a few times a month, so a 14-day idle
+        // window signed a monthly user out on every single visit.
+        assertThat(properties.idle).isEqualTo(Duration.ofDays(30))
+        assertThat(properties.absolute).isEqualTo(Duration.ofDays(180))
+
+        // The knock-on, stated because nobody would look for it: the touch
+        // threshold is derived from `idle`, so it moved too — 30 hours, making the
+        // effective idle window 28.75-30 days. `docs/api-spec.md` publishes the
+        // range rather than the round number.
+        assertThat(properties.touchAfter).isEqualTo(Duration.ofHours(30))
     }
 
     @Test
     fun `a session that has not been used for longer than the idle window is refused`() {
-        val token = issueAt(created = Instant.now(), lastSeen = Instant.now().minus(Duration.ofDays(15)))
+        val token = issueAt(created = Instant.now(), lastSeen = Instant.now().minus(Duration.ofDays(31)))
 
         assertThat(me(token).statusCode()).isEqualTo(401)
     }
@@ -69,7 +81,7 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
         // `server.servlet.session.timeout` gives idle only, so an application that
         // set it and stopped there would have a session that lives forever as long
         // as it is used — and would look configured.
-        val token = issueAt(created = Instant.now().minus(Duration.ofDays(91)), lastSeen = Instant.now())
+        val token = issueAt(created = Instant.now().minus(Duration.ofDays(181)), lastSeen = Instant.now())
 
         assertThat(me(token).statusCode()).isEqualTo(401)
     }
@@ -100,8 +112,8 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
 
     @Test
     fun `a session inside both windows resolves, and using it moves the idle window`() {
-        val justInside = Instant.now().minus(Duration.ofDays(13))
-        val token = issueAt(created = Instant.now().minus(Duration.ofDays(89)), lastSeen = justInside)
+        val justInside = Instant.now().minus(Duration.ofDays(29))
+        val token = issueAt(created = Instant.now().minus(Duration.ofDays(179)), lastSeen = justInside)
 
         assertThat(me(token).statusCode()).isEqualTo(200)
 
@@ -147,6 +159,24 @@ internal class SessionResolutionTest : GoogleLoginFixture() {
         assertThat(me(cookie(genuine)).statusCode()).isEqualTo(200)
         assertThat(get("/auth/me", listOf(cookie(planted), cookie(genuine))).statusCode()).isEqualTo(401)
         assertThat(get("/auth/me", listOf(cookie(genuine), cookie(planted))).statusCode()).isEqualTo(401)
+    }
+
+    @Test
+    fun `logging out with a guessed selector cannot end someone else's session`() {
+        // Logout takes the same constant-time verifier comparison the read path
+        // does, and for a reason that is easy to miss: the selector is a PUBLIC
+        // handle. Without the check, anyone who guessed or observed one could sign
+        // a stranger out at will — not a data breach, but a denial of service on
+        // the couple's own ledger, delivered by an unauthenticated request.
+        val genuine = sessions.issue(userId, presented = null)
+        val forged = HttpCookie(SessionTokens.COOKIE_NAME, "${genuine.selector}.not-the-verifier")
+
+        assertThat(post("/auth/logout", listOf(forged)).statusCode()).isEqualTo(204)
+
+        // Still alive: the 204 above is the "you are not logged in on this device"
+        // answer, not evidence that anything was revoked.
+        assertThat(me(cookie(genuine)).statusCode()).isEqualTo(200)
+        assertThat(sessionRows.findBySelector(genuine.selector)!!.revokedAt).isNull()
     }
 
     @Test

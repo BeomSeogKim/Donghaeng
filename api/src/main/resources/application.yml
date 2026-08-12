@@ -133,16 +133,23 @@ donghaeng:
   session:
     # Idle and absolute, and they are two different questions. `idle` is measured
     # from the last request, `absolute` from the moment the session was issued —
-    # so a session in daily use still ends after 90 days and has to be re-earned
+    # so a session in daily use still ends after 180 days and has to be re-earned
     # at the provider (notes/2026-07-30-decision-network-security.md, Tokens).
+    #
+    # THE NUMBERS ARE THE FOUNDER'S AND THE REASON IS THE USAGE PATTERN, not a
+    # security threshold (notes/2026-08-12-decision-session-lifetimes.md): a
+    # wedding is planned over about a year and the couple open this a few times a
+    # month, so a 14-day idle window signed a monthly user out on every single
+    # visit. A long window is affordable here only because the session is
+    # revocable server-side — an opaque token against a row, never a JWT.
     #
     # `server.servlet.session.timeout` deliberately does NOT appear anywhere in
     # this repo: it configures the container's JSESSIONID and only ever expresses
     # the idle half, so setting it would look like this decision while enforcing
     # half of it against the wrong cookie. Both values here are read by
     # com.donghaeng.auth.SessionService, which is what actually applies them.
-    idle: 14d
-    absolute: 90d
+    idle: 30d
+    absolute: 180d
   cors:
     # EMPTY MEANS DENY, and the base is the environment that has declared nothing —
     # so it denies. Stated rather than omitted, because a reader has to be able to

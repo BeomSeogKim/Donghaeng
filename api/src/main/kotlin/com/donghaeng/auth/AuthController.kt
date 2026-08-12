@@ -5,8 +5,12 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.HttpHeaders
 import org.springframework.http.ProblemDetail
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
@@ -19,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class AuthController internal constructor(
     private val users: AppUserService,
+    private val sessions: SessionService,
+    private val cookies: SessionCookies,
 ) {
     /**
      * "Am I logged in, and as whom?" — the frontend's first call on every load,
@@ -41,4 +47,45 @@ class AuthController internal constructor(
     fun me(
         @CurrentUser caller: AuthenticatedUser,
     ): MeResponse = users.profile(caller.id)
+
+    /**
+     * Ends this device's session (`#90`).
+     *
+     * **POST, not GET**, and that is not a REST preference: v1's CSRF answer is
+     * `SameSite=Lax` plus no state-changing GET (`SecurityConfig`), and Lax admits
+     * the cookie on top-level GET navigation — so a logout reachable by GET is an
+     * `<img src>` away from signing the couple out at an attacker's choosing.
+     * Under POST the cookie is withheld cross-site and the request cannot revoke
+     * anything.
+     *
+     * **It takes no [AuthenticatedUser], deliberately**, which makes it one of the
+     * handlers `#5`'s fail-closed mechanism has to be able to call PUBLIC on
+     * purpose rather than treat as an omission.
+     *
+     * **Always 204, whatever it finds.** No cookie, an unparseable one, a session
+     * that expired, one already revoked, one revoked by another device — every one
+     * of them means "you are not logged in on this device", which is precisely
+     * what the caller asked for. A logout that answers 401 is a logout the client
+     * has to write error handling for, and error handling for "you are already
+     * logged out" is how a sign-out button ends up leaving people signed in. It is
+     * idempotent for the same reason.
+     *
+     * The response also **clears the cookie**, and both halves are load-bearing:
+     * revoking the row is what makes the token dead everywhere, while expiring the
+     * cookie is what stops the browser from presenting a dead token on every
+     * subsequent request. Doing only the first leaves a client that looks logged
+     * in until something 401s; doing only the second is not logout at all.
+     */
+    @Operation(summary = "End the session on this device")
+    @ApiResponses(
+        ApiResponse(responseCode = "204", description = "The session is over, whether or not there was one."),
+    )
+    @PostMapping("/auth/logout")
+    fun logout(request: HttpServletRequest): ResponseEntity<Void> {
+        SessionTokens.of(request)?.let(sessions::revoke)
+        return ResponseEntity
+            .noContent()
+            .header(HttpHeaders.SET_COOKIE, cookies.expire().toString())
+            .build()
+    }
 }

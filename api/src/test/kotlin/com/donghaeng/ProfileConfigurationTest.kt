@@ -313,8 +313,8 @@ class ProfileConfigurationTest {
 
     @Test
     fun `the session lifetimes are stated, and idle alone is never mistaken for both`() {
-        assertThat(base["donghaeng.session.idle"]).isEqualTo("14d")
-        assertThat(base["donghaeng.session.absolute"]).isEqualTo("90d")
+        assertThat(base["donghaeng.session.idle"]).isEqualTo("30d")
+        assertThat(base["donghaeng.session.absolute"]).isEqualTo("180d")
 
         // `server.servlet.session.timeout` configures the container's JSESSIONID,
         // NOT the session above, and it expresses only an idle window. Setting it

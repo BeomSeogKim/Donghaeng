@@ -16,7 +16,7 @@ import java.time.Duration
  * in plaintext.
  */
 internal class SessionCookiesTest {
-    private val properties = SessionProperties(idle = Duration.ofDays(14), absolute = Duration.ofDays(90))
+    private val properties = SessionProperties(idle = Duration.ofDays(30), absolute = Duration.ofDays(180))
 
     @Test
     fun `a secure environment writes Secure onto the cookie`() {
@@ -42,11 +42,11 @@ internal class SessionCookiesTest {
 
     @Test
     fun `Max-Age is the absolute lifetime, not the idle one`() {
-        // A cookie expiring 14 days after issuance would sign out a couple who
+        // A cookie expiring 30 days after issuance would sign out a couple who
         // used the app yesterday. Expiry is decided by SessionService against the
         // row; this is only the browser's copy.
         val header = SessionCookies(secure = true, properties = properties).issue(SessionToken.mint()).toString()
 
-        assertThat(header).contains("Max-Age=${Duration.ofDays(90).seconds}")
+        assertThat(header).contains("Max-Age=${Duration.ofDays(180).seconds}")
     }
 }

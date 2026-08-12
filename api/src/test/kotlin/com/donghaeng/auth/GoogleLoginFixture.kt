@@ -120,6 +120,27 @@ internal abstract class GoogleLoginFixture {
         return client.send(request, HttpResponse.BodyHandlers.ofString())
     }
 
+    /**
+     * Logout is a POST, not a GET, and that is v1's CSRF answer rather than a REST
+     * preference — `SameSite=Lax` admits the cookie on top-level GET navigation,
+     * so a GET logout is an `<img src>` away from signing the couple out.
+     */
+    protected fun post(
+        path: String,
+        cookies: List<HttpCookie> = emptyList(),
+    ): HttpResponse<String> {
+        val request =
+            HttpRequest
+                .newBuilder(URI.create("http://localhost:$port$path"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .apply {
+                    if (cookies.isNotEmpty()) {
+                        header("Cookie", cookies.joinToString("; ") { "${it.name}=${it.value}" })
+                    }
+                }.build()
+        return client.send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
     /** Step one of the round trip: the browser is sent to the provider. */
     protected fun startAuthorization(): AuthorizationRequest {
         val response = get(SecurityConfig.AUTHORIZATION_PATH)

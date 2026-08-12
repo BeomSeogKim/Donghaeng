@@ -27,7 +27,7 @@ internal data class SessionProperties(
      * recomputed aggregate.
      *
      * **Be precise about the CSRF half, because this is the file later domains
-     * copy.** A GET that writes once every fourteen hours is still a
+     * copy.** A GET that writes once every thirty hours is still a
      * state-changing GET; throttling does not make v1's "no state-changing GET"
      * true. What is true is narrower: the only state this particular write
      * changes is the victim's own idle stamp, so a cross-site GET gains an
@@ -38,9 +38,9 @@ internal data class SessionProperties(
      * decision — it is a resolution, and the only thing it can be wrong about is
      * how much of the idle window it spends. The cost is stated exactly: a session
      * can expire up to this long before a full [idle] period of true inactivity
-     * has passed, so the effective idle window is between 13 days and 14. Nothing
-     * expires LATER than the record allows, which is the direction that would
-     * matter.
+     * has passed, so at the configured 30 days the effective window is 28.75-30
+     * days. Nothing expires LATER than the record allows, which is the direction
+     * that would matter.
      */
     val touchAfter: Duration get() = idle.dividedBy(TOUCH_DIVISOR)
 
@@ -92,6 +92,33 @@ internal class SessionService(
             ),
         )
         return issued
+    }
+
+    /**
+     * Ends the session the caller presented, and **only** that one.
+     *
+     * Scoped deliberately: the couple share one ledger and use each other's
+     * phones, so signing out has to mean "this device, now" — logging out on the
+     * laptop must not sign the phone out, exactly as [issue]'s re-issue does not.
+     * Signing out everywhere is a different feature and a different issue.
+     *
+     * Silent about what it found, and that is the contract rather than laziness:
+     * an unknown selector, a wrong verifier and an already-revoked row are all
+     * "you are not logged in on this device", which is the outcome the caller
+     * asked for. Reporting them apart would make a logout that can fail, and a
+     * logout that can fail is one nobody can rely on — see [AuthController].
+     */
+    @Transactional
+    fun revoke(
+        token: SessionToken,
+        now: Instant = Instant.now(),
+    ) {
+        val session = sessions.findBySelector(token.selector) ?: return
+        // The same constant-time comparison the read path uses: a selector is a
+        // public handle, so without this anyone holding one could end a stranger's
+        // session by guessing it.
+        if (!token.matches(session.verifierHash)) return
+        if (session.revokedAt == null) session.revokedAt = now
     }
 
     /**
