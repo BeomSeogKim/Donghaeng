@@ -72,6 +72,14 @@ coverage target.
   outside-of-React thing it synchronizes with. A user action (a tap, a submit)
   belongs in that action's event handler, never an Effect watching a trigger
   flag.
+- **The router is a plain route table; React Router's data APIs are not used**
+  (decided 2026-08-13, `notes/2026-08-13-decision-frontend-routing.md`). A
+  loader is a second place that fetches, and server state has exactly one home.
+  The session resolves *above* the table, so no screen renders before "am I
+  logged in?" is answered.
+- **Every call to the API goes through `src/lib/api.ts`**, which is the only
+  place `credentials: 'include'` is written. A bare `fetch` sends no cookie, and
+  the API answers 401 — which reads as "not logged in", not as the bug it is.
 
 ### The token bridge (built 2026-08-08)
 
