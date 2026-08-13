@@ -171,13 +171,14 @@ inline. The parts that constrain everyday backend work:
   non-member is 404. **Forgetting the resolver must fail closed** — `#5` ships
   either an interceptor that denies undeclared handlers or a build-time check
   that every handler takes a resolved principal. Never neither.
-- **CSRF in v1 is `SameSite=Lax` plus no state-changing GET** — the pair, not
-  either half. Lax admits the cookie on top-level GET navigation, so a
-  state-changing GET reopens exactly what Lax closed. Spring Security's CSRF
-  filter being off is an explicit act with a stated substitute, never a silent
-  `csrf { disable() }`; the token itself is defense in depth and belongs to
-  `#48`. **`SameSite=Strict` is wrong here** — the OAuth callback is a
-  top-level cross-site navigation, so Strict drops the cookie at login.
+- **CSRF in v1 is the CORS preflight, not `SameSite=Lax`** (narrowed 2026-08-13,
+  `notes/2026-08-13-decision-static-front-and-content-type-gate.md`). `SameSite`
+  is a *site* control and a sibling host shares our registrable domain, so Lax
+  does not close it; what does is that **no endpoint accepts
+  `multipart/form-data`, `x-www-form-urlencoded` or `text/plain`** — held by a
+  CI sweep. Lax and no state-changing GET still stand, and `csrf { disable() }`
+  is still never silent. **`Strict` is wrong here** — the OAuth callback is a
+  top-level cross-site navigation, so it drops the cookie at login.
 - **Injection risk lives exactly in the native aggregation queries.** Column
   names go through a whitelist, never string concatenation.
 - **Rate limits are per wedding**, and per link token once links exist —
