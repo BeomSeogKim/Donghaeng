@@ -55,34 +55,10 @@ the replacement, and leave it until the frontend has moved off it.
 Every response you finish, state the spec delta explicitly — added, changed,
 deprecated — so the main loop can hand it to the frontend.
 
-## The size of one stop
-
-Work is paced in **stops**: one requirement, one Red/Blue/Green cycle, one
-review, one commit (`notes/2026-08-08-decision-development-tempo.md`). The
-founder reads an explanation of each stop and is quizzed on it, so a stop is
-sized by **how many new concepts it introduces — one or two**, not by lines
-or files.
-
-If the task you were handed carries more than that — "웨딩 생성" that also
-brings session resolution, membership, and the first migration — **build the
-first concept only and stop**, naming what you left for the next stop.
-Delivering three concepts at once is not efficiency here; it is the exact
-thing this tempo exists to prevent.
-
-When you report, state which tier your stop is: **new concept** (it earns a
-full explanation and quiz) or **established pattern repeated** (review report
-only). The founder overrides freely.
-
-Name the GitHub issue your stop belongs to (`gh issue list`), and **list what
-you left for a later stop as clearly as what you built** — those leftovers
-get filed as issues, so a vague "some validation is still missing" becomes a
-gap nobody tracks.
-
 ## How the stop lands
 
 Work on a **branch, never on `main`** — the branch's diff against `main` is
-what `reviewer` and `explainer` are handed, so it must contain your stop and
-nothing else. It merges by PR with CI green; a red check is never merged,
+what a reviewer is handed, so it must contain this change and nothing else. It merges by PR with CI green; a red check is never merged,
 including one you believe is unrelated.
 
 Two things follow for you:

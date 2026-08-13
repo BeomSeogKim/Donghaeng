@@ -12,7 +12,7 @@
 # something is added, not in the number.
 #
 # Over budget, the fix is to compress or relocate BEFORE adding — to a subtree
-# file, to the notes record, to /stop, or to a hook.
+# file, to the notes record, or to a hook.
 
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
@@ -52,9 +52,9 @@ if [ "$fail" -ne 0 ]; then
     echo "AGENTS.md is over budget."
     echo
     echo "Compress or relocate before adding. A rule belongs at exactly one"
-    echo "level: both trees → root, one tree → that subtree, a procedure with a"
-    echo "nameable trigger → .claude/skills/stop/, something mechanically"
-    echo "checkable → a hook. Rationale belongs in its notes/ record."
+    echo "level: both trees → root, one tree → that subtree, something"
+    echo "mechanically checkable → a hook or a test. Rationale belongs in"
+    echo "its notes/ record."
   } >&2
   exit 1
 fi
