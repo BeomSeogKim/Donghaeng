@@ -108,7 +108,7 @@ internal class SecurityConfig {
                 loginPage = AUTHORIZATION_PATH
                 authorizationEndpoint { authorizationRequestResolver = pkceResolver(registrations) }
                 authenticationSuccessHandler = OAuthLoginSuccessHandler(logins, cookies, frontend)
-                authenticationFailureHandler = OAuthLoginFailureHandler(objectMapper)
+                authenticationFailureHandler = OAuthLoginFailureHandler(objectMapper, frontend)
             }
         }
         return http.build()

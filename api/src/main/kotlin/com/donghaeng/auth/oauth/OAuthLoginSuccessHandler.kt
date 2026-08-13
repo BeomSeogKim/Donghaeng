@@ -51,7 +51,9 @@ internal class OAuthLoginSuccessHandler(
         //
         // Failing loudly beats logging someone in on an unvalidated userinfo
         // response, so this stays an error until #89 decides what replaces the
-        // signed assertion.
+        // signed assertion. Deliberately NOT routed into #109's failure redirect:
+        // that would make a provider we have mis-wired look, to us and to the
+        // person, exactly like a forged callback (#101).
         val principal =
             authentication.principal as? OidcUser
                 ?: error("OAuth login produced ${authentication.principal?.javaClass?.name}, not an OidcUser")
