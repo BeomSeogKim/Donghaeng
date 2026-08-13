@@ -26,7 +26,7 @@ nothing else. Everything below loads on demand.
 **Google login works end to end.** `#37` is merged, `V1`+`V2` are applied to
 dev by hand, and a real browser round trip issues a `DH_SESSION` cookie that
 `/auth/me` resolves. `api/src/main` now has `auth/` (composition root),
-`auth/login/`, `auth/session/`, `config/` and `error/`.
+`auth/account/`, `auth/oauth/`, `auth/session/`, `config/` and `error/`.
 
 ⚠️ **DDL applied by hand must be applied as `donghaeng_app`.** Applying it as
 a personal superuser leaves every table owned by that role and the app gets

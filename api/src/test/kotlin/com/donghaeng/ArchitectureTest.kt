@@ -1,5 +1,6 @@
 package com.donghaeng
 
+import com.tngtech.archunit.base.DescribedPredicate
 import com.tngtech.archunit.core.domain.JavaClass
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.importer.ClassFileImporter
@@ -9,13 +10,20 @@ import com.tngtech.archunit.lang.ConditionEvents
 import com.tngtech.archunit.lang.SimpleConditionEvent
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
+import com.tngtech.archunit.library.Architectures.layeredArchitecture
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices
 import jakarta.persistence.Entity
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.context.annotation.Configuration
+import org.springframework.security.web.authentication.AuthenticationFailureHandler
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler
+import org.springframework.stereotype.Service
+import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.method.support.HandlerMethodArgumentResolver
 
 /**
- * The package boundary, enforced.
+ * The package boundary and the layer direction, enforced.
  *
  * **`internal` does not do this job, and the rule file used to say it did.**
  * Kotlin's `internal` is *module*-scoped, `api/` is a single Gradle module, and
@@ -30,13 +38,15 @@ import org.junit.jupiter.api.Test
  * **Most of these rules name no packages**, deliberately. A rule that enumerates
  * today's packages is one a new package silently escapes — the same failure `#80`
  * exists about — so the rules that must survive `#7`'s `wedding/` and `#11`'s
- * `guest/` derive the domain from the package name instead of listing it. Only the
- * declared edge inside `auth/` and the substrate list name names, because each
- * states a fact about those packages specifically.
+ * `guest/` derive the domain from the package name instead of listing it. The
+ * layer rule goes one step further and names no packages at all, only annotations
+ * and simple names. Only the declared chain inside `auth/` and the substrate list
+ * name names, because each states a fact about those packages specifically.
  *
  * That property was verified rather than asserted: a throwaway
- * `com.donghaeng.wedding` reaching into `auth.login`'s repository was refused by a
- * rule written before the package existed.
+ * `com.donghaeng.wedding` reaching into `auth.account`'s repository was refused by
+ * a rule written before the package existed, and a `@RestController` in the same
+ * throwaway package was refused by the layer rule for the same reason.
  */
 class ArchitectureTest {
     @Test
@@ -55,8 +65,14 @@ class ArchitectureTest {
         assertThat(classes.map { it.name })
             .contains(
                 "com.donghaeng.auth.AuthController",
-                "com.donghaeng.auth.login.LoginService",
+                "com.donghaeng.auth.account.LoginService",
+                "com.donghaeng.auth.oauth.OAuthLoginSuccessHandler",
                 "com.donghaeng.auth.session.SessionService",
+                // The file facade, not the data class. The layer rule places the
+                // entity-to-DTO mapping in the Service layer through this name, and
+                // a compiler that stopped emitting it would leave the mapping
+                // unplaced and the rule quietly wider.
+                "com.donghaeng.auth.account.MeResponseKt",
             )
     }
 
@@ -72,18 +88,108 @@ class ArchitectureTest {
     }
 
     @Test
-    fun `auth session does not depend on auth login`() {
-        // The one declared edge, and the direction is the point: login needs a
-        // session issued, so `login -> session`. Nothing in session knows an
-        // account exists — `user_session.user_id` is a Long, not a mapping — and
-        // that is what lets #5 grow the session side and #89 grow the login side
-        // without either reaching into the other.
-        noClasses()
-            .that()
-            .resideInAPackage("$ROOT.auth.session..")
-            .should()
-            .dependOnClassesThat()
-            .resideInAPackage("$ROOT.auth.login..")
+    fun `auth's three clusters are one chain, and no arrow points back`() {
+        // `oauth -> account -> session`, read off the code rather than chosen, and
+        // each arrow is a sentence about what the packages hold:
+        //
+        //   * `oauth -> account`: the handshake hands over a ProviderProfile and
+        //     gets nothing back. Nothing in `account/` names a provider TYPE — the
+        //     provider is the varchar `ck_app_user_email_verifier_known` constrains
+        //     — so #89's Kakao and Naver mappers add files to `oauth/` and change
+        //     nothing here.
+        //   * `account -> session`: a completed login must leave holding a session,
+        //     so LoginService asks SessionService to issue one.
+        //   * `session -> nothing`: `user_session.user_id` is a Long, not a
+        //     mapping, so the session half knows neither an account nor a provider.
+        //     That is what lets #5 grow `session/` while #89 grows `oauth/`.
+        //
+        // Derived from the order rather than written three times, so the day a
+        // fourth cluster is inserted its two new prohibitions arrive with it.
+        AUTH_CHAIN.forEachIndexed { index, upstream ->
+            AUTH_CHAIN.drop(index + 1).forEach { downstream ->
+                noClasses()
+                    .that()
+                    .resideInAPackage("$ROOT.auth.$downstream..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("$ROOT.auth.$upstream..")
+                    .check(classes)
+            }
+        }
+    }
+
+    @Test
+    fun `a layer is only reached from the layer above it`() {
+        // NOTHING asserted layer direction before this rule. Every other rule in
+        // this file is about packages, so a repository injecting a service, an
+        // entity holding a controller and a service holding a controller all
+        // compiled AND passed the whole suite — responsibility separation here was
+        // a naming convention with nothing behind it. All three were run as
+        // mutations against this rule and named in the record.
+        //
+        // Defined by ANNOTATION and name, never by package, so #7's `wedding/` and
+        // #11's `guest/` are covered the day they are written and no list has to be
+        // extended.
+        //
+        // `consideringAllDependencies` is the load-bearing option: a class in NO
+        // layer may then not touch a layer at all. That is what makes the four
+        // definitions below a decision rather than a default — a new kind of class
+        // that reaches for a service or a row fails here until someone says which
+        // layer it is, instead of quietly falling through.
+        layeredArchitecture()
+            .consideringAllDependencies()
+            // The INBOUND EDGE, which is wider than `@RestController`. Spring
+            // Security's filter chain and Spring MVC's argument resolution are also
+            // places a request enters this application: OAuthLoginSuccessHandler
+            // serves the OAuth callback and CurrentUserArgumentResolver decides who
+            // the caller is. Treating them as anything else would mean either
+            // exempting them by name or forbidding the calls they exist to make.
+            // The three interfaces are FRAMEWORK types, so this list grows when
+            // Spring gives us a new kind of entry point, not when we add a class.
+            .layer(CONTROLLER)
+            .definedBy(
+                predicate("a request entry point") { candidate ->
+                    candidate.isAnnotatedWith(RestController::class.java) ||
+                        ENTRY_POINTS.any(candidate::isAssignableTo)
+                },
+            )
+            // `@Service`, plus the entity-to-DTO mapping. api/AGENTS.md puts that
+            // mapping in the response's own file as an extension function, where it
+            // compiles to a `MeResponseKt`-style file facade — service-layer work
+            // that happens to live in the DTO's file, and the one legitimate reader
+            // of a row outside a service. Placed rather than exempted, so it gets a
+            // service's permissions and a service's prohibitions both.
+            .layer(SERVICE)
+            .definedBy(
+                predicate("a service, or the mapping in a response DTO's file") { candidate ->
+                    candidate.isAnnotatedWith(Service::class.java) || candidate.simpleName.endsWith("ResponseKt")
+                },
+            )
+            // The same heuristic the cross-domain rule uses, and it misses the same
+            // things — `@MappedSuperclass`, `@Embeddable`, a repository named
+            // otherwise. Shared deliberately: one definition of "a row" means a miss
+            // is a miss in both rules rather than in whichever one nobody checked.
+            .layer(PERSISTENCE)
+            .definedBy(predicate("a row or the thing that loads it") { it.isPersistence() })
+            // The composition root: it names the parts, which is its whole job. It
+            // is a layer only because it has to be one — under
+            // `consideringAllDependencies` an unplaced class may touch nothing, and
+            // a filter chain that may not name the service it wires is not a filter
+            // chain.
+            .layer(WIRING)
+            .definedBy(predicate("a configuration class") { it.isAnnotatedWith(Configuration::class.java) })
+            .whereLayer(CONTROLLER)
+            .mayOnlyBeAccessedByLayers(WIRING)
+            .whereLayer(SERVICE)
+            .mayOnlyBeAccessedByLayers(CONTROLLER, WIRING)
+            .whereLayer(PERSISTENCE)
+            .mayOnlyBeAccessedByLayers(SERVICE)
+            // WIRING carries no `whereLayer` on purpose. `GoogleClientRegistration`
+            // owns REGISTRATION_ID and the profile dispatch keys on it, so the edge
+            // does read a constant off a configuration class. What must not happen —
+            // an inner package depending on its domain's composition root — is
+            // `a domain's inner packages do not depend on its composition root`,
+            // which is about packages and stays there.
             .check(classes)
     }
 
@@ -211,8 +317,40 @@ class ArchitectureTest {
      */
     private fun JavaClass.isPersistence(): Boolean = isAnnotatedWith(Entity::class.java) || simpleName.endsWith("Repository")
 
+    /**
+     * `DescribedPredicate` has no SAM constructor from Kotlin — it is an abstract
+     * class — and the description is not decoration: it is the whole of what a
+     * layered-architecture failure prints about which layer a class was in.
+     */
+    private fun predicate(
+        description: String,
+        matches: (JavaClass) -> Boolean,
+    ): DescribedPredicate<JavaClass> =
+        object : DescribedPredicate<JavaClass>(description) {
+            override fun test(candidate: JavaClass): Boolean = matches(candidate)
+        }
+
     private companion object {
         const val ROOT = "com.donghaeng"
+
+        const val CONTROLLER = "Controller"
+        const val SERVICE = "Service"
+        const val PERSISTENCE = "Persistence"
+        const val WIRING = "Wiring"
+
+        /**
+         * Spring's own inbound edges — the places a request enters this application
+         * without passing a `@RestController`.
+         */
+        val ENTRY_POINTS =
+            listOf(
+                AuthenticationSuccessHandler::class.java,
+                AuthenticationFailureHandler::class.java,
+                HandlerMethodArgumentResolver::class.java,
+            )
+
+        /** `auth/`'s inner packages, most dependent first. */
+        val AUTH_CHAIN = listOf("oauth", "account", "session")
 
         /**
          * Imported once for the class, not once per test method: scanning the

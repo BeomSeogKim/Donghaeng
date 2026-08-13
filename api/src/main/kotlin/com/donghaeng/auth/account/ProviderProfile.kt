@@ -1,4 +1,4 @@
-package com.donghaeng.auth.login
+package com.donghaeng.auth.account
 
 /**
  * What one completed login tells us about a person, reduced to what `app_user`
@@ -15,7 +15,8 @@ package com.donghaeng.auth.login
  *
  * [mergeKey] is the sensitive field: `null` is the ordinary, safe answer, and a
  * non-null value is a claim that the provider checked mailbox control. Each
- * provider decides what may become one — see [GoogleProfile], and note that
+ * provider decides what may become one — see
+ * [com.donghaeng.auth.oauth.GoogleProfile], and note that
  * `ck_app_user_email_verifier_known` will never accept `NAVER`.
  */
 internal data class ProviderProfile(

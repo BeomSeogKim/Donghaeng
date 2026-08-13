@@ -1,5 +1,11 @@
 # Decision — `auth/` splits in two, and a test is the boundary (2026-08-12)
 
+> **Amended 2026-08-13** — `login/` no longer exists; it is `account/` and
+> `oauth/`, and layer direction is now asserted at all. See the two sections at
+> the end. Everything above them is what was decided on 2026-08-12 and is left
+> as written, including the sentence "login depends on session", which is now
+> "account depends on session".
+
 Prompted by `auth/` reaching twenty-four files in one directory during `#37`, and
 by a finding that `api/AGENTS.md` asserted a guarantee the compiler does not
 provide. This is the structure fifteen domains will copy, so both halves are
@@ -164,3 +170,184 @@ run reports a violation that is no longer in the source. That cost an hour once.
   because two packages are a target.
 - **Not the test layout.** The `auth/` tests still sit in `com.donghaeng.auth` and
   exercise the area end to end; only production code moved.
+
+---
+
+# Amendment — `login/` was two things, and one of them was mis-assigned (2026-08-13)
+
+`auth/login/` reached twelve files and covers two clusters with different reasons
+to grow: the **account** (`#93` concurrent first login, `#94` profile refresh) and
+the **provider handshake** (`#89`, Kakao and Naver). It is now three packages at
+the same depth, which is what keeps the existing `$ROOT.(*).(*)..` slice rule
+working without a third level:
+
+```
+auth/          AuthController · SecurityConfig · AuthWebConfig
+auth/account/  AppUser · AppUserRepository · AppUserService · OauthIdentity ·
+               OauthIdentityRepository · MeResponse · ProviderProfile · LoginService
+auth/oauth/    GoogleClientRegistration · GoogleProfile ·
+               OAuthLoginSuccessHandler · OAuthLoginFailureHandler
+auth/session/  unchanged
+```
+
+## `ProviderProfile` belongs to the account, and that is what stops `LoginService` spanning
+
+The split was framed as account · handshake with `LoginService` spanning both.
+It does not have to span, and the reason it looked as though it did is one file
+being on the wrong side.
+
+`ProviderProfile` is not part of the handshake. Its own first sentence says what
+it is — "what one completed login tells us about a person, **reduced to what
+`app_user` and `oauth_identity` can hold**" — which is a statement about the
+account's tables, not about OAuth. It is the shape `account/` accepts and
+`oauth/` produces: a port, with the mapper on the far side of it. Put it in
+`oauth/` and the two packages point at each other (`LoginService` needs the type,
+`OAuthLoginSuccessHandler` needs the service) and the cycle rule refuses the
+result. Put it in `account/` and the graph is a chain.
+
+`LoginService` then lands in `account/` on its own merits rather than by
+elimination: what grows it is `#93` and `#94`, both account work, while its own
+comment already claims `#89` "adds mappers and changes no logic in THIS file".
+
+## The three edges, each a fact about the code
+
+**`oauth → account`.** The handshake hands over a `ProviderProfile` and gets
+nothing back. Nothing in `account/` names a provider *type* — the provider is the
+varchar `ck_app_user_email_verifier_known` constrains — so `#89` adds files to
+`oauth/` and changes nothing on the account side.
+
+**`account → session`.** A completed login must leave holding a session, so
+`LoginService` asks `SessionService` to issue one. This is the 2026-08-12 edge,
+narrowed: it was `login → session` and the half of `login/` that actually needed
+a session was the account half.
+
+**`session → nothing`.** `user_session.user_id` is a `Long`, not a mapping, so
+the session half knows neither an account nor a provider. Unchanged, and it is
+what lets `#5` grow `session/` while `#89` grows `oauth/`.
+
+So the three are a total order, `oauth → account → session`, and the rule is
+derived from the list rather than written three times — a fourth cluster inserted
+into it brings its own two prohibitions. **There is no edge between `account` and
+`oauth` in the other direction and none between `account` and `session` in the
+other direction; both are asserted rather than believed**, which is the whole
+point of splitting a folder at all.
+
+# Amendment — the layers were a naming convention with nothing behind it (2026-08-13)
+
+All six rules in `ArchitectureTest` were about **packages**. None was about
+**layers**. Verified before writing anything: each of these compiled and passed
+the entire suite.
+
+```kotlin
+internal interface AppUserRepository : JpaRepository<AppUser, Long> { fun probe(): AppUserService }
+internal class AppUser { fun probe(controller: AuthController) = controller }
+internal class SessionService { fun probe(controller: AuthController) = controller }
+```
+
+`api/AGENTS.md` has said "Layers stay shallow: Controller → Service →
+Repository" since 2026-08-07, and until now the only thing standing behind that
+sentence was that people had been writing class names that agreed with it.
+ArchUnit's `layeredArchitecture()` now holds it.
+
+## Defined by annotation and simple name, never by package
+
+`#7`'s `wedding/` and `#11`'s `guest/` are covered the day they are written, with
+no list to remember to extend — the same property the package rules already have,
+one step further, since these definitions name no package at all.
+
+Two of the four definitions are wider than the obvious one, and both are
+decisions rather than conveniences:
+
+- **Controller is the *inbound edge*, not `@RestController`.** Spring Security's
+  filter chain and Spring MVC's argument resolution are also places a request
+  enters this application: `OAuthLoginSuccessHandler` serves the OAuth callback
+  and `CurrentUserArgumentResolver` decides who the caller is. They call services
+  because that is their job. The alternative was exempting them by name, which is
+  the same claim without the reasoning attached. The predicate names three
+  *framework* interfaces, so it grows when Spring gives us a new kind of entry
+  point, not when we add a class.
+- **Service includes the entity-to-DTO mapping.** `api/AGENTS.md` puts that
+  mapping in the response's own file as an extension function, which compiles to
+  a `MeResponseKt` file facade — the one legitimate reader of a row outside a
+  service. Placed in the Service layer rather than ignored, so it carries a
+  service's prohibitions as well as its permission.
+
+`Wiring` is `@Configuration`, and it is a layer only because it has to be one:
+a filter chain that may not name the service it wires is not a filter chain. It
+carries no rule about who may *access* it, because `GoogleClientRegistration`
+owns `REGISTRATION_ID` and the profile dispatch reads it. What must not happen —
+an inner package depending on its domain's composition root — was already a rule
+and stays there.
+
+## `consideringAllDependencies`, which is the load-bearing option
+
+Under it, **a class in no layer may not touch a layer at all.** That is what
+makes the four definitions a decision instead of a default: the next class that
+is none of them and reaches for a service or a row fails the build until someone
+says which layer it is. The alternative,
+`consideringOnlyDependenciesInLayers()`, would have caught all three mutations
+above and quietly permitted a `@Component` to inject a repository — the exact
+shape the layering exists to prevent.
+
+What is deliberately left unlayered: `@ConfigurationProperties` classes, DTO data
+classes, value objects (`SessionToken`, `SessionTokens`, `SessionCookies`), and
+the whole of `config/` and `error/`. None of them is an origin of a dependency on
+a layer today, and placing them would be inventing a category to hold things that
+do not need one. If one of them ever reaches for a row, it fails — which is the
+correct outcome and the reason not to place them pre-emptively.
+
+## What this still cannot see
+
+- **The persistence heuristic is the same heuristic**, shared with the
+  cross-domain rule on purpose: `@Entity` or a simple name ending in
+  `Repository`, missing `@MappedSuperclass`, `@Embeddable` and any repository
+  named otherwise. One definition means a miss is a miss in both rules rather
+  than in whichever one nobody checked.
+- **A `@Component` that is a service in all but the annotation is not a
+  service.** It is unlayered, so it may not touch a layer — which fails loudly
+  rather than silently, but the message will say "unplaced class" when the real
+  answer is usually "this should have said `@Service`".
+- **Reaching into another domain's service is still uncaught** (2026-08-12,
+  unchanged). The new rule constrains who may access a service by *layer*, not by
+  domain, so a controller in `wedding/` calling `AppUserService` satisfies it.
+
+## The rules that were verified, and how
+
+Fourteen mutations, each a clean rebuild, each read for **which test fired**
+rather than for the suite going red — the trap this record already carries once.
+
+| Mutation | Fired |
+|---|---|
+| a repository names a service | layer rule, `Service` clause |
+| an entity names the controller | layer rule, `Controller` clause + composition-root rule |
+| a service names the controller | layer rule, `Controller` clause + composition-root rule |
+| the controller reaches a repository | layer rule, `Persistence` clause |
+| an unplaced `@Component` reaches a repository | layer rule, `Persistence` clause |
+| an unplaced value class reaches a service | layer rule, `Service` clause |
+| a throwaway `com.donghaeng.wedding` entity names its own controller | layer rule, `Controller` clause |
+| `account` depends on `oauth` | chain rule + inner cycle rule |
+| `session` depends on `account` | chain rule + inner cycle rule |
+| `session` depends on `oauth` | chain rule + inner cycle rule |
+| another domain reaches into `auth`'s repository | cross-domain rule + layer rule |
+| an inner package reads `SecurityConfig.AUTHORIZATION_PATH` | composition-root rule |
+| `config/` names a domain type | substrate rule + outer cycle rule |
+| the importer narrowed to one package | importer guard, plus three rules on empty `should` |
+
+Each of the three layer clauses was reached on its own: only the `Controller`
+clause can catch a dependency whose *target* is a controller, only `Service` one
+whose target is a service, only `Persistence` one whose target is a row. The
+layered rule reports its whole description on failure and does not name the
+clause, so attribution is read off the origin and target in the violation line.
+
+Two things worth carrying forward, both of which cost time here:
+
+**An unused import is not a dependency.** The first substrate mutation added
+`import com.donghaeng.auth.account.AppUser` to a `config/` class and nothing
+fired — correctly, since Kotlin emits no reference for an import nobody uses.
+A mutation that does not compile into a dependency proves nothing about the rule
+it was aimed at, and it looks exactly like a rule that is inert.
+
+**`git checkout -- src/main` restores the INDEX, and `git mv` stages the old
+content at the new path.** A mutation harness that reverts that way, against a
+tree whose moves are staged but whose edits are not, silently reverts the work
+instead of the mutation. Commit before mutating.

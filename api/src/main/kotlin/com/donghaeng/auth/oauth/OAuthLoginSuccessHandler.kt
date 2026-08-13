@@ -1,5 +1,7 @@
-package com.donghaeng.auth.login
+package com.donghaeng.auth.oauth
 
+import com.donghaeng.auth.account.LoginService
+import com.donghaeng.auth.account.ProviderProfile
 import com.donghaeng.auth.session.SessionCookies
 import com.donghaeng.auth.session.SessionTokens
 import com.donghaeng.config.FrontendProperties

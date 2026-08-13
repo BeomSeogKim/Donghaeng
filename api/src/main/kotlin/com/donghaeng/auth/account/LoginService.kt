@@ -1,4 +1,4 @@
-package com.donghaeng.auth.login
+package com.donghaeng.auth.account
 
 import com.donghaeng.auth.session.SessionService
 import com.donghaeng.auth.session.SessionToken
@@ -16,8 +16,9 @@ import java.time.Instant
  * Nothing here names a provider. Which one spoke is carried by
  * [ProviderProfile.provider], so `#89` adds mappers and changes no logic in THIS
  * file — which is a claim about this file only. `#89` still restructures
- * [OAuthLoginSuccessHandler], because Naver is plain OAuth 2.0 and produces no
- * `OidcUser` to map from (notes/2026-08-12-decision-login-slice-by-provider.md).
+ * [com.donghaeng.auth.oauth.OAuthLoginSuccessHandler], because Naver is plain
+ * OAuth 2.0 and produces no `OidcUser` to map from
+ * (notes/2026-08-12-decision-login-slice-by-provider.md).
  */
 @Service
 internal class LoginService(
