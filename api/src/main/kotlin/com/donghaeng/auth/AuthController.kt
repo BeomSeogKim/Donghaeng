@@ -1,7 +1,7 @@
 package com.donghaeng.auth
 
-import com.donghaeng.auth.login.AppUserService
-import com.donghaeng.auth.login.MeResponse
+import com.donghaeng.auth.account.AppUserService
+import com.donghaeng.auth.account.MeResponse
 import com.donghaeng.auth.session.AuthenticatedUser
 import com.donghaeng.auth.session.CurrentUser
 import com.donghaeng.auth.session.SessionCookies

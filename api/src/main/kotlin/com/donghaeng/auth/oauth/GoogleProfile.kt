@@ -1,5 +1,6 @@
-package com.donghaeng.auth.login
+package com.donghaeng.auth.oauth
 
+import com.donghaeng.auth.account.ProviderProfile
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
 
 /**

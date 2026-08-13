@@ -1,7 +1,7 @@
 package com.donghaeng.auth
 
 import com.donghaeng.SharedPostgres
-import com.donghaeng.auth.login.GoogleClientRegistration
+import com.donghaeng.auth.oauth.GoogleClientRegistration
 import com.donghaeng.auth.session.SessionTokens
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper

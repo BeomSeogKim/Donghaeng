@@ -1,9 +1,9 @@
 package com.donghaeng.auth
 
-import com.donghaeng.auth.login.GoogleClientRegistration
-import com.donghaeng.auth.login.LoginService
-import com.donghaeng.auth.login.OAuthLoginFailureHandler
-import com.donghaeng.auth.login.OAuthLoginSuccessHandler
+import com.donghaeng.auth.account.LoginService
+import com.donghaeng.auth.oauth.GoogleClientRegistration
+import com.donghaeng.auth.oauth.OAuthLoginFailureHandler
+import com.donghaeng.auth.oauth.OAuthLoginSuccessHandler
 import com.donghaeng.auth.session.CurrentUser
 import com.donghaeng.auth.session.SessionCookies
 import com.donghaeng.config.FrontendProperties

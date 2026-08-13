@@ -48,7 +48,7 @@ see that file's `Rules` section for the admission test.
 | `2026-08-12-decision-cors.md` | CORS denies by default, exact origins only, patterns forbidden at the type level |
 | `2026-08-12-decision-session-lifetimes.md` | Session idle 30 days, absolute 180 — the couple open this a few times a month |
 | `2026-08-12-decision-session-cookie-ambiguity.md` | Two session cookies: refuse the read, revoke both |
-| `2026-08-12-decision-auth-package-structure.md` | `auth/` splits into login and session; a test is the boundary, not `internal` |
+| `2026-08-12-decision-auth-package-structure.md` | `auth/` splits into account · oauth · session; the boundary and the layer direction are tests, not `internal` |
 | `2026-08-10-decision-auth-gate-and-sequence.md` | The resolver is the gate, not the filter chain; the build order |
 | `2026-08-10-decision-cross-tenant-status-code.md` | Cross-tenant is 404, never 403 |
 | `2026-08-09-decision-schema-ownership.md` | Flyway in tests only; DDL applied by hand |
