@@ -36,7 +36,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 
   ✗ main is push-protected.
 
-    One stop = one branch = one PR into main, and a red check is never merged.
+    Work on a branch and merge by PR. A red check is never merged.
     Push the branch and open a PR instead:
 
         git push -u origin <branch>

@@ -1,5 +1,11 @@
 # Decision — build workflow (2026-08-08)
 
+> **PARTLY SUPERSEDED, 2026-08-13** —
+> `2026-08-13-decision-drop-the-stop-pipeline.md`. "One stop = one branch =
+> one PR" and everything that assumes a stop no longer bind. The CI jobs,
+> the never-merge-a-red-check rule, the seam being type-checked, and the
+> parent/sub-issue shape are unaffected.
+
 The last methodology gaps found by auditing the day's decisions before
 scaffolding. Three real ones, closed here, plus the smaller items settled
 with them. Companion to `notes/2026-08-08-decision-development-tempo.md`

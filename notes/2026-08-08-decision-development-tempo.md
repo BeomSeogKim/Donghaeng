@@ -1,5 +1,12 @@
 # Decision — development tempo and the comprehension gate (2026-08-08)
 
+> **SUPERSEDED IN FULL, 2026-08-13** —
+> `2026-08-13-decision-drop-the-stop-pipeline.md`. The stop, the vertical
+> slice rule, the mandatory review pipeline and the comprehension gate are
+> all removed. Nothing below binds. It is kept because the *reasoning* is
+> still the best statement of what the pipeline was buying, and the newer
+> record names what was lost by dropping it.
+
 Decided immediately before scaffolding `web/` and `api/`, because it governs
 how every unit of implementation work is cut, reviewed, and accepted from
 here on.

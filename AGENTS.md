@@ -11,29 +11,29 @@ nothing else. Everything below loads on demand.
 
 | File | Carries |
 |---|---|
-| `AGENTS.md` (here) | Product truth, tempo, agents, the rules about rules |
+| `AGENTS.md` (here) | Product truth, agents, the rules about rules |
 | `api/AGENTS.md` | Schema ownership, backend architecture/API/TDD, security posture, domain mechanisms |
 | `web/AGENTS.md` | Frontend methodology/architecture, the token bridge, the value checker, screen rules |
 | `design/AGENTS.md` | The design system — thesis, tokens, contrast, typography, components |
 | `notes/README.md` | Index of the decision records — the *why* behind all of it |
-| `.claude/skills/stop/` | **How a stop is actually run**, step by step |
 
 `CLAUDE.md` symlinks to `AGENTS.md` at each level; edit `AGENTS.md` only.
 **Read your subtree's file before writing code in it** — and re-read it after a
 `/compact`, which re-injects only this root file.
 
-## Pick up here (last session: 2026-08-11)
+## Pick up here (last session: 2026-08-13)
 
-**The substrate is closed.** There is application code and a schema but **no
-domain code** — `api/src/main` is four config guards, the error contract and
-one migration file. **The first entity is written in `#37`.**
+**Google login works end to end.** `#37` is merged, `V1`+`V2` are applied to
+dev by hand, and a real browser round trip issues a `DH_SESSION` cookie that
+`/auth/me` resolves. `api/src/main` now has `auth/` (composition root),
+`auth/login/`, `auth/session/`, `config/` and `error/`.
 
-⚠️ **The schema is merged but has not been applied to any real database.**
-Flyway runs in tests only, so the founder types `V1__baseline_schema.sql` by
-hand, wrapped in an explicit `BEGIN; … COMMIT;`. **Read the column sizes while
-typing**: `ddl-auto: validate` compares JDBC type codes only, so a mistyped
-`varchar(20)` boots fine and fails later on a long 하객 이름. Until this is
-done, dev has no tables and `#37` cannot run against it.
+⚠️ **DDL applied by hand must be applied as `donghaeng_app`.** Applying it as
+a personal superuser leaves every table owned by that role and the app gets
+`permission denied` — invisible until boot, and `#105` is open on it. After
+any hand-applied migration: `select count(*) from pg_class where
+relnamespace='public'::regnamespace and relkind in ('r','S') and
+pg_get_userbyid(relowner) <> 'donghaeng_app';` must be `0`.
 
 **What is next, open, and left is `gh` — not this file.**
 `gh issue list --milestone v1`, `--label open-question` for the undecided. The
@@ -66,44 +66,19 @@ sealbox at `donghaeng/DATABASE_URL` (never a `.env`). No `_test` database —
 backend tests use Testcontainers. Ports 8080 (`api/`), 3000 (`web/`),
 registered in `../../notes/local-infra.md`.
 
-## Development tempo (decided 2026-08-08)
-
-`notes/2026-08-08-decision-development-tempo.md`. The goal it serves is the
-founder's: **minimize the cognitive debt of AI-written code.** This section is
-*why* the ritual has its shape; **`/stop` is the ritual** — run it, don't
-reconstruct it.
-
-- **Cut vertically, by requirement — never horizontally by layer.** One
-  requirement = one Red/Blue/Green cycle = one review = one explanation = one
-  commit = **one stop**. "웨딩 생성" and "웨딩 정보 수정" are separate stops. A
-  layer slice has no Red Gate test worth writing, and the seams between
-  separately-approved layers are exactly where an AI silently disagrees with
-  itself.
-- **One honest exception — the substrate**, done horizontally, once, at the
-  front. It is finished; everything from here is vertical.
-- **Slice size is measured in new concepts, not lines: one or two per stop** —
-  the founder reads the explanation document, not the raw diff.
-- **The comprehension gate is tiered**, so it survives past week two. A new
-  concept gets the full explanation + quiz; a repeated pattern gets
-  `reviewer`'s report only. The implementor proposes the tier; the founder
-  overrides freely.
-- **Never let the author explain its own work.** An implementor explaining its
-  own change explains its *intent*, so a bug gets described as the bug-free
-  version it meant to write — unknown debt turned into false confidence, which
-  is worse than no gate.
-
-## Work tracking and build (decided 2026-08-08)
+## Work tracking and build (decided 2026-08-08, amended 2026-08-13)
 
 `notes/2026-08-08-decision-work-tracking.md`,
-`notes/2026-08-08-decision-build-workflow.md`. The decided rules; the procedure
-is `/stop`.
+`notes/2026-08-08-decision-build-workflow.md`. **There is no development
+ritual** — the stop, the mandatory review pipeline and the comprehension gate
+were removed 2026-08-13
+(`notes/2026-08-13-decision-drop-the-stop-pipeline.md`), which also records
+what that costs. Everything below still binds.
 
 - **GitHub Issues via `gh`** — no Jira, no board, no backlog file. **`notes/`
   is why; an Issue is what's left.** An issue never decides anything; rationale
   in an issue body that isn't in a record is a bug.
-- **One issue = one requirement, not one stop.** **One stop = one branch = one
-  PR into `main`**, and the diff handed to `reviewer` and `explainer` is
-  `main...<branch>` — that is what makes "the diff of a stop" mechanical.
+- **One issue = one requirement.** Branch off `main`, PR back into it.
 - **A red check is never merged.** Not "unrelated", not "fix it after". Green
   means *deployable* — `prod-boot` boots the real config, `docker` asserts the
   shipped image answers 404 on `/v3/api-docs`, `/swagger-ui`, `/actuator`.
@@ -142,8 +117,8 @@ but **matching still runs** at vendor-email paste and CSV import.
 
 These shape how *any* requirement is read, so they are ambient. **Facts that
 bind only while one requirement is built live in that requirement's `notes/`
-record** — `/stop` loads them when the issue is picked up, which is the only
-moment they mean anything.
+record**, loaded when the issue is picked up — the only moment they mean
+anything.
 
 - **The Wedding, not the user, is the top-level unit.** The couple shares full
   access to one ledger, and one person may belong to several weddings.
@@ -174,11 +149,11 @@ moment they mean anything.
 
 ## Agents and automation
 
-**`backend-implementor`** (all `api/` code, sole owner of `docs/api-spec.md`),
-**`frontend-implementor`** (all `web/` code, reads the spec and never `api/`
-source), **`reviewer`**, **`security-manager`**, **`explainer`** (the
-comprehension gate, in Korean, published as an Artifact and linked from the
-issue). **`/stop`** orchestrates all five.
+**`backend-implementor`** (all `api/` code, sole owner of `docs/api-spec.md`)
+and **`frontend-implementor`** (all `web/` code, reads the spec and never
+`api/` source). **`reviewer`** and **`security-manager`** are available, not
+scheduled — call them when the change warrants it, which on auth, sessions,
+tokens, native SQL or wedding-scoped queries it does.
 
 - **Delegation is automatic in this repo**, and **the main loop never writes
   `api/` or `web/` code itself.** This overrides any general default about not
@@ -186,8 +161,7 @@ issue). **`/stop`** orchestrates all five.
 - **Every agent reads this file plus its tree's `AGENTS.md`.** Prompts carry
   role and *own-behavior* rules only — never a copy of a tree file's rule.
 - **The reviewers cannot write.** No `Edit`, no `Write` — that is what makes
-  their verdict worth reading. `explainer` has `Write` for exactly one purpose:
-  its own HTML file, in the scratchpad.
+  their verdict worth reading.
 - **The guards in `.claude/hooks/` fail closed and are tested in CI**, along
   with an assertion that they are still *wired* — a passing suite says the hook
   works, not that anything runs it.
@@ -211,8 +185,8 @@ continuation. If historical context is needed, ask the founder directly.
   glibc/ICU collation story does not, because the rule alone produces correct
   code.
 - **A rule belongs at exactly one level — never two.** Both trees → root. One
-  tree → that subtree. A procedure with a nameable trigger → `/stop`. Something
-  mechanically checkable → a hook, and then *not* also prose. Two statements of
+  tree → that subtree. Something mechanically checkable → a hook or a test, and
+  then *not* also prose. Two statements of
   one rule is how they drift, and it has already cost this repo a live bug
   (`notes/2026-08-11-decision-claude-setup.md`).
 - **Budgets are enforced, not stated**: root ≤ 220 lines, each subtree ≤ 280.

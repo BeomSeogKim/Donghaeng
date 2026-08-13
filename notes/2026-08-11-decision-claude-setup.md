@@ -1,5 +1,11 @@
 # 2026-08-11 — The Claude Code setup gets a shape
 
+> **PARTLY SUPERSEDED, 2026-08-13** —
+> `2026-08-13-decision-drop-the-stop-pipeline.md`. The `/stop` skill and the
+> `explainer` agent are deleted, so every passage placing a behaviour *in the
+> skill* no longer applies. The layering itself — hook vs prose vs record,
+> and prompts carrying own-behaviour rules only — still binds.
+
 **Status**: decided. Extends `2026-08-11-decision-agents-md-hierarchy.md`,
 which did the same job one level down. Related: `#87`.
 
