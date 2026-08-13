@@ -120,9 +120,9 @@ internal class SchemaOwnershipGuard(
     private fun describe(value: String?) = if (value == null) "nothing (unset)" else "`$value`"
 
     companion object {
-        const val FLYWAY_ENABLED = "spring.flyway.enabled"
+        val FLYWAY_ENABLED = "spring.flyway.enabled"
 
-        const val DDL_AUTO = "spring.jpa.hibernate.ddl-auto"
+        val DDL_AUTO = "spring.jpa.hibernate.ddl-auto"
 
         /**
          * The raw Hibernate setting, and it is not a synonym that loses:
@@ -131,7 +131,7 @@ internal class SchemaOwnershipGuard(
          * [DDL_AUTO]. Checking Boot's alias alone would leave a second
          * environment variable that wins outright.
          */
-        const val HBM2DDL_AUTO = "spring.jpa.properties.hibernate.hbm2ddl.auto"
+        val HBM2DDL_AUTO = "spring.jpa.properties.hibernate.hbm2ddl.auto"
 
         private val SAFE_DDL_AUTO = setOf("validate", "none")
 

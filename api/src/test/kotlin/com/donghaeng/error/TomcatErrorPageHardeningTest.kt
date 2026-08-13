@@ -1,5 +1,6 @@
 package com.donghaeng.error
 
+import com.donghaeng.SharedPostgres
 import jakarta.servlet.DispatcherType
 import jakarta.servlet.Filter
 import jakarta.servlet.ServletException
@@ -12,6 +13,8 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.core.Ordered
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
 import java.net.Socket
 import java.util.EnumSet
 
@@ -36,13 +39,20 @@ import java.util.EnumSet
     properties = [
         "donghaeng.profile=test",
         "server.error.include-stacktrace=always",
-        "spring.autoconfigure.exclude=" +
-            "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +
-            "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
     ],
 )
 class TomcatErrorPageHardeningTest {
+    companion object {
+        /**
+         * This test boots the whole application, which since #37 means a context
+         * that cannot be built without a DataSource. See [SharedPostgres] for why
+         * the autoconfiguration exclusions that used to stand here are gone.
+         */
+        @JvmStatic
+        @DynamicPropertySource
+        fun database(registry: DynamicPropertyRegistry) = SharedPostgres.publish(registry)
+    }
+
     @LocalServerPort
     private var port: Int = 0
 

@@ -124,6 +124,9 @@ shipped yet:
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | A request failed Bean Validation — a request body DTO, a query parameter, or a path variable alike. |
 | `MALFORMED_REQUEST_BODY` | 400 | The request body could not be parsed at all. |
+| `UNAUTHENTICATED` | 401 | The request carried no session, or one that has expired, been revoked, or does not match. |
+| `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. Not an error to apologise for — offer the login button again. |
+| `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND`, `UNSUPPORTED_MEDIA_TYPE` | as named | A framework-level error with no more specific code. |
 
@@ -171,7 +174,209 @@ own `Errors` section overrides this.
 has no roles, so **403 has no correct use today**. Reaching for it because "403
 is the authorization status" is the mistake this row exists to prevent.
 
+## Authentication
+
+_Added 2026-08-12 (`#37`). Google only for now; 카카오 · 네이버 arrive with `#89`
+and add nothing to this section but a second and third `provider` path segment._
+
+**The couple is authenticated; guests never are.** Login is OAuth at the
+provider, and what the browser ends up holding is an **opaque session token in an
+HttpOnly cookie** — not a JWT, not the provider's token, and nothing the frontend
+can read or needs to.
+
+### The cookie
+
+| | |
+|---|---|
+| Name | `DH_SESSION` |
+| Flags | `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`; `Secure` everywhere except local dev over `http://localhost` |
+| Lifetime | idle **28.75–30 days**, absolute **180 days** — whichever comes first |
+
+**`web/` never reads, writes, or parses this cookie.** It cannot: `HttpOnly`.
+Every request simply needs to be sent with credentials included
+(`fetch(..., { credentials: 'include' })`), and the answer to "am I logged in?"
+is `GET /auth/me`, never an inspection of `document.cookie`.
+
+**Two expiries, and they are different questions.** Idle is measured from the
+last request, absolute from the moment of login. A couple using the app daily is
+still signed out after 180 days and logs in again; that is intended — the
+absolute window is not extended by use, which is the whole difference between the
+two.
+
+The numbers come from how the product is used, not from a security threshold
+(`notes/2026-08-12-decision-session-lifetimes.md`): **a wedding is planned over
+about a year and the couple open this a few times a month.** A short idle window
+would sign a monthly user out on every single visit.
+
+The idle window is a **range, not 30 days exactly.** The server does not rewrite
+the "last seen" stamp on every request — that would make every read a write — so
+the stamp can lag real activity by up to 30 hours, and a session expires
+somewhere between 28.75 and 30 days after its last use. Nothing expires *later*
+than 30 days. Do not build a countdown from this; ask the server.
+
+**The session is re-issued on every login**, which invalidates the token the
+browser presented. Tabs share one cookie jar, so a second login in another tab
+simply replaces the cookie for both — the first tab is not signed out. **A second
+device is a separate session and is not revoked**, by design: signing in on a
+laptop does not sign the phone out.
+
+Treat a 401 as "log in again", never as an error state to report.
+
+### `GET /oauth2/authorization/google`
+
+Status: active (added 2026-08-12)
+Auth: none — this is where a logged-out person starts
+
+**A browser navigation, not a fetch.** Point the browser at it
+(`window.location.href = ...`, or a plain `<a href>`); an XHR cannot follow the
+redirect chain to Google and back, and calling it with `fetch` will fail on CORS
+at the provider rather than logging anyone in.
+
+Responds `302` to Google's consent screen.
+
+Errors
+- 404 — there is no such login provider **here**. Two things produce it and they
+  are deliberately indistinguishable: a provider name we do not support, and an
+  environment where Google credentials are not configured. In the second case the
+  backend logs a warning naming the two missing variables at startup; every other
+  endpoint works normally, so a frontend can be developed against a backend that
+  cannot log anyone in.
+
+Not in the generated OpenAPI document — it is a Spring Security filter, not a
+controller. Same for the callback below.
+
+### `GET /login/oauth2/code/google`
+
+Status: active (added 2026-08-12)
+Auth: none — this is what the provider redirects the browser back to
+
+**Nothing calls this; Google does.** It is listed because its outcomes are the
+frontend's to handle, and because the exact URL
+`http://localhost:8080/login/oauth2/code/google` in dev is registered by hand in
+the Google console and must not change.
+
+On success: `302` to the configured frontend origin (dev: `http://localhost:3000`)
+with `Set-Cookie: DH_SESSION=...`. **The destination is server configuration.** It
+is never taken from the request, so there is no `returnTo` parameter and adding
+one would be an open redirect on the one request that has just been handed a
+session.
+
+Errors
+- 401 `OAUTH_LOGIN_DENIED` — consent refused at the provider
+- 401 `OAUTH_LOGIN_FAILED` — anything else: a `state` mismatch, a failed token
+  exchange, an ID token that did not validate
+
+Both arrive as **problem+json in a browser navigation**, which is a document the
+person is looking at rather than JSON a script is reading. `#38` decides what to
+do about that; the backend's promise is only that it is never an HTML page and
+never a redirect carrying `?error` in a query string.
+
+### `GET /auth/me`
+
+Status: active (added 2026-08-12)
+Auth: session cookie
+
+The first call on every page load: who is signed in, if anyone.
+
+Response 200
+```json
+{ "id": 12, "name": "김테스터" }
+```
+
+`name` is **nullable** — a provider may return none — so render a fallback rather
+than assuming a string.
+
+**There is deliberately no `email`** (decided 2026-08-12). No v1 screen shows the
+couple their own address, and publishing a field nothing consumes would be a seam
+commitment with no requirement behind it. Ask if a screen needs it; do not work
+around its absence. This says nothing about what the server *stores* — the
+verified-email account merge is untouched and is not visible here.
+
+Carries the recomputed aggregate: **no.** It is a read, and it is not
+wedding-scoped: which wedding is a separate resolution that arrives with `#5`.
+
+Errors
+- 401 `UNAUTHENTICATED` — no cookie, or an expired, revoked or unrecognised one.
+  One code for all of those on purpose: distinguishing them would tell an
+  anonymous caller which session identifiers exist.
+
+### `POST /auth/logout`
+
+Status: active (added 2026-08-12)
+Auth: session cookie, but see below — it never demands one
+
+Ends the session **on this device**.
+
+Request: no body.
+
+Response 204, with no body and a `Set-Cookie` that clears `DH_SESSION`.
+
+Carries the recomputed aggregate: **no** — it changes no ledger data.
+
+Three properties, and each exists because its absence would produce a sign-out
+button that leaves people signed in:
+
+- **It is a POST, and a GET will not do.** v1's CSRF protection is
+  `SameSite=Lax` plus no state-changing GET, and Lax *does* send the cookie on
+  top-level GET navigation — so a logout reachable by GET could be triggered by an
+  `<img>` on any page the couple visit. Under POST the cookie is withheld
+  cross-site and the request cannot revoke anything.
+- **It always answers 204**, whatever it finds: no cookie, an unparseable cookie,
+  several at once, an expired session, one already revoked, one revoked from
+  another device. All of them mean "you are not logged in on this device", which
+  is what the caller asked for. There is no error path to write, and it is
+  idempotent — calling it twice is not a mistake.
+- **If the browser somehow presents more than one session cookie, every one of
+  them is ended.** Reads refuse an ambiguous request (that is where a 401 with
+  more than one cookie comes from); logout is the opposite and deliberately so.
+  This is the right thing to call when the app is wedged on 401s.
+- **It does two things, and the client needs both.** The server revokes the
+  session row, which is what makes the token dead everywhere; the response clears
+  the cookie, which is what stops the browser from presenting a dead token on
+  every later request. Deleting the cookie client-side alone is *not* logout — the
+  row stays valid and the token would still work if it were ever presented again.
+
+**It signs out this device only.** The couple share one ledger and use each
+other's phones, so a laptop logout leaves the phone signed in — by design. Signing
+out everywhere is a separate, not-yet-built feature; do not present this as one.
+
+Errors: none. Handle 204 and nothing else.
+
+### Calling the API from the browser (CORS)
+
+_Added 2026-08-12 (`#97`)._
+
+The API and `web/` are different origins in every environment, so **every call
+from the browser is a cross-origin call** and two things have to be true at once.
+
+1. **The origin must be on the server's list.** It is an exact string — scheme,
+   host and port — and there is no wildcard and no pattern. In dev the list is
+   exactly `http://localhost:3000`. `http://127.0.0.1:3000` is a *different*
+   origin to a browser and is not on it; use `localhost`.
+2. **The request must be sent with credentials.** `fetch(url, { credentials:
+   'include' })`, or `withCredentials` on whatever client you use. Without it the
+   browser sends no cookie, the server sees an anonymous request, and `/auth/me`
+   answers 401 — which looks exactly like "not logged in" and is the single most
+   likely way to lose an afternoon here.
+
+Allowed methods are `GET, POST, PATCH, PUT, DELETE`; allowed request headers are
+`Content-Type` and `Accept`. **A custom header needs a backend change** — adding
+one to a request without it being on that list fails the preflight, and does so
+before any application code on either side runs.
+
+An origin that is not on the list gets no `Access-Control-Allow-Origin`, and the
+browser discards the response before your code sees it. Production has no origin
+configured yet, for the same reason it has no frontend URL (`#96`).
+
+### Not here yet
+
+- **Signing out of every device.** `POST /auth/logout` ends this device's session
+  only. A "log out everywhere" action is filed and not built; do not label the
+  existing button as though it were one.
+- **CSRF token.** v1's protection is `SameSite=Lax` plus no state-changing GET; a
+  token is `#48`.
+
 ## Endpoints
 
-_None yet — `api/` has no domain endpoints. The error contract above is already
-live and binding._
+_No wedding-scoped endpoints yet. The error contract and the authentication
+section above are live and binding._

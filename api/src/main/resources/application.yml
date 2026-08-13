@@ -18,6 +18,37 @@
 # Profile selection: SPRING_PROFILES_ACTIVE (see README, Development).
 server:
   port: 8080
+  tomcat:
+    accesslog:
+      # Off, and pinned rather than left at Boot's default, for the same reason as
+      # the `server.error.*` keys below: the environment outranks every yml, so
+      # SERVER_TOMCAT_ACCESSLOG_ENABLED=true in a deploy platform turns it on with
+      # the whole suite green. What it would then write to a file is every request
+      # line — including the OAuth callback, whose query string carries `code` and
+      # `state`, and any future link token that travels in a path.
+      # RealConfigurationBootTest asserts the RESOLVED value.
+      enabled: false
+  servlet:
+    session:
+      cookie:
+        # These four are the SESSION COOKIE's flags, and they are in the base
+        # because the base is where a setting whose wrong value is unsafe belongs.
+        # Boot defaults `secure` to false, so pinning it here and letting `dev`
+        # loosen it is the first case of "profiles only loosen" actually being
+        # exercised (issue #5's handover comment).
+        #
+        # They configure two cookies at once: the container's JSESSIONID, which
+        # carries the OAuth authorization request — `state`, the PKCE verifier, the
+        # nonce — across the round trip, and com.donghaeng.auth.SessionCookies,
+        # which reads `secure` from here for the session token itself.
+        secure: true
+        http-only: true
+        # NOT `strict`. The OAuth callback is a top-level cross-site navigation
+        # back from Google, so `strict` withholds the cookie at exactly the moment
+        # of login. `lax` is also half of v1's CSRF answer — the other half being
+        # that no GET changes state (com.donghaeng.auth.SecurityConfig).
+        same-site: lax
+        path: /
   error:
     # What the servlet container's error page may publish. Boot already defaults
     # all three to the safe value, and they are pinned anyway for the same reason
@@ -97,3 +128,46 @@ springdoc:
     # Off by default so a deploy never publishes the endpoint/DTO map; the seam
     # work re-enables it only where the document is actually generated.
     enabled: false
+
+donghaeng:
+  session:
+    # Idle and absolute, and they are two different questions. `idle` is measured
+    # from the last request, `absolute` from the moment the session was issued —
+    # so a session in daily use still ends after 180 days and has to be re-earned
+    # at the provider (notes/2026-07-30-decision-network-security.md, Tokens).
+    #
+    # THE NUMBERS ARE THE FOUNDER'S AND THE REASON IS THE USAGE PATTERN, not a
+    # security threshold (notes/2026-08-12-decision-session-lifetimes.md): a
+    # wedding is planned over about a year and the couple open this a few times a
+    # month, so a 14-day idle window signed a monthly user out on every single
+    # visit. A long window is affordable here only because the session is
+    # revocable server-side — an opaque token against a row, never a JWT.
+    #
+    # `server.servlet.session.timeout` deliberately does NOT appear anywhere in
+    # this repo: it configures the container's JSESSIONID and only ever expresses
+    # the idle half, so setting it would look like this decision while enforcing
+    # half of it against the wrong cookie. Both values here are read by
+    # com.donghaeng.auth.SessionService, which is what actually applies them.
+    idle: 30d
+    absolute: 180d
+  cors:
+    # EMPTY MEANS DENY, and the base is the environment that has declared nothing —
+    # so it denies. Stated rather than omitted, because a reader has to be able to
+    # see that the decision was made (#6, #97).
+    #
+    # Exact origins only. Never `*`: the session rides a cookie, so
+    # `allowCredentials` is true and the CORS spec makes the pair illegal — but
+    # more to the point, never `allowedOriginPatterns` either, which is the API
+    # that lets `https://*.donghaeng.kr` be written slightly wrong and match
+    # `donghaeng.kr.evil.com`. See com.donghaeng.auth.CorsPolicy.
+    allowed-origins: []
+# Deliberately absent from the base: `donghaeng.frontend.base-url`, the origin a
+# completed login redirects the browser to. It has no value that is safe by
+# default — a wrong one sends a freshly-issued session somewhere it does not
+# belong — so each profile states its own, and an environment that has not is
+# refused at the moment of redirect rather than at startup.
+#
+# Also deliberately absent: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. They are
+# read from the environment by com.donghaeng.auth.GoogleClientRegistration, never
+# from a file, and no `spring.security.oauth2.client.*` key appears in this repo —
+# ProfileConfigurationTest holds both halves.

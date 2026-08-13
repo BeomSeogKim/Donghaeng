@@ -1,5 +1,6 @@
 package com.donghaeng
 
+import com.donghaeng.config.CorsProperties
 import com.donghaeng.config.RequiredProfileMarker
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -64,6 +65,9 @@ abstract class RealConfigurationBootTest(
     @Autowired
     private lateinit var flywayProperties: FlywayProperties
 
+    @Autowired
+    private lateinit var corsProperties: CorsProperties
+
     @Test
     fun `the committed configuration boots and reaches postgres`() {
         assertThat(environment.activeProfiles).containsExactly(expectedProfile)
@@ -104,6 +108,28 @@ abstract class RealConfigurationBootTest(
         assertThat(serverProperties.error.includeMessage).isEqualTo(ErrorProperties.IncludeAttribute.NEVER)
         assertThat(serverProperties.error.includeStacktrace).isEqualTo(ErrorProperties.IncludeAttribute.NEVER)
         assertThat(serverProperties.error.isIncludeException).isFalse()
+
+        // Same class, added with #37: the access log writes the request line, so
+        // an environment that turns it on files the OAuth callback's `code` and
+        // `state`. The file sweep cannot see SERVER_TOMCAT_ACCESSLOG_ENABLED=true.
+        assertThat(serverProperties.tomcat.accesslog.isEnabled).isFalse()
+
+        // CORS, for the same reason and with a second one on top
+        // (notes/2026-08-12-decision-cors.md). DONGHAENG_CORS_ALLOWED_ORIGINS in a
+        // deploy platform reverses the committed value invisibly to a file sweep —
+        // and a List<String> also binds from a comma-delimited SCALAR, which the
+        // file sweep's indexed keys could not see at all. Bound values can only be
+        // spelled one way.
+        assertThat(corsProperties.allowedOrigins).allSatisfy { origin ->
+            assertThat(origin).doesNotContain("*").matches("https?://[^/]+")
+        }
+        when (expectedProfile) {
+            "dev" -> assertThat(corsProperties.allowedOrigins).containsExactly("http://localhost:3000")
+            // Production has no frontend yet, so it is reachable from no page at
+            // all — deliberate, and set with the frontend base URL when the domain
+            // is decided (#96/#97).
+            else -> assertThat(corsProperties.allowedOrigins).isEmpty()
+        }
     }
 
     @Test

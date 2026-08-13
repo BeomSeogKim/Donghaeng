@@ -1,4 +1,4 @@
-package com.donghaeng.auth
+package com.donghaeng.auth.login
 
 import com.donghaeng.BaselineSchemaFixture
 import org.assertj.core.api.Assertions.assertThat

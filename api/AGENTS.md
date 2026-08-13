@@ -73,11 +73,14 @@ and tokens.
 - **Layers stay shallow**: Controller (DTO) → Service (tx boundary,
   invariants, aggregate recompute, `GuestChange` writes) → Repository (JPA +
   native aggregation queries). No hexagonal/ports-and-adapters layer.
-- **Split a class when it starts doing two distinct things, not before.**
-  Kotlin `internal` is the default visibility inside a domain package; only
-  the Controller and an explicit cross-domain contract are `public`.
-  Cross-domain access always goes through that contract, never straight into
-  another domain's entities or repository.
+- **Split a class when it starts doing two distinct things, not before.** Only
+  the Controller and a declared cross-domain contract are `public`. `internal`
+  is MODULE-scoped and `api/` is one module, so it enforces no package boundary;
+  `ArchitectureTest` and `SourceShapeTest` do
+  (`notes/2026-08-12-decision-auth-package-structure.md`).
+- **Never a layer bucket** — `AuthRepositories.kt`, `AuthEntities.kt`. The checks
+  catch a persistence or configuration type sharing a file, and a misnamed
+  single-type file; two ordinary types sharing one is still your judgement.
 - **Tests mirror the domain tree**, not the layer tree. Three kinds, chosen by
   where a requirement's risk lives: Service unit tests (no DB), Repository
   Testcontainers tests (mandatory for the paths named above), Controller
@@ -112,7 +115,11 @@ and tokens.
   reason `wedding_id` sits on every root: a default cannot be forgotten, a
   judgement call can.
 - **DTO naming**: `XxxRequest` / `XxxResponse`, mapped via extension functions
-  in the domain package. Entities never serialize directly.
+  in the domain package. Entities never serialize directly. **The Service returns
+  the response DTO**, and the DTO owns its file — a Controller that mapped an
+  entity itself would be reading associations after the transaction closed, and
+  `open-in-view: false` makes that a `LazyInitializationException` in whichever
+  domain first has associations, not in the one that set the pattern.
 - **No `/v1` prefix** — no second API version planned; free to add later.
 - **ktlint** via the standard Gradle plugin, default ruleset.
 - **`docs/api-spec.md` is written in the same change as the code** — new,
@@ -146,6 +153,12 @@ inline. The parts that constrain everyday backend work:
   duplicate does not make the lookup find it. The lookup must use the *same*
   expression, and the app-side normalisation must be an **ASCII-only**
   lowercase — Kotlin's `String.lowercase()` is not `lower(... collate "C")`.
+- **A session token is read through `SessionTokens` and nowhere else**, and its
+  two functions are deliberately asymmetric: reading refuses a request carrying
+  more than one cookie, revoking ends all of them (decided 2026-08-12,
+  `notes/2026-08-12-decision-session-cookie-ambiguity.md`). Making them consistent
+  turns a denial of service into session fixation — the logout path did exactly
+  that before review caught it.
 - **The auth gate is our resolver, not Spring Security's filter chain**
   (decided 2026-08-10, `notes/2026-08-10-decision-auth-gate-and-sequence.md`).
   `authorizeHttpRequests` stays `permitAll` in **every** environment; what
