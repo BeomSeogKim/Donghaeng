@@ -1,5 +1,6 @@
 package com.donghaeng
 
+import com.donghaeng.auth.oauth.LoginDestinationGuard
 import com.donghaeng.config.CorsProperties
 import com.donghaeng.config.RequiredProfileMarker
 import org.assertj.core.api.Assertions.assertThat
@@ -9,6 +10,7 @@ import org.springframework.boot.autoconfigure.flyway.FlywayProperties
 import org.springframework.boot.autoconfigure.web.ErrorProperties
 import org.springframework.boot.autoconfigure.web.ServerProperties
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.ApplicationContext
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ClassPathResource
 import org.springframework.test.context.ActiveProfiles
@@ -67,6 +69,9 @@ abstract class RealConfigurationBootTest(
 
     @Autowired
     private lateinit var corsProperties: CorsProperties
+
+    @Autowired
+    private lateinit var applicationContext: ApplicationContext
 
     @Test
     fun `the committed configuration boots and reaches postgres`() {
@@ -130,6 +135,14 @@ abstract class RealConfigurationBootTest(
             // is decided (#96/#97).
             else -> assertThat(corsProperties.allowedOrigins).isEmpty()
         }
+    }
+
+    @Test
+    fun `the login-destination guard is in the real context, not only in its own test`() {
+        // LoginDestinationProfileBootTest proves the invariant; this proves
+        // something runs it. A guard that is correct and unwired is not a guard —
+        // and it is a plain @Component, so nothing else would notice its removal.
+        assertThat(applicationContext.getBeansOfType(LoginDestinationGuard::class.java)).hasSize(1)
     }
 
     @Test

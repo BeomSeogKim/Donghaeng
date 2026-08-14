@@ -316,11 +316,11 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
     }
 
     @Test
-    fun `a callback the provider refused comes back as problem+json, not as an HTML redirect`() {
-        // A failure raised inside the OAuth2 login filter never reaches
-        // @RestControllerAdvice — a filter is outside Spring MVC's exception
-        // resolvers entirely (#62). Spring's default answer is a redirect to a
-        // generated login page.
+    fun `a refused consent sends the browser back to the frontend login route, not to problem+json`() {
+        // #109: the callback is a BROWSER NAVIGATION to the API origin, so
+        // problem+json here is a JSON blob the person is staring at with no way
+        // back — and refusing consent is a normal path, not an error
+        // (notes/2026-08-13-decision-login-failure-return-path.md).
         val authorization = startAuthorization()
         val denied =
             get(
@@ -328,10 +328,56 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
                 authorization.cookies,
             )
 
-        assertThat(denied.statusCode()).isEqualTo(401)
-        assertThat(denied.headers().firstValue("Content-Type").orElseThrow())
-            .startsWith("application/problem+json")
-        assertThat(denied.json()["code"].asText()).isEqualTo("OAUTH_LOGIN_DENIED")
+        assertThat(denied.statusCode()).isEqualTo(302)
+        assertThat(denied.location()).hasToString("http://localhost:3000/login#e=denied")
+        assertThat(denied.headers().firstValue("Content-Type").orElse(""))
+            .doesNotStartWith("application/problem+json")
+        assertThat(denied.sessionCookie()).isNull()
+    }
+
+    @Test
+    fun `the failure redirect carries a closed code in the fragment and nothing the provider wrote`() {
+        // The two objections the `?error` ban was made of: a query string lands in
+        // access logs and in `Referer`, and a reason the caller chooses is a way to
+        // put attacker-written words on our own domain. A fragment carrying one of
+        // two fixed codes answers both.
+        val authorization = startAuthorization()
+        val denied =
+            get(
+                "${SecurityConfig.CALLBACK_PATH}?error=access_denied" +
+                    "&error_description=${"Sign in at donghaeng-support.example to unlock your ledger".replace(" ", "%20")}" +
+                    "&state=${authorization.parameters["state"]}",
+                authorization.cookies,
+            )
+
+        val location = denied.location()
+        assertThat(location.rawQuery).describedAs("a failure reason must never travel in the query string").isNull()
+        assertThat(location.rawFragment).isEqualTo("e=denied")
+        // Nowhere in the response — not the Location, not a header.
+        val whole = location.toString() + denied.headers().map()
+        assertThat(whole).doesNotContain("donghaeng-support.example").doesNotContain("unlock your ledger")
+    }
+
+    @Test
+    fun `a provider error code cannot forge a line in the log`() {
+        // The `error` query parameter reaches OAuth2Error.errorCode VERBATIM, and
+        // the `state` precondition costs an attacker nothing — they start the
+        // authorization themselves. Left unsanitised, one request writes whatever
+        // line it likes into the log that the 401/404/429 spike alerting is read
+        // from, which is the one detection capability the security record keeps.
+        val authorization = startAuthorization()
+        val (_, logged) =
+            capturingWarnings {
+                get(
+                    "${SecurityConfig.CALLBACK_PATH}?error=a%0D%0A2026-08-13%20INFO%20login%20succeeded" +
+                        "&state=${authorization.parameters["state"]}",
+                    authorization.cookies,
+                )
+            }
+
+        val message = logged.single().formattedMessage
+        assertThat(message).doesNotContain("\n").doesNotContain("\r")
+        assertThat(message).doesNotContain("login succeeded")
     }
 
     @Test
@@ -344,8 +390,8 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
                 get("${SecurityConfig.CALLBACK_PATH}?code=stub-authorization-code&state=not-ours")
             }
 
-        assertThat(forged.statusCode()).isEqualTo(401)
-        assertThat(forged.json()["code"].asText()).isEqualTo("OAUTH_LOGIN_FAILED")
+        assertThat(forged.statusCode()).isEqualTo(302)
+        assertThat(forged.location()).hasToString("http://localhost:3000/login#e=failed")
         assertThat(sessions.findAll()).isEmpty()
 
         // This request needs no cookie and no credentials, so anyone can repeat it

@@ -47,6 +47,24 @@ no design tokens and no translator. `#63`'s field-level 400 has the same shape
 and stays JSON; carving out an HTML path for one route buys a rendering
 concern for the whole tree.
 
+## Amended the same day — the environment with no frontend at all
+
+Implementation found a case this record did not answer: **what a failed
+callback does when `donghaeng.frontend.base-url` is blank.** That is prod
+today, until `#96` names the domain.
+
+- **The problem+json answer survives as the fallback for exactly that case**,
+  and `OAUTH_LOGIN_DENIED` / `OAUTH_LOGIN_FAILED` stay in the spec narrowed to
+  it rather than removed. Refusing at startup instead would turn an anonymous,
+  unauthenticated GET into a 500-with-stack-trace generator — the log
+  amplification `unknownProviderIsNotFound` exists to close.
+- **But a configured OAuth registration with nowhere to land is a
+  misconfiguration, and it refuses at startup.** If a Google
+  `ClientRegistration` is configured, `base-url` must be non-blank. Without
+  this the two paths answer the same missing config differently — failure gets
+  a tidy 401 document, success gets a masked 500 — and half a hole is worse
+  than none, because it reads as closed.
+
 ## What this does not decide
 
 - **The route and the copy.** `/login` is the obvious landing place, but the

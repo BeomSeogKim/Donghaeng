@@ -66,6 +66,14 @@ gets a real design, in the same change that adds 카카오 and 네이버.**
 
 ## Still open — and it is the backend's, not ours
 
+> **Answered later the same day** by
+> `2026-08-13-decision-login-failure-return-path.md`. The callback now
+> redirects failures to the frontend origin carrying one of two closed codes
+> in the **fragment** — `/login#e=denied` or `#e=failed` — so the frontend can
+> reach the screen after all, and owns every word the user reads. The
+> paragraph below describes the state that prompted the question, not the
+> state today.
+
 **A failed OAuth callback is a screen we cannot reach.** `docs/api-spec.md` says
 `#38` decides what to do when the callback answers 401
 (`OAUTH_LOGIN_DENIED` — consent refused — or `OAUTH_LOGIN_FAILED`). The answer

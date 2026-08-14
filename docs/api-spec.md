@@ -125,8 +125,8 @@ shipped yet:
 | `VALIDATION_FAILED` | 400 | A request failed Bean Validation — a request body DTO, a query parameter, or a path variable alike. |
 | `MALFORMED_REQUEST_BODY` | 400 | The request body could not be parsed at all. |
 | `UNAUTHENTICATED` | 401 | The request carried no session, or one that has expired, been revoked, or does not match. |
-| `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. Not an error to apologise for — offer the login button again. |
-| `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. |
+| `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. **Only reachable where no frontend origin is configured** — otherwise the callback redirects; see `GET /login/oauth2/code/google`. |
+| `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND`, `UNSUPPORTED_MEDIA_TYPE` | as named | A framework-level error with no more specific code. |
 
@@ -247,7 +247,7 @@ controller. Same for the callback below.
 
 ### `GET /login/oauth2/code/google`
 
-Status: active (added 2026-08-12)
+Status: active (added 2026-08-12; failure behaviour changed 2026-08-13, `#109`)
 Auth: none — this is what the provider redirects the browser back to
 
 **Nothing calls this; Google does.** It is listed because its outcomes are the
@@ -261,15 +261,39 @@ is never taken from the request, so there is no `returnTo` parameter and adding
 one would be an open redirect on the one request that has just been handed a
 session.
 
-Errors
-- 401 `OAUTH_LOGIN_DENIED` — consent refused at the provider
-- 401 `OAUTH_LOGIN_FAILED` — anything else: a `state` mismatch, a failed token
-  exchange, an ID token that did not validate
+On failure: `302` to **`<frontend origin>/login`** with a code in the **URL
+fragment**, and no session cookie (changed 2026-08-13, `#109`,
+`notes/2026-08-13-decision-login-failure-return-path.md`). The callback is a
+browser navigation, so a JSON body here would be a document the person is left
+looking at with no way back.
 
-Both arrive as **problem+json in a browser navigation**, which is a document the
-person is looking at rather than JSON a script is reading. `#38` decides what to
-do about that; the backend's promise is only that it is never an HTML page and
-never a redirect carrying `?error` in a query string.
+| Fragment | Means |
+|---|---|
+| `#e=denied` | The person refused consent at the provider. **A normal path, not an error** — land on the ordinary login screen with the button offered again, never on an error screen. |
+| `#e=failed` | Everything else: a `state` mismatch, a failed token exchange, a provider error, an ID token that did not validate. |
+
+Three properties of that redirect are contract, and `web/` should rely on all
+three:
+
+- **Two codes, and that is the whole vocabulary.** A third value is a spec change,
+  not a surprise to handle. **Switch on the value; never render it**, and treat an
+  unrecognised one as `failed`. That is not defensiveness about us: anyone can
+  send a victim to `<frontend>/login#e=<anything>` without touching this API, so
+  at the frontend the fragment is fully attacker-controlled.
+- **Nothing the provider wrote ever appears.** No `error_description`, no OAuth
+  error code, no exception message. **The frontend owns every word the user
+  reads**; the Korean copy is a constant per code in `web/`.
+- **A fragment, never a query string.** There is no `?error=`. A fragment is not
+  sent to a server, so the reason stays out of access logs and out of `Referer`.
+  Read it with `location.hash`, and clear it once handled.
+
+The origin is server configuration — the same value the success redirect uses.
+
+Errors (problem+json, and only where there is no frontend to return to)
+- 401 `OAUTH_LOGIN_DENIED` / 401 `OAUTH_LOGIN_FAILED` — an environment with
+  `donghaeng.frontend.base-url` unset has nowhere to redirect, which is
+  production's state until `#96`. No browser `web/` serves ever sees these; they
+  are documented so the two codes are not read as removed.
 
 ### `GET /auth/me`
 

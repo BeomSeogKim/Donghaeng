@@ -102,6 +102,35 @@ class SourceShapeTest {
     }
 
     @Test
+    fun `a redirect is only ever sent from the OAuth handlers, and never from the request`() {
+        // The open-redirect rule, held here rather than written into
+        // `api/AGENTS.md`: a rule a test can hold does not also live in prose. It
+        // is the same shape as #80's `wedding_id` allowlist — an ALLOWLIST of the
+        // files permitted to redirect at all, so a new one has to be added
+        // deliberately.
+        //
+        // Two halves, and the second is the one that matters. WHERE, because the
+        // browser reaches the callback holding a session issued one line earlier
+        // and every other endpoint in this API answers JSON. WHAT, because the
+        // destination is configuration — never a `redirect_uri` parameter, never a
+        // `Referer`, never a URL smuggled through `state`. Any mention of
+        // `request` inside the argument fails, which is coarse on purpose: a
+        // redirect target assembled from the request is not a thing to review case
+        // by case.
+        val redirect = Regex("""\.sendRedirect\(([^\n]*)""")
+        sources().forEach { path ->
+            redirect.findAll(Files.readString(path)).forEach { match ->
+                assertThat(path.fileName.toString())
+                    .describedAs("%s redirects; only the OAuth handlers may", path)
+                    .isIn(MAY_REDIRECT)
+                assertThat(match.groupValues[1])
+                    .describedAs("%s builds a redirect target out of the request", path)
+                    .doesNotContain("request")
+            }
+        }
+    }
+
+    @Test
     fun `no constant is visible outside its own file`() {
         // A `const val` is INLINED at every call site, so nothing referencing the
         // declaring class survives into the caller's class file — and
@@ -140,5 +169,9 @@ class SourceShapeTest {
             if (declaresScope) return "private" in line.substringBefore("object")
         }
         return false
+    }
+
+    private companion object {
+        val MAY_REDIRECT = setOf("OAuthLoginSuccessHandler.kt", "OAuthLoginFailureHandler.kt")
     }
 }
