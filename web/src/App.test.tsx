@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
+import { useLocation, useNavigate } from 'react-router'
 import { expect, it } from 'vitest'
 import { App } from './App'
 import { renderWithProviders } from './test/render'
@@ -187,4 +188,149 @@ it('keeps a signed-in person off the login screen', async () => {
   renderWithProviders(<App />, { initialEntries: ['/login'] })
 
   expect(await screen.findByText('김테스터 님')).toBeVisible()
+})
+
+/*
+ * A failed OAuth callback comes back as a browser navigation to /login with a
+ * closed code in the fragment (docs/api-spec.md § GET /login/oauth2/code/google,
+ * notes/2026-08-13-decision-login-failure-return-path.md). These are the tests
+ * the methodology makes mandatory: the branch decides which words a person
+ * reads, and a wrong mapping is a silent wrong message rather than a crash.
+ *
+ * The fragment is fully attacker-controlled — anyone can send a victim to
+ * <frontend>/login#e=<anything> without touching our API — so "never render the
+ * value" is asserted, not assumed.
+ */
+
+/** A probe for the URL itself: the fragment must not survive being handled. */
+function LocationHash() {
+  return <span data-testid="location-hash">{useLocation().hash}</span>
+}
+
+/** A probe for `location.state`, which a redirect-after-login would carry. */
+function LocationState() {
+  return <span data-testid="location-state">{JSON.stringify(useLocation().state)}</span>
+}
+
+/** Stands in for an in-app arrival at a screen that is already on the page. */
+function GoTo({ to, state }: { to: string; state?: unknown }) {
+  const navigate = useNavigate()
+  return (
+    <button onClick={() => navigate(to, { state })} type="button">
+      이동
+    </button>
+  )
+}
+
+it('treats a refused consent as a normal path, not as an error', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(<App />, { initialEntries: ['/login#e=denied'] })
+
+  expect(await screen.findByText('로그인을 취소했습니다')).toBeVisible()
+  // Cancelling is not a failure and must not be told as one — asserted on the
+  // words themselves, which is what the person actually reads.
+  expect(screen.queryByText(/못했습니다/)).not.toBeInTheDocument()
+  // The button stays the obvious next action.
+  expect(screen.getByRole('link', { name: '구글로 로그인' })).toBeVisible()
+})
+
+it('says a login failed without inventing a reason for it', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(<App />, { initialEntries: ['/login#e=failed'] })
+
+  expect(await screen.findByText('로그인하지 못했습니다')).toBeVisible()
+  // The honest half: two codes travel and no detail does, so there is nothing
+  // to explain — and claiming otherwise would be an invented cause.
+  expect(
+    screen.getByText('무엇 때문인지는 알 수 없습니다. 다시 시도해 주세요.'),
+  ).toBeVisible()
+  expect(screen.getByRole('link', { name: '구글로 로그인' })).toBeVisible()
+})
+
+it('reads an unrecognised code as a failure and never renders it', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(<App />, {
+    initialEntries: ['/login#e=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E'],
+  })
+
+  expect(await screen.findByText('로그인하지 못했습니다')).toBeVisible()
+  // Asserted on the markup and on the node, not on textContent: an injected
+  // element contributes no text, so a textContent assertion would pass while
+  // the handler had already fired.
+  expect(document.querySelector('img')).toBeNull()
+  expect(document.body.innerHTML).not.toContain('onerror')
+})
+
+it('clears the fragment once handled, and keeps the message on screen', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(
+    <>
+      <App />
+      <LocationHash />
+    </>,
+    { initialEntries: ['/login#e=denied'] },
+  )
+
+  // A stale fragment would re-announce a cancelled login on every later
+  // navigation back to /login, and on a reload.
+  await waitFor(() => expect(screen.getByTestId('location-hash')).toHaveTextContent(''))
+  expect(screen.getByText('로그인을 취소했습니다')).toBeVisible()
+})
+
+it('says nothing when the person simply opened the login screen', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(<App />, { initialEntries: ['/login'] })
+
+  await screen.findByRole('link', { name: '구글로 로그인' })
+  expect(screen.queryByText('로그인을 취소했습니다')).not.toBeInTheDocument()
+  expect(screen.queryByText('로그인하지 못했습니다')).not.toBeInTheDocument()
+})
+
+it('leaves a fragment it did not handle exactly where it found it', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(
+    <>
+      <App />
+      <LocationHash />
+    </>,
+    { initialEntries: ['/login#top'] },
+  )
+
+  // A bare fragment is not a failure code, so there is nothing to say and
+  // nothing to consume. Rewriting the URL here would silently break an anchor
+  // or a deep link for a message we never showed.
+  await screen.findByRole('link', { name: '구글로 로그인' })
+  expect(screen.getByTestId('location-hash')).toHaveTextContent('#top')
+  expect(screen.queryByText('로그인하지 못했습니다')).not.toBeInTheDocument()
+})
+
+it('catches a code that arrives at a screen already on the page', async () => {
+  server.use(recording().me(unauthenticated))
+
+  renderWithProviders(
+    <>
+      <App />
+      <GoTo state={{ from: '/' }} to="/login#e=failed" />
+      <LocationHash />
+      <LocationState />
+    </>,
+    { initialEntries: ['/login'] },
+  )
+
+  await screen.findByRole('link', { name: '구글로 로그인' })
+  await userEvent.click(screen.getByRole('button', { name: '이동' }))
+
+  // Reading the code only at mount would show nothing here AND strip the
+  // fragment on the way past — destroying the failure rather than missing it.
+  expect(await screen.findByText('로그인하지 못했습니다')).toBeVisible()
+  await waitFor(() => expect(screen.getByTestId('location-hash')).toHaveTextContent(''))
+  // Clearing the fragment must not delete where the person was headed: the
+  // obvious redirect-after-login is <Navigate to="/login" state={{ from }} />.
+  expect(screen.getByTestId('location-state')).toHaveTextContent('{"from":"/"}')
 })
