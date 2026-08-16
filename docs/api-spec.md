@@ -297,7 +297,7 @@ Errors (problem+json, and only where there is no frontend to return to)
 
 ### `GET /auth/me`
 
-Status: active (added 2026-08-12)
+Status: active (added 2026-08-12; `name` became refreshable 2026-08-17, `#94`)
 Auth: session cookie
 
 The first call on every page load: who is signed in, if anyone.
@@ -309,6 +309,17 @@ Response 200
 
 `name` is **nullable** — a provider may return none — so render a fallback rather
 than assuming a string.
+
+**`name` can change between two calls for the same `id`, and that is not an error
+state.** It is the provider's display name, re-read at every login: someone who
+renames their Google account sees the new name here from their next sign-in
+onwards. So do not cache it past a login, do not treat a change as a different
+person — **`id` is the identity, `name` is display text** — and do not offer an
+edit for it in v1, since the next login would overwrite whatever was typed.
+A provider that sends no name on a later login does **not** clear the stored one,
+and the refresh is **best-effort**: a name the server cannot store leaves the
+previous one standing and the login still succeeds. A name that did not change is
+never a failed login.
 
 **There is deliberately no `email`** (decided 2026-08-12). No v1 screen shows the
 couple their own address, and publishing a field nothing consumes would be a seam
