@@ -70,7 +70,8 @@ and tokens.
   **`import` is not a legal Kotlin package name here** — it compiles, but
   ktlint's `standard:package-name` rejects it. (`intake` lost because it would
   also plausibly hold `email_ingest`, a separate domain.)
-- **Layers stay shallow**: Controller (DTO) → Service (tx boundary,
+- **Layers stay shallow**: Controller (DTO) → Service (tx boundary — except
+  `LoginService`, whose retry needs an insert to fail alone, `#93` —
   invariants, aggregate recompute, `GuestChange` writes) → Repository (JPA +
   native aggregation queries). No hexagonal/ports-and-adapters layer.
 - **Split a class when it starts doing two distinct things, not before.** Only

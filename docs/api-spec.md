@@ -247,7 +247,8 @@ controller. Same for the callback below.
 
 ### `GET /login/oauth2/code/google`
 
-Status: active (added 2026-08-12; failure behaviour changed 2026-08-13, `#109`)
+Status: active (added 2026-08-12; failure behaviour changed 2026-08-13, `#109`;
+first-login idempotency stated 2026-08-13, `#93`)
 Auth: none — this is what the provider redirects the browser back to
 
 **Nothing calls this; Google does.** It is listed because its outcomes are the
@@ -260,6 +261,16 @@ with `Set-Cookie: DH_SESSION=...`. **The destination is server configuration.** 
 is never taken from the request, so there is no `returnTo` parameter and adding
 one would be an open redirect on the one request that has just been handed a
 session.
+
+**A first login is idempotent** (`#93`,
+`notes/2026-08-13-decision-first-login-idempotency-and-email-merge.md`). Two
+callbacks for the same identity landing at the same instant — two tabs, a double
+tap, a retried navigation — both succeed and both get a session; the first
+registers the account and the second signs in on it. This is stated because the
+frontend used to have to treat "log in again and it works" as a real strategy: the
+losing one answered 500. There is nothing to handle and no new status code —
+success looks the same either way, and **a 500 from this endpoint is now always a
+genuine fault.**
 
 On failure: `302` to **`<frontend origin>/login`** with a code in the **URL
 fragment**, and no session cookie (changed 2026-08-13, `#109`,
