@@ -21,6 +21,9 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.core.Ordered
+import org.springframework.http.HttpEntity
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -77,7 +80,7 @@ class ErrorDispatchContractTest {
 
     @Test
     fun `an exception thrown by a filter still becomes the masked problem document`() {
-        val (response, logged) = errorLevelEventsDuring { restTemplate.getForEntity("/probe/filter-boom", String::class.java) }
+        val (response, logged) = logEventsDuring { restTemplate.getForEntity("/probe/filter-boom", String::class.java) }
 
         assertThat(response.statusCode.value()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value())
 
@@ -85,7 +88,7 @@ class ErrorDispatchContractTest {
         // the SAME format GlobalErrorHandler uses (asserted there too). Two
         // formats for one event means an incident greps one of them and silently
         // misses half the 500s.
-        assertThat(logged.map { it.formattedMessage })
+        assertThat(logged.filter { it.level == Level.ERROR }.map { it.formattedMessage })
             .contains("Responding 500 to /probe/filter-boom")
         assertThat(response.headers.contentType.toString())
             .startsWith(MediaType.APPLICATION_PROBLEM_JSON_VALUE)
@@ -110,13 +113,57 @@ class ErrorDispatchContractTest {
     }
 
     @Test
+    fun `an anonymous request to a session-scoped endpoint leaves one INFO record`() {
+        // The 401 half of the security record's 401/404/429 alerting, asserted
+        // against the real filter chain and the real argument resolver rather
+        // than a probe — this is the shape an actual unauthenticated caller
+        // produces (notes/2026-07-30-decision-network-security.md).
+        val request =
+            HttpEntity<Void>(
+                HttpHeaders().apply {
+                    // A session cookie is the most sensitive header this API
+                    // receives, and it is the reason "상태와 경로만" is not a
+                    // preference: tokens are masked in logs, and the surest way
+                    // to mask one is never to write it.
+                    add(HttpHeaders.COOKIE, "DH_SESSION=$COOKIE_MARKER")
+                },
+            )
+
+        val (response, logged) =
+            logEventsDuring {
+                restTemplate.exchange("/auth/me?token=$QUERY_MARKER", HttpMethod.GET, request, String::class.java)
+            }
+
+        assertThat(response.statusCode.value()).isEqualTo(HttpStatus.UNAUTHORIZED.value())
+
+        val records = logged.filter { it.formattedMessage.startsWith("Responding 401") }
+        assertThat(records).hasSize(1)
+        assertThat(records.single().formattedMessage).isEqualTo("Responding 401 to /auth/me")
+        assertThat(records.single().level).isEqualTo(Level.INFO)
+        assertThat(records.single().throwableProxy).isNull()
+
+        assertThat(logged.joinToString("\n") { "${it.formattedMessage} ${it.throwableProxy?.message}" })
+            .describedAs("no header value and no query string reaches the log")
+            .doesNotContain(COOKIE_MARKER)
+            .doesNotContain(QUERY_MARKER)
+    }
+
+    @Test
     fun `a status a filter sets directly carries a code too`() {
         // `/error` is reached with no exception at all here, so the document has
         // to be built from the dispatch attributes rather than from a throwable.
         // This is the shape Spring Security's entry points use.
-        val response = restTemplate.getForEntity("/probe/forwarded-404", String::class.java)
+        val (response, logged) = logEventsDuring { restTemplate.getForEntity("/probe/forwarded-404", String::class.java) }
 
         assertThat(response.statusCode.value()).isEqualTo(HttpStatus.NOT_FOUND.value())
+
+        // The second producer records a 4xx too, in the one format. A signal
+        // that exists on one of the two paths is a signal with a hole in it —
+        // and this is the path Spring Security's 401 arrives on.
+        val record = logged.single { it.formattedMessage.startsWith("Responding 404") }
+        assertThat(record.formattedMessage).isEqualTo("Responding 404 to /probe/forwarded-404")
+        assertThat(record.level).isEqualTo(Level.INFO)
+        assertThat(record.throwableProxy).isNull()
         assertThat(response.headers.contentType.toString())
             .startsWith(MediaType.APPLICATION_PROBLEM_JSON_VALUE)
 
@@ -127,24 +174,33 @@ class ErrorDispatchContractTest {
     }
 
     @Test
-    fun `a client asking for the error path directly gets a 404 and logs nothing`() {
+    fun `a client asking for the error path directly gets a 404 and no ERROR record`() {
         // `@RequestMapping` maps for DispatcherType.REQUEST as well as ERROR, so
         // `/error` is an ordinary reachable path. With no dispatch attributes on
         // it there is no error to report: answering 500 would fabricate one, and
-        // logging it would hand an anonymous client unbounded ERROR-log volume.
-        // That attacks the one capability the security record insists on keeping
-        // — alerting on spikes in 401/404/429 — and it cannot be rate-limited,
-        // because the standing rule is per-wedding and per-link-token and
-        // `/error` has neither. `BasicErrorController` was reachable too and
-        // logged nothing, so anything louder is a regression we introduced.
-        val logged = errorLevelEventsDuring { restTemplate.getForEntity("/error", String::class.java) }
+        // logging it at ERROR would hand an anonymous client unbounded
+        // ERROR-log volume. That attacks the one capability the security record
+        // insists on keeping — alerting on spikes in 401/404/429 — and it cannot
+        // be rate-limited, because the standing rule is per-wedding and
+        // per-link-token and `/error` has neither.
+        //
+        // It IS one of those 404s, though, so it leaves the same INFO record
+        // every other 404 leaves. Exempting it would put the one hole in the
+        // 404 signal at the one path an anonymous caller can always reach.
+        val (response, logged) = logEventsDuring { restTemplate.getForEntity("/error", String::class.java) }
 
-        assertThat(logged.first.statusCode.value()).isEqualTo(HttpStatus.NOT_FOUND.value())
-        assertThat(logged.second)
+        assertThat(response.statusCode.value()).isEqualTo(HttpStatus.NOT_FOUND.value())
+        assertThat(logged.filter { it.level == Level.ERROR })
             .describedAs("an unauthenticated GET /error must not be able to write an ERROR log line")
             .isEmpty()
+        val record = logged.single { it.formattedMessage.startsWith("Responding 404") }
+        assertThat(record.level).isEqualTo(Level.INFO)
+        // The path is in the record and NOT in `instance` — the response stays
+        // the one every unmapped path gets, and the log still says which path
+        // was asked for. That asymmetry is the whole point of this branch.
+        assertThat(record.formattedMessage).isEqualTo("Responding 404 to /error")
 
-        val body = objectMapper.readTree(logged.first.body)
+        val body = objectMapper.readTree(response.body)
         assertThat(body["code"].asText()).isEqualTo("NOT_FOUND")
         assertThat(body["status"].asInt()).isEqualTo(404)
     }
@@ -214,9 +270,13 @@ class ErrorDispatchContractTest {
         // catches it and the response falls to this same valve — which reads
         // ERROR_EXCEPTION, still holding the ORIGINAL throwable. The one code
         // path that exists to be the last line of defence would fail open.
-        val raw = rawRequest("GET /a|b HTTP/1.1")
+        val (raw, logged) = logEventsDuring { rawRequest("GET /a|b HTTP/1.1") }
 
         assertThat(raw).startsWith("HTTP/1.1 400")
+
+        // Neither producer runs for it, so the 4xx record simply does not exist
+        // here — and in particular the connector's rejection is not an incident.
+        assertThat(logged.filter { it.level == Level.ERROR }).isEmpty()
         assertThat(raw)
             .describedAs("the container's error page is a human-readable introspection surface")
             .doesNotContain("Apache Tomcat")
@@ -276,14 +336,19 @@ class ErrorDispatchContractTest {
             socket.getInputStream().readBytes().decodeToString()
         }
 
-    /** Runs [block] with an appender on the root logger, returning its result and the ERROR events. */
-    private fun <T> errorLevelEventsDuring(block: () -> T): Pair<T, List<ILoggingEvent>> {
+    /**
+     * Runs [block] with an appender on the root logger, returning its result and
+     * every event logged.
+     *
+     * Written here because `#67`'s `capturingLog { }` sits in an unmerged PR;
+     * this function collapses into it when that lands.
+     */
+    private fun <T> logEventsDuring(block: () -> T): Pair<T, List<ILoggingEvent>> {
         val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
         val appender = ListAppender<ILoggingEvent>().apply { start() }
         root.addAppender(appender)
         try {
-            val result = block()
-            return result to appender.list.filter { it.level == Level.ERROR }
+            return block() to appender.list.toList()
         } finally {
             root.detachAppender(appender)
             appender.stop()
@@ -323,5 +388,10 @@ class ErrorDispatchContractTest {
 private const val FILTER_MARKER = "leaked-secret-6c2e91-filter-internals"
 
 private const val LEAKY_HEADER = "X-Donghaeng-Probe"
+
+/** A session token's shape, presented so the log can be asserted not to carry it. */
+private const val COOKIE_MARKER = "leaked-secret-0d6f38-a-session-token"
+
+private const val QUERY_MARKER = "leaked-secret-8e2b74-in-a-query-string"
 
 private const val HEADER_MARKER = "leaked-secret-4b7a05-in-a-header"

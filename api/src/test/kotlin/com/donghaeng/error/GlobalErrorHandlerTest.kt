@@ -137,22 +137,109 @@ class GlobalErrorHandlerTest {
     }
 
     @Test
-    fun `an unhandled exception is a masked 500 that leaks nothing about itself`() {
-        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        root.addAppender(appender)
-        val response =
-            try {
-                mockMvc.get("/test-errors/unhandled").andReturn().response
-            } finally {
-                root.detachAppender(appender)
-                appender.stop()
+    fun `a 4xx leaves one INFO record carrying its status and path`() {
+        // The 4xx branch is the only application-side source for the security
+        // record's 401/404/429 spike alerting
+        // (notes/2026-07-30-decision-network-security.md), and it is the only
+        // place a cross-tenant 404 can ever be told apart from a typo'd id — the
+        // response is identical on purpose
+        // (notes/2026-08-10-decision-cross-tenant-status-code.md).
+        val (_, logged) =
+            logEventsDuring {
+                mockMvc.get("/test-errors/domain?token=$QUERY_MARKER") {
+                    header(PROBE_HEADER, HEADER_MARKER)
+                }
             }
+
+        val records = logged.filter { it.formattedMessage.startsWith("Responding 404") }
+        assertThat(records).hasSize(1)
+
+        val record = records.single()
+        // Status and path, in the format ProblemDocuments.logLine already gives
+        // the 5xx line — one string for an incident to grep, not two.
+        assertThat(record.formattedMessage).isEqualTo("Responding 404 to /test-errors/domain")
+
+        // INFO, not WARN: a 401 from an anonymous caller is routine traffic, and
+        // a channel that cries wolf gets muted. Not DEBUG either — that is one
+        // config change away from silent, and #64 has just pinned loggers off.
+        assertThat(record.level).isEqualTo(Level.INFO)
+
+        // No throwable. The 5xx line carries one because the client is told
+        // nothing and the exception is the whole diagnosis; a 4xx is a decision
+        // we made deliberately, and a stack trace per 404 is how a log stops
+        // being readable.
+        assertThat(record.throwableProxy).isNull()
+    }
+
+    @Test
+    fun `the 4xx record carries the status and the path and nothing else about the request`() {
+        // "상태와 경로만" — the record's phrasing. The whole captured stream is
+        // searched, not just the line we produced, because a leak that arrives
+        // under some other logger's line is the same leak.
+        val (_, logged) =
+            logEventsDuring {
+                mockMvc.post("/test-errors/validated?token=$QUERY_MARKER") {
+                    contentType = MediaType.APPLICATION_JSON
+                    // The marker is the REJECTED VALUE, so it sits inside the
+                    // exception Spring raises. A handler that logged `ex.message`
+                    // — the obvious way to make a 4xx line "more useful" —
+                    // publishes it, and this assertion is what goes red.
+                    content = """{"name": "ok", "note": "$BODY_MARKER"}"""
+                    header(PROBE_HEADER, HEADER_MARKER)
+                }
+            }
+
+        assertThat(logged.map { it.formattedMessage })
+            .contains("Responding 400 to /test-errors/validated")
+
+        assertThat(logged.joinToString("\n") { "${it.formattedMessage} ${it.throwableProxy?.message}" })
+            .describedAs("a 4xx record names the status and the path, never the body, a header or the query string")
+            .doesNotContain(BODY_MARKER)
+            .doesNotContain(HEADER_MARKER)
+            .doesNotContain(QUERY_MARKER)
+    }
+
+    @Test
+    fun `a path at the bound is recorded whole`() {
+        // The bound sits far above anything this API routes, so the record of a
+        // real request is never cut. If this ever goes red because a genuine path
+        // outgrew it, raise the bound — do not soften the assertion below.
+        val path = "/" + "a".repeat(119)
+
+        val (_, logged) = logEventsDuring { mockMvc.get(path) }
+
+        assertThat(logged.map { it.formattedMessage })
+            .contains("Responding 404 to $path")
+    }
+
+    @Test
+    fun `a caller-inflated path is cut, and the record says it was cut`() {
+        // The request line counts against Tomcat's 8KB header budget, so without
+        // this the caller picks how many bytes each of their 404s writes — ~250x
+        // a normal record, from an unauthenticated request, against the one
+        // capability the security record keeps. The cut is marked because a
+        // silently shortened path reads as the whole path.
+        val path = "/" + "a".repeat(4_000)
+
+        val (_, logged) = logEventsDuring { mockMvc.get(path) }
+
+        val record = logged.single { it.formattedMessage.startsWith("Responding 404") }
+        assertThat(record.formattedMessage)
+            .startsWith("Responding 404 to /" + "a".repeat(119))
+            .endsWith("…[truncated]")
+        assertThat(record.formattedMessage.length)
+            .describedAs("the caller does not choose how long the record is")
+            .isLessThan(200)
+    }
+
+    @Test
+    fun `an unhandled exception is a masked 500 that leaks nothing about itself`() {
+        val (response, logged) = logEventsDuring { mockMvc.get("/test-errors/unhandled").andReturn().response }
 
         // One log format across both producers — the identical assertion lives in
         // ErrorDispatchContractTest. The client is told nothing, so the server
         // has to be told everything, in a string an incident can grep once.
-        assertThat(appender.list.filter { it.level == Level.ERROR }.map { it.formattedMessage })
+        assertThat(logged.filter { it.level == Level.ERROR }.map { it.formattedMessage })
             .contains("Responding 500 to /test-errors/unhandled")
 
         assertThat(response.status).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -241,7 +328,34 @@ class GlobalErrorHandlerTest {
         val body = objectMapper.readTree(response.contentAsString)
         assertThat(body["code"].asText()).isEqualTo("METHOD_NOT_ALLOWED")
     }
+
+    /**
+     * Every event logged during [block], with its result.
+     *
+     * Written here because `#67`'s `capturingLog { }` sits in an unmerged PR;
+     * this function collapses into it when that lands.
+     */
+    private fun <T> logEventsDuring(block: () -> T): Pair<T, List<ILoggingEvent>> {
+        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        root.addAppender(appender)
+        try {
+            return block() to appender.list.toList()
+        } finally {
+            root.detachAppender(appender)
+            appender.stop()
+        }
+    }
 }
+
+/** Markers that appear nowhere else, so finding one in a log record is unambiguous. */
+private const val BODY_MARKER = "leaked-secret-1e5b90-in-a-request-body"
+
+private const val HEADER_MARKER = "leaked-secret-9c3d24-in-a-request-header"
+
+private const val QUERY_MARKER = "leaked-secret-5a7e11-in-a-query-string"
+
+private const val PROBE_HEADER = "X-Donghaeng-Probe"
 
 private const val STATUS_EXCEPTION_MARKER = "leaked-secret-8b1d47-jdbc-password"
 
@@ -293,4 +407,6 @@ internal class ErrorContractController {
 
 internal data class ValidatedRequest(
     @field:NotBlank val name: String,
+    /** A field whose REJECTED VALUE is a body value, so the log assertions have something to find. */
+    @field:Size(max = 3) val note: String? = null,
 )
