@@ -1,16 +1,12 @@
 package com.donghaeng.error
 
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
+import com.donghaeng.capturingLog
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
@@ -138,22 +134,13 @@ class GlobalErrorHandlerTest {
 
     @Test
     fun `an unhandled exception is a masked 500 that leaks nothing about itself`() {
-        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        root.addAppender(appender)
-        val response =
-            try {
-                mockMvc.get("/test-errors/unhandled").andReturn().response
-            } finally {
-                root.detachAppender(appender)
-                appender.stop()
-            }
+        val (response, logged) = capturingLog { mockMvc.get("/test-errors/unhandled").andReturn().response }
 
         // One log format across both producers — the identical assertion lives in
-        // ErrorDispatchContractTest. The client is told nothing, so the server
-        // has to be told everything, in a string an incident can grep once.
-        assertThat(appender.list.filter { it.level == Level.ERROR }.map { it.formattedMessage })
-            .contains("Responding 500 to /test-errors/unhandled")
+        // ErrorDispatchContractTest, through the same function. The client is told
+        // nothing, so the server has to be told everything: the status, the path,
+        // and the exception that neither of them names.
+        logged.assertMaskedFailureRecord(500, "/test-errors/unhandled", IllegalStateException::class.java)
 
         assertThat(response.status).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value())
         assertThat(response.contentType).startsWith(MediaType.APPLICATION_PROBLEM_JSON_VALUE)
@@ -195,6 +182,25 @@ class GlobalErrorHandlerTest {
         assertThat(body["detail"].asText()).isEqualTo("An unexpected error occurred.")
         assertThat(body["code"].asText()).isEqualTo("INTERNAL_ERROR")
         assertThat(response.contentAsString).doesNotContain(STATUS_EXCEPTION_MARKER)
+    }
+
+    @Test
+    fun `a 5xx that is not a 500 is recorded as the status it actually was`() {
+        // The masking rule is a property of the whole 5xx range, and so is the
+        // record. With only 500 asserted, a line hardcoded to "Responding 500"
+        // stayed green — and an incident reading it would be looking for a crash
+        // while the application was in fact refusing traffic.
+        val (response, logged) = capturingLog { mockMvc.get("/test-errors/unavailable").andReturn().response }
+
+        assertThat(response.status).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value())
+        logged.assertMaskedFailureRecord(503, "/test-errors/unavailable", ResponseStatusException::class.java)
+
+        // Masked the same way, since it is the status and not the handler that
+        // decides — the body is the 503's, with nothing of the thrower's reason.
+        val body = objectMapper.readTree(response.contentAsString)
+        assertThat(body["detail"].asText()).isEqualTo("An unexpected error occurred.")
+        assertThat(body["code"].asText()).isEqualTo("INTERNAL_ERROR")
+        assertThat(response.contentAsString).doesNotContain(UNAVAILABLE_MARKER)
     }
 
     @Test
@@ -248,6 +254,8 @@ private const val STATUS_EXCEPTION_MARKER = "leaked-secret-8b1d47-jdbc-password"
 /** A string that appears nowhere else, so finding it in a response body is unambiguous. */
 private const val UNHANDLED_MARKER = "leaked-secret-3f9a2c-guest-phone-01012345678"
 
+private const val UNAVAILABLE_MARKER = "leaked-secret-9e5b28-upstream-host"
+
 private const val LEAKY_TITLE_MARKER = "leaked-secret-7d4e10-in-a-title"
 
 private const val LEAKY_PROPERTY_MARKER = "leaked-secret-2a8f63-in-an-extension-member"
@@ -283,6 +291,9 @@ internal class ErrorContractController {
 
     @GetMapping("/unhandled")
     fun unhandled(): Nothing = throw IllegalStateException(UNHANDLED_MARKER)
+
+    @GetMapping("/unavailable")
+    fun unavailable(): Nothing = throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, UNAVAILABLE_MARKER)
 
     @GetMapping("/server-side-status")
     fun serverSideStatus(): Nothing = throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, STATUS_EXCEPTION_MARKER)
