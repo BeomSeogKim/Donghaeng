@@ -49,6 +49,15 @@ leaves an account with no session, which the next login adopts. **`#94`'s
 profile write is therefore a third independent commit**, not part of a login
 transaction.
 
+**And it runs only after the identity insert has succeeded** (added 2026-08-17,
+found by merging `#94` into this). Refreshing at the point the merge lookup
+recognises someone is wrong under the retry: that pass can still lose the
+identity insert and hand the login to a *different* account — the staged
+double-collision case. A refresh placed there renames a person on an attempt
+that then rolls back. Placed after `identities.save`, a losing pass reaches no
+call site at all, so the refresh runs exactly once and the idempotence of
+"compare before you write" is a backstop rather than the guarantee.
+
 ## `#94` — the merge key must be verified, and we can become the verifier
 
 `#94` has two halves and only the second one matters much. Profile refresh

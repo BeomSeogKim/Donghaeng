@@ -1,8 +1,10 @@
 package com.donghaeng.auth.account
 
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.Instant
 
 internal interface AppUserRepository : JpaRepository<AppUser, Long> {
     /**
@@ -29,4 +31,37 @@ internal interface AppUserRepository : JpaRepository<AppUser, Long> {
     fun findByMergeKey(
         @Param("mergeKey") mergeKey: String,
     ): AppUser?
+
+    /**
+     * Writes a display name the provider has changed since we last saw this person,
+     * and writes NOTHING when it has not (#94, [ProfileRefreshService]).
+     *
+     * The predicate is what makes that true, and it is `is distinct from` rather
+     * than `<>` for the row that has no name yet: `name <> 'x'` is NULL there, so
+     * `<>` would leave a nameless account nameless forever — which is the same
+     * "a returning user's profile never catches up" this issue is about, one column
+     * over.
+     *
+     * A statement rather than a read-then-save: the read exists only to decide
+     * whether to write, so Postgres may as well decide, and a row that matches
+     * nothing is not locked and no new tuple is written. Two logins for one person
+     * racing here settle on one of the two names rather than on a lost update.
+     *
+     * Which columns it may touch is `AppUserWriteScopeTest`'s to say, not this
+     * comment's.
+     */
+    @Modifying
+    @Query(
+        value = """
+            update app_user
+               set name = :name, updated_at = :now
+             where id = :id and name is distinct from :name
+            """,
+        nativeQuery = true,
+    )
+    fun renameIfChanged(
+        @Param("id") id: Long,
+        @Param("name") name: String,
+        @Param("now") now: Instant,
+    ): Int
 }

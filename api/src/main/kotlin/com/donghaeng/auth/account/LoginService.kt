@@ -21,6 +21,10 @@ import java.time.Instant
  * two different people signing in at the same instant take no shared lock and never
  * meet.
  *
+ * A login that recognises someone also lets the provider correct what it told us
+ * about them last time — see [ProfileRefreshService], which is deliberately a
+ * commit of its own rather than part of this one.
+ *
  * Nothing here names a provider. Which one spoke is carried by
  * [ProviderProfile.provider], so `#89` adds mappers and changes no logic in THIS
  * file — which is a claim about this file only. `#89` still restructures
@@ -31,6 +35,7 @@ import java.time.Instant
 @Service
 internal class LoginService(
     private val identities: OauthIdentityRepository,
+    private val profiles: ProfileRefreshService,
     private val registrations: AccountRegistrationService,
     private val sessions: SessionService,
 ) {
@@ -75,6 +80,17 @@ internal class LoginService(
      *
      * The catch is narrow ([IdentityCollision]): anything else the schema refuses
      * still fails, loudly.
+     *
+     * **Every exit that recognised an existing person refreshes their profile**
+     * (`#94`), and the loop has exactly two: the subject lookup here, and the merge
+     * lookup inside [AccountRegistrationService.register]. The third exit — a person
+     * this pass just created — must not, and does not.
+     *
+     * **A login refreshes once, not once per pass.** A pass that loses never reaches
+     * either call site: the losing INSERT throws before `register` gets to its own
+     * refresh, and this one only runs on a pass that returns. Should a collision ever
+     * surface later than the INSERT that caused it, the repeat is harmless anyway —
+     * `renameIfChanged` compares before it writes, so the second one matches no row.
      */
     private fun resolveUserId(
         profile: ProviderProfile,
@@ -83,7 +99,7 @@ internal class LoginService(
         var collision: DataIntegrityViolationException? = null
         repeat(ATTEMPTS) {
             identities.findByProviderAndProviderUserId(profile.provider, profile.subject)?.let { identity ->
-                return identity.userId
+                return identity.userId.also { profiles.refresh(it, profile, now) }
             }
             try {
                 return registrations.register(profile, now)

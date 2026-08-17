@@ -122,9 +122,15 @@ internal class ConcurrentFirstLoginTest {
             }
 
         // One account — the one the rival committed — and the login that lost the
-        // race is attached to it rather than dead.
+        // race is attached to it rather than dead. `single()` is what carries that:
+        // an account of its own would be a second row.
         val user = users.findAll().single()
-        assertThat(user.name).isEqualTo("먼저")
+        // The rival wrote `먼저`; the retry's merge lookup recognised that row as
+        // this person, and recognising someone is what refreshes their name (#94).
+        // So the marker of "which row did the login land on" is no longer the name —
+        // this asserts the refresh reached the merge path THROUGH the retry, which
+        // is the one call site the two changes had to be merged to reach.
+        assertThat(user.name).isEqualTo("김테스터")
         assertThat(identities.findAll().single().userId).isEqualTo(user.id)
         assertThat(sessions.findAll().single().userId).isEqualTo(user.id)
         assertThat(issued.selector).isNotBlank()

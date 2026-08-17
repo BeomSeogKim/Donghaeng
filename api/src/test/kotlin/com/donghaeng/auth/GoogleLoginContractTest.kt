@@ -295,6 +295,71 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
     }
 
     @Test
+    fun `a name changed at Google reaches us on the next login, and nothing else on the row moves`() {
+        // #94's first half, end to end: without this, the display name we happen to
+        // see on someone's FIRST login is the name we show them forever.
+        STUB_PROVIDER.subject = "google-subject-renamed"
+        STUB_PROVIDER.email = "kim@gmail.com"
+        STUB_PROVIDER.emailVerified = true
+        STUB_PROVIDER.fullName = "김테스터"
+        login()
+
+        STUB_PROVIDER.fullName = "김바뀜"
+        val session = login()
+
+        assertThat(get("/auth/me", listOf(session)).json()["name"].asText()).isEqualTo("김바뀜")
+        // One person, one row — the refresh is an update on the row the login just
+        // recognised, never a second account.
+        assertThat(users.findAll()).singleElement().satisfies({ user ->
+            assertThat(user.name).isEqualTo("김바뀜")
+            // The address half of #94 is #110's and is deliberately not reachable
+            // from here (2026-08-13 record, #94 §2).
+            assertThat(user.email).isEqualTo("kim@gmail.com")
+            assertThat(user.emailVerifiedBy).isEqualTo("GOOGLE")
+        })
+    }
+
+    @Test
+    fun `a person recognised by their verified email, not by their subject, is refreshed too`() {
+        // The other door into an existing account (#82): a second provider account
+        // carrying the same verified address. That person is returning as much as
+        // one recognised by their subject id, so the refresh cannot hang off the
+        // identity lookup alone — and the row it lands on is the one holding the
+        // merge key, which is the row this change is least allowed to disturb.
+        STUB_PROVIDER.subject = "google-subject-merge-first"
+        STUB_PROVIDER.email = "Kim@Gmail.com"
+        STUB_PROVIDER.emailVerified = true
+        STUB_PROVIDER.fullName = "김테스터"
+        login()
+
+        STUB_PROVIDER.subject = "google-subject-merge-second"
+        STUB_PROVIDER.email = "kim@gmail.com"
+        STUB_PROVIDER.fullName = "김바뀜"
+        login()
+
+        assertThat(users.findAll()).singleElement().satisfies({ user ->
+            assertThat(user.name).isEqualTo("김바뀜")
+            // Untouched — and it is the address the FIRST login normalised and
+            // stored, not the one the second login presented. Nothing about a
+            // profile refresh may rewrite the merge key, even to a value that folds
+            // to the same thing.
+            assertThat(user.email).isEqualTo("kim@gmail.com")
+        })
+    }
+
+    @Test
+    fun `a login that carries no name leaves the name we already had`() {
+        STUB_PROVIDER.subject = "google-subject-nameless"
+        STUB_PROVIDER.fullName = "김테스터"
+        login()
+
+        STUB_PROVIDER.fullName = null
+        val session = login()
+
+        assertThat(get("/auth/me", listOf(session)).json()["name"].asText()).isEqualTo("김테스터")
+    }
+
+    @Test
     fun `an unverified email is not stored at all, and the account stands alone`() {
         STUB_PROVIDER.subject = "google-subject-unverified"
         STUB_PROVIDER.email = "victim@gmail.com"
