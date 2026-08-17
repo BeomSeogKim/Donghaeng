@@ -126,6 +126,14 @@ internal abstract class GoogleLoginFixture {
      * Logout is a POST, not a GET, and that is v1's CSRF answer rather than a REST
      * preference — `SameSite=Lax` admits the cookie on top-level GET navigation,
      * so a GET logout is an `<img src>` away from signing the couple out.
+     *
+     * **`Content-Type: application/json` even though the body is empty**, because
+     * every state-changing handler declares `consumes` and a request without it
+     * does not match the mapping at all
+     * (notes/2026-08-13-decision-static-front-and-content-type-gate.md). That is
+     * the point rather than an inconvenience — it is what forces the preflight —
+     * and it is what a real client has to send, so the fixture sends it too.
+     * [ContentTypeGateContractTest] is where the absence is asserted instead.
      */
     protected fun post(
         path: String,
@@ -135,6 +143,7 @@ internal abstract class GoogleLoginFixture {
             HttpRequest
                 .newBuilder(URI.create("http://localhost:$port$path"))
                 .POST(HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/json")
                 .apply {
                     if (cookies.isNotEmpty()) {
                         header("Cookie", cookies.joinToString("; ") { "${it.name}=${it.value}" })

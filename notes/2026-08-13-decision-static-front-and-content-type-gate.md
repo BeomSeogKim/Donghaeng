@@ -73,6 +73,79 @@ demotes it from "required before import" to "not required".
 bytes under a non-safelisted content type (`application/octet-stream`), or
 base64 inside JSON — either forces a preflight. `#20` picks; the constraint
 binds either way.
+> ⚠️ **`application/octet-stream` is wrong here — it does not force a
+> preflight.** Corrected below; `#20` must not take this sentence as guidance.
+
+## Amended 2026-08-15 — the ban was half a rule, and one of its facts was wrong
+
+Building the sweep (`#111`) tested the claims above instead of restating them,
+and two did not survive.
+
+**1. A ban does not reach a handler with no body, so the rule is now
+positive.** The three-type ban only bites where a message converter runs.
+`POST /auth/logout` reads no body and declared no `consumes`, so nothing
+produced a 415 — and a `text/plain` POST from a sibling host is CORS-simple,
+same-site under `Lax`, and arrived. The exposure was small (logout is
+idempotent and reads nothing); **the sentence claiming the preflight was the
+gate was the real defect**, because it read as closed.
+
+The rule becomes: **every state-changing handler declares a non-empty
+`consumes`, and no declared type may be one a preflight-free request can
+present.** That subsumes the three-type ban — requiring a type that preflights
+cannot also admit one that does not — and closes the body-less hole, because
+`consumes` is a *mapping condition* evaluated before any converter: a
+non-matching request never enters the method. Verified over real HTTP, not read
+off the source: `text/plain` → 415, **no `Content-Type` header at all** → 415,
+`application/json` → 204.
+
+**Two spellings satisfy that sentence and defeat it, so the check refuses them
+outright.** Both were found by auditing the check rather than the code, and
+both were confirmed against the running server:
+
+- **`@RequestBody(required = false)` switches the condition off.**
+  `ConsumesRequestCondition` short-circuits before comparing any media type
+  when the request has no body and the body is not required, and the only
+  thing that lowers `bodyRequired` is that annotation. A handler with a
+  perfectly correct `consumes = application/json` and an optional body
+  answered **204** to both a `text/plain` and a header-less POST. So the
+  mapping-condition guarantee above is **conditional, not absolute** — it
+  holds because the sweep now forbids the one configuration that breaks it.
+  Keep the body required and let the client send `{}`.
+- **Any negated expression widens the condition, even beside a positive one.**
+  Matching is an OR across expressions and a negated one matches everything it
+  does not exclude, so `["application/json", "!multipart/form-data"]` answers
+  **204** to `text/plain`. "At least one positive expression" is therefore not
+  enough; **no negated expression is allowed at all**. This matters because
+  `["!multipart/form-data", "!text/plain"]` is the literal transcription of
+  this record's *original* wording — the spelling someone reading the
+  superseded sentence would reach for.
+
+**The sweep cannot see filter-registered endpoints**, so those are held by a
+separate boot test asserting `GET /logout`, `POST /logout`, `POST /login` and
+`GET /login` all 404. Two things learned there: `logout { disable() }` **is**
+load-bearing — deleting it makes `GET /logout` a 302, a state-changing GET —
+while `formLogin { disable() }` is **not**, because Spring Security 6 applies
+`logout` to every chain by default and does not apply `formLogin`. The test
+asserts the surface rather than those two lines, so it holds whichever way a
+future edit reaches for them. `#5` will edit this chain.
+
+This is deliberately not "must declare exactly `application/json`". That form
+would turn red the day `#20` picks a type for CSV, forcing a decision this
+record leaves to `#20`.
+
+**2. `application/octet-stream` does not force a preflight**, so the `#20`
+guidance above is wrong. A request sending **no** `Content-Type` is matched as
+`application/octet-stream`, and a `fetch` with a typeless body sends none and
+is CORS-simple — so octet-stream is a fourth preflight-free type. Confirmed by
+declaring it on a handler: the header-less POST answered 204 and the handler
+ran. **`#20`'s live options are base64 inside JSON, or a content type of our
+own.**
+
+**Consequences that landed with it:** `POST /auth/logout` now requires
+`Content-Type: application/json` despite having no body, and `web/`'s
+`apiFetch` sends it on every non-GET — it did not, so sign-out was broken by
+the backend change until the same branch fixed it. `DELETE` is not swept: it is
+never CORS-simple, so it is not a hole.
 
 ## What this does not decide
 

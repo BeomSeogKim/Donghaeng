@@ -4,6 +4,7 @@ import { HttpResponse, http } from 'msw'
 import { useLocation, useNavigate } from 'react-router'
 import { expect, it } from 'vitest'
 import { App } from './App'
+import { apiError } from './lib/api'
 import { renderWithProviders } from './test/render'
 import { server } from './test/server'
 
@@ -38,9 +39,19 @@ function recording() {
         return response()
       })
     },
+    /**
+     * Refuses what the API refuses. A state-changing request without
+     * `Content-Type: application/json` is answered 415 and never reaches the
+     * endpoint (docs/api-spec.md § Every POST, PUT and PATCH must send
+     * `Content-Type: application/json`), so this double answers 415 too — a
+     * double more permissive than the server is how a sign-out button that
+     * cannot sign anyone out stays green.
+     */
     logout(response: () => Response) {
       return http.post(`${API}/auth/logout`, ({ request }) => {
         seen.push(request)
+        if (request.headers.get('Content-Type') !== 'application/json')
+          return unsupportedMediaType()
         return response()
       })
     },
@@ -60,6 +71,30 @@ const unauthenticated = () =>
   )
 
 const signedIn = (name: string | null) => HttpResponse.json({ id: 12, name })
+
+/**
+ * The refusal, as the API actually writes it — an ordinary problem document,
+ * not a bare status (docs/api-spec.md § Every POST, PUT and PATCH must send
+ * `Content-Type: application/json`). The status is the same either way, so a
+ * bare 415 would look convincing while disagreeing with the server about
+ * `code`, which is the only member anything branches on.
+ *
+ * `detail` is verbatim from the server, quoting back the header that was sent —
+ * kept exactly so, because it is the reason nothing renders `detail`. With no
+ * header at all the server writes `'null'`, which is this case.
+ */
+const unsupportedMediaType = () =>
+  HttpResponse.json(
+    {
+      type: 'about:blank',
+      title: 'Unsupported Media Type',
+      status: 415,
+      detail: "Content-Type 'null' is not supported.",
+      instance: '/auth/logout',
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+    },
+    { status: 415, headers: { 'Content-Type': 'application/problem+json' } },
+  )
 
 it('sends an unauthenticated visitor from the ledger to the login screen', async () => {
   server.use(recording().me(unauthenticated))
@@ -113,6 +148,24 @@ it('shows the signed-in person and lets them sign out', async () => {
   // logout (docs/api-spec.md § POST /auth/logout).
   const logout = calls.seen.find((request) => request.url === `${API}/auth/logout`)
   expect(logout?.method).toBe('POST')
+  // Without it the API answers 415 and the session survives the button.
+  expect(logout?.headers.get('Content-Type')).toBe('application/json')
+})
+
+it('refuses a sign-out that omits the JSON content type, exactly as the API does', async () => {
+  const calls = recording()
+  server.use(calls.logout(() => new HttpResponse(null, { status: 204 })))
+
+  // The shape the app sent until 2026-08-15. Asserted so the double above stays
+  // strict: if it ever goes back to accepting this, the sign-out test above
+  // would pass with a request the real server throws away.
+  const refused = await fetch(`${API}/auth/logout`, { method: 'POST' })
+
+  expect(refused.status).toBe(415)
+  expect(await apiError(refused)).toMatchObject({
+    status: 415,
+    code: 'UNSUPPORTED_MEDIA_TYPE',
+  })
 })
 
 it('leaves nothing of the signed-out person in the cache', async () => {

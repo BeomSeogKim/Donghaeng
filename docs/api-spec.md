@@ -127,8 +127,9 @@ shipped yet:
 | `UNAUTHENTICATED` | 401 | The request carried no session, or one that has expired, been revoked, or does not match. |
 | `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. **Only reachable where no frontend origin is configured** — otherwise the callback redirects; see `GET /login/oauth2/code/google`. |
 | `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | A `POST`/`PUT`/`PATCH` sent a `Content-Type` the endpoint does not accept, **or sent none at all**. Not an edge case — it is how the CSRF gate refuses a request; see "Every POST, PUT and PATCH must send `Content-Type: application/json`". |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
-| *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND`, `UNSUPPORTED_MEDIA_TYPE` | as named | A framework-level error with no more specific code. |
+| *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND` | as named | A framework-level error with no more specific code. |
 
 Domain codes (`GUEST_NOT_FOUND`, `IMPORT_FILE_ALREADY_PROCESSED`, …) are added
 to this table by the endpoint that can raise them, in the same change.
@@ -331,7 +332,11 @@ Auth: session cookie, but see below — it never demands one
 
 Ends the session **on this device**.
 
-Request: no body.
+Request: no body, but **`Content-Type: application/json` is required anyway**
+(changed 2026-08-15). Without it the request is refused with a 415 and never
+reaches the endpoint — see "Every POST, PUT and PATCH must send
+`Content-Type: application/json`" below for why an empty body still needs a
+content type.
 
 Response 204, with no body and a `Set-Cookie` that clears `DH_SESSION`.
 
@@ -340,11 +345,11 @@ Carries the recomputed aggregate: **no** — it changes no ledger data.
 Three properties, and each exists because its absence would produce a sign-out
 button that leaves people signed in:
 
-- **It is a POST, and a GET will not do.** v1's CSRF protection is
-  `SameSite=Lax` plus no state-changing GET, and Lax *does* send the cookie on
-  top-level GET navigation — so a logout reachable by GET could be triggered by an
-  `<img>` on any page the couple visit. Under POST the cookie is withheld
-  cross-site and the request cannot revoke anything.
+- **It is a POST, and a GET will not do.** Lax *does* send the cookie on top-level
+  GET navigation, so a logout reachable by GET could be triggered by an `<img>` on
+  any page the couple visit. What protects the POST is not Lax either — it is the
+  preflight the required `Content-Type` forces, which is why that header is not
+  optional on a request with no body.
 - **It always answers 204**, whatever it finds: no cookie, an unparseable cookie,
   several at once, an expired session, one already revoked, one revoked from
   another device. All of them mean "you are not logged in on this device", which
@@ -392,13 +397,85 @@ An origin that is not on the list gets no `Access-Control-Allow-Origin`, and the
 browser discards the response before your code sees it. Production has no origin
 configured yet, for the same reason it has no frontend URL (`#96`).
 
+### Every POST, PUT and PATCH must send `Content-Type: application/json`
+
+_Added 2026-08-15 (`#111`). **This is a breaking change** — see the note at the end._
+
+**Every state-changing request sends `Content-Type: application/json`, including
+one with an empty body.** A `POST`, `PUT` or `PATCH` that sends anything else — or
+sends no `Content-Type` at all — gets a **415**, and never reaches the endpoint.
+`GET` is unaffected and sends no `Content-Type`.
+
+**The 415 is an ordinary problem document**, like every other error here. It is
+raised during handler selection rather than by the endpoint, but that changes
+nothing the client sees:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unsupported Media Type",
+  "status": 415,
+  "detail": "Content-Type 'text/plain' is not supported.",
+  "instance": "/auth/logout",
+  "code": "UNSUPPORTED_MEDIA_TYPE"
+}
+```
+
+`code` is **`UNSUPPORTED_MEDIA_TYPE`** for every way of getting refused, so the
+client branches once. Only `detail` varies, in three ways — a wrong type quotes it
+back (`Content-Type 'text/plain' is not supported.`), a missing header reads
+`Content-Type 'null' is not supported.`, and an **unparseable** header (`%`, or a
+valid type with a bad parameter such as `application/json; charset=@@`) reads
+`Could not parse Content-Type.` Do not branch on any of them; the first is also a
+plain example of why `detail` is never rendered, since it prints the submitted
+header straight back at you.
+
+**A test double must return this document, not a bare 415.** A double that answers
+415 with no body disagrees with the server about the one member anything branches
+on.
+
+This is not a style preference; it is the one rule in this section that is also a
+security control, and the header is doing real work even when there is no body to
+describe. The **CORS-safelisted** content types — `multipart/form-data`,
+`application/x-www-form-urlencoded`, `text/plain` — are the only ones a browser may
+send cross-origin *without* a preflight, and the preflight is what stops a
+malicious page from writing to this API with the couple's cookie attached. Demanding
+JSON is what forces the preflight
+(`notes/2026-08-13-decision-static-front-and-content-type-gate.md`). Two CI checks
+hold it: one that every handler declares it, one that a request without it is
+actually refused.
+
+What it means for `web/`:
+
+- **Send the header on every mutation, even with no body.** `fetch(url, { method:
+  'POST' })` with no `Content-Type` is refused. This is the whole of the breaking
+  change.
+- **Never `FormData`, never `URLSearchParams`, as a request body.** `fetch` sets a
+  safelisted content type for both, and the call will fail.
+- **File upload does not use a multipart form**, and it will not use
+  `application/octet-stream` either — a request sending *no* `Content-Type` is
+  matched as octet-stream, so that type is preflight-free and banned with the other
+  three. When CSV import arrives (`#20`) it will be base64 inside JSON or a content
+  type of our own; the endpoint's entry will say which. An `<input type="file">` is
+  still the picker; only the transport differs.
+
+> **Breaking, 2026-08-15.** `POST /auth/logout` previously accepted a request with
+> no `Content-Type` and now answers 415 to one. `web/` sent none until this date, so
+> sign-out broke until `apiFetch` was changed to set the header on every non-`GET`;
+> that landed alongside this. Nothing else in `web/` mutates yet. **A client written
+> against an older copy of this spec will fail its first mutation** — this is the
+> first thing to check.
+
 ### Not here yet
 
 - **Signing out of every device.** `POST /auth/logout` ends this device's session
   only. A "log out everywhere" action is filed and not built; do not label the
   existing button as though it were one.
-- **CSRF token.** v1's protection is `SameSite=Lax` plus no state-changing GET; a
-  token is `#48`.
+- **CSRF token.** Narrowed 2026-08-15: v1's protection is the **CORS preflight**,
+  forced by the content-type rule above, plus `SameSite=Lax` and no state-changing
+  GET. `Lax` alone does not close it — a sibling host shares our registrable domain
+  and is therefore same-site with the API. A token stays defense in depth (`#48`),
+  not a requirement.
 
 ## Endpoints
 

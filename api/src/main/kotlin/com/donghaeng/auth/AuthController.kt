@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -58,12 +59,23 @@ class AuthController internal constructor(
     /**
      * Ends this device's session (`#90`).
      *
-     * **POST, not GET**, and that is not a REST preference: v1's CSRF answer is
-     * `SameSite=Lax` plus no state-changing GET (`SecurityConfig`), and Lax admits
-     * the cookie on top-level GET navigation — so a logout reachable by GET is an
+     * **POST, not GET**, and that is not a REST preference. `SameSite=Lax` admits
+     * the cookie on top-level GET navigation, so a logout reachable by GET is an
      * `<img src>` away from signing the couple out at an attacker's choosing.
-     * Under POST the cookie is withheld cross-site and the request cannot revoke
-     * anything.
+     *
+     * What stops a cross-site POST is not Lax either — a sibling host under our
+     * registrable domain is same-site with us. It is the CORS preflight, and
+     * **`consumes` is what forces one here** (narrowed 2026-08-13,
+     * `notes/2026-08-13-decision-static-front-and-content-type-gate.md`).
+     *
+     * The `consumes` is load-bearing rather than descriptive, and it is easy to
+     * mistake for noise on a handler that reads no body. It is a *mapping
+     * condition*: a request that does not satisfy it never reaches this method. So a
+     * `text/plain` simple POST — or one with no `Content-Type` at all, which is
+     * matched as `application/octet-stream` — fails to match and answers 415, which
+     * is exactly the request a sibling host can send without a preflight. Deleting
+     * it reopens a cross-site logout. Held by `RequestContentTypeTest` and observed
+     * by `ContentTypeGateContractTest`.
      *
      * **It takes no [AuthenticatedUser], deliberately**, which makes it one of the
      * handlers `#5`'s fail-closed mechanism has to be able to call PUBLIC on
@@ -87,7 +99,7 @@ class AuthController internal constructor(
     @ApiResponses(
         ApiResponse(responseCode = "204", description = "The session is over, whether or not there was one."),
     )
-    @PostMapping("/auth/logout")
+    @PostMapping("/auth/logout", consumes = [MediaType.APPLICATION_JSON_VALUE])
     fun logout(request: HttpServletRequest): ResponseEntity<Void> {
         // EVERY token, not the single unambiguous one. `SessionTokens.of` answers
         // `null` when the browser presents more than one `DH_SESSION`, and on that
