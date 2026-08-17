@@ -176,11 +176,10 @@ inline. The parts that constrain everyday backend work:
   `notes/2026-08-13-decision-static-front-and-content-type-gate.md`). `SameSite`
   is a *site* control and a sibling host shares our registrable domain, so Lax
   does not close it; what does is that **every POST/PUT/PATCH declares a
-  `consumes` no preflight-free request can satisfy** — a mapping condition, so
-  it covers a body-less handler too; the banned list is in the record and in the
-  sweep. Lax and no state-changing GET still stand, `csrf { disable() }` is
-  never silent, and **`Strict` is wrong** — the OAuth callback is a top-level
-  cross-site navigation, so it drops the cookie at login.
+  `consumes` no preflight-free request can satisfy** — the sweep holds it and
+  owns the banned spellings. Lax and no state-changing GET still stand,
+  `csrf { disable() }` is never silent, and **`Strict` is wrong** — the callback
+  is a top-level cross-site navigation, so it drops the cookie at login.
 - **Injection risk lives exactly in the native aggregation queries.** Column
   names go through a whitelist, never string concatenation.
 - **Rate limits are per wedding**, and per link token once links exist —

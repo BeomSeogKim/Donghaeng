@@ -74,9 +74,10 @@ internal class ProblemErrorController : ErrorController {
         // rate-limited either — the standing rule is per-wedding and per-link
         // token, and this path has neither, while IP-only is forbidden.
         //
-        // `BasicErrorController` was equally reachable and logged nothing, so
-        // anything noisier here is a regression this class introduced.
-        val status = statusOf(request) ?: return notAnErrorDispatch()
+        // `BasicErrorController` was equally reachable and wrote no ERROR line,
+        // so anything louder than [notAnErrorDispatch]'s INFO record is a
+        // regression this class introduced.
+        val status = statusOf(request) ?: return notAnErrorDispatch(request)
 
         // The path the client actually asked for. `/error` is where the
         // container forwarded to, and publishing that as `instance` would tell
@@ -92,7 +93,10 @@ internal class ProblemErrorController : ErrorController {
         // property to stop doing so.
         val instance = ProblemDocuments.pathOrNull(request.getAttribute(RequestDispatcher.ERROR_REQUEST_URI) as? String)
 
-        if (!status.is5xxServerError) return problemResponse(status, instance)
+        if (!status.is5xxServerError) {
+            logClientError(status, instance)
+            return problemResponse(status, instance)
+        }
 
         // The other half of masking, and the half GlobalErrorHandler gets for
         // free by returning a fresh HttpHeaders(). Here the response is live:
@@ -115,8 +119,33 @@ internal class ProblemErrorController : ErrorController {
             .body(ProblemDocuments.masked(status, instance))
     }
 
-    /** The same 404 any other unmapped path gets, and just as quiet. */
-    private fun notAnErrorDispatch(): ResponseEntity<ProblemDetail> = problemResponse(HttpStatus.NOT_FOUND, instance = null)
+    /**
+     * The same 404 any other unmapped path gets — and, since #65, recorded the
+     * same way. It is still quiet in the sense that matters: an anonymous client
+     * cannot make it write an ERROR line and so cannot drown the incident
+     * channel. Leaving it out of the INFO record instead would put the single
+     * hole in the 404 signal at the one path an anonymous caller can always
+     * reach.
+     */
+    private fun notAnErrorDispatch(request: HttpServletRequest): ResponseEntity<ProblemDetail> {
+        // The path is logged and deliberately not published: `instance` stays
+        // null so the response is indistinguishable from any other unmapped
+        // path's, while the log still says which path was asked for.
+        logClientError(HttpStatus.NOT_FOUND, ProblemDocuments.pathOrNull(request.requestURI))
+        return problemResponse(HttpStatus.NOT_FOUND, instance = null)
+    }
+
+    /**
+     * The 4xx record. See [GlobalErrorHandler] for why it is INFO, why it carries
+     * no throwable, and what `#5` will have to add to it for a cross-tenant
+     * refusal to be distinguishable from a typo'd id.
+     */
+    private fun logClientError(
+        status: HttpStatusCode,
+        instance: URI?,
+    ) {
+        if (status.is4xxClientError) logger.info(ProblemDocuments.logLine(status, instance))
+    }
 
     private fun problemResponse(
         status: HttpStatusCode,

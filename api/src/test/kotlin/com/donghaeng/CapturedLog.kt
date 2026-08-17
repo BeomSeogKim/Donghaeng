@@ -50,4 +50,16 @@ internal class CapturedLog(
     private val events: List<ILoggingEvent>,
 ) {
     fun at(level: Level): List<ILoggingEvent> = events.filter { it.level == level }
+
+    /**
+     * Every event, whatever its level and whoever wrote it.
+     *
+     * The 4xx record is located through this rather than through [at], for two
+     * reasons the 5xx assertions do not have. Its level is itself asserted, and
+     * selecting by level first would turn "the record was demoted" into a missing
+     * element rather than a level mismatch. And the leak assertions must read
+     * lines this suite never wrote: a request value that surfaces under some
+     * other logger's line is the same leak.
+     */
+    fun everything(): List<ILoggingEvent> = events
 }

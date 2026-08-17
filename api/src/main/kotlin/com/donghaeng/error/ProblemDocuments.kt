@@ -80,13 +80,49 @@ internal object ProblemDocuments {
     /** `null` for a status outside `HttpStatusCode`'s range, guarded for the same reason. */
     fun statusOrNull(status: Int?): HttpStatusCode? = status?.let { runCatching { HttpStatusCode.valueOf(it) }.getOrNull() }
 
-    /** One format for both producers, so an incident greps for one string. */
+    /**
+     * One format for both producers, so an incident greps for one string.
+     *
+     * **The path is truncated because the caller chooses its length.** The
+     * request line counts against Tomcat's 8KB header budget
+     * (`server.max-http-request-header-size`), so without a bound every 4xx —
+     * which since #65 is every 404, from anyone, unauthenticated — writes up to
+     * ~8KB of bytes the caller picked, against a normal record of a few dozen.
+     * That is a log-volume lever held by the attacker rather than by us, and the
+     * cheapest place to take it away is the one line both producers share.
+     *
+     * It removes the SIZE lever only. **How often an unauthenticated caller may
+     * reach a 4xx at all is still open** — the standing rate-limit unit is per
+     * wedding and per link token, and a pre-auth path has neither (`#98`).
+     *
+     * [MAX_PATH_CHARS] is far above any path this API serves, so a real request
+     * is never cut; when something is cut, [TRUNCATION_MARK] says so in the
+     * record, because a silently shortened path reads as the whole path and
+     * would send an incident looking for the wrong request.
+     */
     fun logLine(
         status: HttpStatusCode,
         instance: URI?,
-    ): String = "Responding ${status.value()} to ${instance ?: "an unknown path"}"
+    ): String = "Responding ${status.value()} to ${loggablePath(instance)}"
+
+    private fun loggablePath(instance: URI?): String {
+        val path = instance?.toString() ?: UNKNOWN_PATH
+        if (path.length <= MAX_PATH_CHARS) return path
+        // Never cut between a surrogate pair: `server.tomcat.relaxed-path-chars`
+        // admits a raw non-ASCII path, and a lone surrogate is what makes a JSON
+        // log encoder emit something that is not valid UTF-8.
+        val end = if (path[MAX_PATH_CHARS - 1].isHighSurrogate()) MAX_PATH_CHARS - 1 else MAX_PATH_CHARS
+        return path.take(end) + TRUNCATION_MARK
+    }
 
     private const val UNTITLED = "Error"
 
     private const val UNTITLED_CODE = "ERROR"
+
+    private const val UNKNOWN_PATH = "an unknown path"
+
+    /** Generous next to `/weddings/{id}/guests/{id}/meal-counts`, and 60x below the request-line budget. */
+    private const val MAX_PATH_CHARS = 120
+
+    private const val TRUNCATION_MARK = "…[truncated]"
 }

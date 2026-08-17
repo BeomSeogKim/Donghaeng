@@ -91,6 +91,33 @@ internal class GlobalErrorHandler : ResponseEntityExceptionHandler() {
             return ResponseEntity(ProblemDocuments.masked(statusCode, instanceOf(request)), HttpHeaders(), statusCode)
         }
 
+        // The 4xx signal, and the only application-side source for the security
+        // record's alerting on 401/404/429 spikes
+        // (notes/2026-07-30-decision-network-security.md).
+        //
+        // INFO, and the level is the decision: a 401 from an anonymous caller is
+        // routine traffic, so at WARN this cries wolf and gets muted — and a muted
+        // channel is worse than none. DEBUG would be one config change from
+        // silent, which is not hypothetical now that several loggers are pinned
+        // off. No throwable either: a 4xx is a decision we made deliberately, so
+        // there is nothing to diagnose, and a stack trace per 404 is how a log
+        // stops being read at all.
+        //
+        // Status and path, nothing else — never the body, never a header, never
+        // the query string. Same format as the 5xx line above, so an incident
+        // greps once. The path-borne-token caveat there applies here too.
+        //
+        // What is NOT here yet: a cross-tenant refusal answers 404 identically to
+        // a nonexistent id (notes/2026-08-10-decision-cross-tenant-status-code.md),
+        // and this line is where the two are supposed to become distinguishable.
+        // The mark cannot travel in the problem document — the document is the
+        // thing that must not differ — so #5's resolver has to leave it out of
+        // band, on the request, and this funnel has to read it. Deliberately not
+        // built: #5 owns the resolver that knows the difference. `request` is
+        // already in hand here and in the other producer, so adding it is a local
+        // change in two places rather than a signature threaded through anything.
+        if (statusCode.is4xxClientError) logger.info(ProblemDocuments.logLine(statusCode, instanceOf(request)))
+
         val problem = response.body as? ProblemDetail ?: return response
         if (problem.properties?.containsKey(DomainException.CODE) != true) {
             // A DomainException has already set its own; this fills in the rest.
