@@ -4,6 +4,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.context.properties.bind.Bindable
 import org.springframework.boot.context.properties.bind.Binder
+import org.springframework.boot.context.properties.source.ConfigurationPropertyName
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource
 import org.springframework.boot.env.PropertiesPropertySourceLoader
 import org.springframework.boot.env.PropertySourceLoader
@@ -136,22 +137,62 @@ class ProfileConfigurationTest {
     // --- the decisions of issue #50 --------------------------------------
 
     @Test
-    fun `no environment logs SQL or its bound values`() {
+    fun `no environment logs SQL, its bound values, or the driver's own traces`() {
         // In the base, so it holds for a mistyped profile too, and because
-        // `show-sql: false` is a different code path from these three loggers.
+        // `show-sql: false` is a different code path from these four loggers.
         // Comparing to the string 'OFF' is what catches an unquoted OFF, which
         // YAML 1.1 parses as the boolean false.
+        //
+        // This is the EARLY detector, not the enforcement: a committed file cannot
+        // see LOGGING_LEVEL_ORG_HIBERNATE_ORM_JDBC_BIND=TRACE in a deploy platform,
+        // and com.donghaeng.config.LogLevelGuard is what refuses that at startup
+        // (notes/2026-08-17-decision-log-masking-mechanism.md). Both are kept: this
+        // one fails in review, that one fails in production.
         listOf(base, dev, prod).forEach { source ->
             assertThat(source["spring.jpa.show-sql"]).isNotEqualTo(true)
-            assertThat(source["logging.level.org.hibernate.SQL"]).isIn(null, "OFF")
-            assertThat(source["logging.level.org.hibernate.orm.jdbc.bind"]).isIn(null, "OFF")
-            assertThat(source["logging.level.org.hibernate.orm.jdbc.extract"]).isIn(null, "OFF")
+            PINNED_LOGGERS.forEach { logger ->
+                assertThat(source["logging.level.$logger"]).isIn(null, "OFF")
+            }
         }
+
+        // The driver's exception messages, which are a different pipe again from
+        // the driver's TRACE above: PostgreSQL quotes the offending row value in an
+        // error response's DETAIL field and pgjdbc copies DETAIL into the message,
+        // which the 5xx funnel logs. In the base like the loggers, and for the same
+        // reason — dev and prod mask identically or the behaviour is one nobody
+        // tests.
+        listOf(base, dev, prod).forEach { source ->
+            assertThat(logServerErrorDetail(source)).isIn(null, false, "false")
+        }
+        assertThat(logServerErrorDetail(base)).isEqualTo(false)
+
         assertThat(base["spring.jpa.show-sql"]).isEqualTo(false)
-        assertThat(base["logging.level.org.hibernate.SQL"]).isEqualTo("OFF")
-        assertThat(base["logging.level.org.hibernate.orm.jdbc.bind"]).isEqualTo("OFF")
-        assertThat(base["logging.level.org.hibernate.orm.jdbc.extract"]).isEqualTo("OFF")
+        PINNED_LOGGERS.forEach { logger ->
+            assertThat(base["logging.level.$logger"]).isEqualTo("OFF")
+        }
     }
+
+    /**
+     * Found by CANONICAL property name, not by the one spelling the base file
+     * happens to use: `spring.datasource.hikari.dataSourceProperties.…` binds
+     * identically through relaxed binding, and an `isIn(null, false, "false")` keyed
+     * on the dashed string would not see it.
+     *
+     * The prefix is canonicalised and the map key is not, and that asymmetry is the
+     * accurate one — Spring's relaxed binding ends at the map, and everything after
+     * it is a key handed to the driver verbatim. So `log-server-error-detail` is
+     * deliberately NOT matched here: it is a different key, one pgjdbc never reads,
+     * and `ServerErrorDetailGuard` refuses it at startup rather than this sweep
+     * blessing it.
+     */
+    private fun logServerErrorDetail(source: Map<String, Any?>): Any? =
+        source
+            .entries
+            .filter { (name, _) ->
+                ConfigurationPropertyName.adapt(name.substringBeforeLast('.'), '.') == HIKARI_DRIVER_PROPERTIES &&
+                    name.substringAfterLast('.') == "logServerErrorDetail"
+            }.map { it.value }
+            .singleOrNull()
 
     @Test
     fun `no environment loosens what the base pins`() {
@@ -191,6 +232,21 @@ class ProfileConfigurationTest {
             assertThat(source["spring.flyway.enabled"])
                 .describedAs("%s · only the tests may run Flyway", path)
                 .isIn(null, false, "false")
+
+            // A profile file outranks the base here too, so pinning it there stops
+            // nothing on its own. Whitelist, for the quoting reason above.
+            assertThat(logServerErrorDetail(source))
+                .describedAs("%s · PostgreSQL's error DETAIL quotes the row value that failed", path)
+                .isIn(null, false, "false")
+
+            // Same shape for the four loggers that print row values, and the same
+            // division of labour: this catches the committed mistake, LogLevelGuard
+            // catches the environment variable.
+            PINNED_LOGGERS.forEach { logger ->
+                assertThat(source["logging.level.$logger"])
+                    .describedAs("%s · %s prints 하객 names and phone numbers", path, logger)
+                    .isIn(null, "OFF")
+            }
 
             // The three keys that decide how much of a server-side failure the
             // error page publishes. Boot's defaults are already the safe values,
@@ -406,3 +462,20 @@ class ProfileConfigurationTest {
         assertThat(dev["logging.level.com.donghaeng"]).isEqualTo("DEBUG")
     }
 }
+
+/** The map whose keys Hikari hands to the JDBC driver untouched. */
+private val HIKARI_DRIVER_PROPERTIES = ConfigurationPropertyName.of("spring.datasource.hikari.data-source-properties")
+
+/**
+ * The loggers that print row values — the parameters sent, the values read back, the
+ * statements that make them readable, and the driver's own traces one layer below
+ * all three. `com.donghaeng.config.LogLevelGuard` holds the same list against the
+ * RESOLVED levels; this file holds it against the committed ones.
+ */
+private val PINNED_LOGGERS =
+    listOf(
+        "org.hibernate.SQL",
+        "org.hibernate.orm.jdbc.bind",
+        "org.hibernate.orm.jdbc.extract",
+        "org.postgresql",
+    )

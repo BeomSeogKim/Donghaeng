@@ -1,10 +1,8 @@
 package com.donghaeng.error
 
 import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import com.donghaeng.SharedPostgres
+import com.donghaeng.capturingLog
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.Filter
 import jakarta.servlet.ServletException
@@ -12,7 +10,6 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -77,16 +74,17 @@ class ErrorDispatchContractTest {
 
     @Test
     fun `an exception thrown by a filter still becomes the masked problem document`() {
-        val (response, logged) = errorLevelEventsDuring { restTemplate.getForEntity("/probe/filter-boom", String::class.java) }
+        val (response, logged) = capturingLog { restTemplate.getForEntity("/probe/filter-boom", String::class.java) }
 
         assertThat(response.statusCode.value()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value())
 
         // The client is told nothing, so the server is told everything — and in
-        // the SAME format GlobalErrorHandler uses (asserted there too). Two
-        // formats for one event means an incident greps one of them and silently
-        // misses half the 500s.
-        assertThat(logged.map { it.formattedMessage })
-            .contains("Responding 500 to /probe/filter-boom")
+        // the SAME format GlobalErrorHandler uses, through the same assertion.
+        // Two formats for one event means an incident greps one of them and
+        // silently misses half the 500s. The exception is part of that record:
+        // this producer reads it off the dispatch attributes, and reading the
+        // wrong one leaves an incident with a status and no cause.
+        logged.assertMaskedFailureRecord(500, "/probe/filter-boom", ServletException::class.java)
         assertThat(response.headers.contentType.toString())
             .startsWith(MediaType.APPLICATION_PROBLEM_JSON_VALUE)
 
@@ -137,16 +135,34 @@ class ErrorDispatchContractTest {
         // because the standing rule is per-wedding and per-link-token and
         // `/error` has neither. `BasicErrorController` was reachable too and
         // logged nothing, so anything louder is a regression we introduced.
-        val logged = errorLevelEventsDuring { restTemplate.getForEntity("/error", String::class.java) }
+        val (response, logged) = capturingLog { restTemplate.getForEntity("/error", String::class.java) }
 
-        assertThat(logged.first.statusCode.value()).isEqualTo(HttpStatus.NOT_FOUND.value())
-        assertThat(logged.second)
+        assertThat(response.statusCode.value()).isEqualTo(HttpStatus.NOT_FOUND.value())
+        assertThat(logged.at(Level.ERROR))
             .describedAs("an unauthenticated GET /error must not be able to write an ERROR log line")
             .isEmpty()
 
-        val body = objectMapper.readTree(logged.first.body)
+        val body = objectMapper.readTree(response.body)
         assertThat(body["code"].asText()).isEqualTo("NOT_FOUND")
         assertThat(body["status"].asInt()).isEqualTo(404)
+    }
+
+    @Test
+    fun `a 5xx a filter sets directly is recorded as that status, with no exception invented`() {
+        // Two halves the 500 case cannot see. The status is whatever the filter
+        // set — a line hardcoded to 500 survived the suite, and it would tell an
+        // incident the application crashed when it was in fact shedding load.
+        // And nothing threw here, so there is no throwable to attach; recording
+        // one anyway would mean this producer had reached for some other
+        // request's.
+        val (response, logged) = capturingLog { restTemplate.getForEntity("/probe/unavailable", String::class.java) }
+
+        assertThat(response.statusCode.value()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value())
+        logged.assertMaskedFailureRecord(503, "/probe/unavailable", cause = null)
+
+        val body = objectMapper.readTree(response.body)
+        assertThat(body["status"].asInt()).isEqualTo(503)
+        assertThat(body["detail"].asText()).isEqualTo("An unexpected error occurred.")
     }
 
     @Test
@@ -276,20 +292,6 @@ class ErrorDispatchContractTest {
             socket.getInputStream().readBytes().decodeToString()
         }
 
-    /** Runs [block] with an appender on the root logger, returning its result and the ERROR events. */
-    private fun <T> errorLevelEventsDuring(block: () -> T): Pair<T, List<ILoggingEvent>> {
-        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        root.addAppender(appender)
-        try {
-            val result = block()
-            return result to appender.list.filter { it.level == Level.ERROR }
-        } finally {
-            root.detachAppender(appender)
-            appender.stop()
-        }
-    }
-
     @TestConfiguration
     class ProbeConfiguration {
         @Bean
@@ -306,6 +308,7 @@ class ErrorDispatchContractTest {
                             (response as HttpServletResponse).setHeader(LEAKY_HEADER, HEADER_MARKER)
                             response.sendError(HttpStatus.UNAUTHORIZED.value())
                         }
+                        "/probe/unavailable" -> (response as HttpServletResponse).sendError(HttpStatus.SERVICE_UNAVAILABLE.value())
                         "/probe/unregistered-status" -> (response as HttpServletResponse).sendError(499)
                         "/probe/forwarded-404" ->
                             (response as HttpServletResponse).sendError(HttpStatus.NOT_FOUND.value())

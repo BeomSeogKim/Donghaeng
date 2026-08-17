@@ -75,6 +75,30 @@ spring:
     url: ${DATABASE_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      data-source-properties:
+        # THE DRIVER'S SWITCH, and it is where the row values actually are
+        # (notes/2026-08-17-decision-log-masking-mechanism.md). PostgreSQL puts
+        # the offending value in the error response's DETAIL field — `Key
+        # (lower(email))=(…) already exists.` — and pgjdbc copies DETAIL into the
+        # exception message, which the 5xx funnel then logs with the throwable
+        # attached. Off, the message keeps `duplicate key value violates unique
+        # constraint "ux_app_user_email"` and loses only which value collided.
+        #
+        # In the BASE, so dev and prod mask identically: a masking behaviour that
+        # differs in dev is one nobody tests. It is not a scrubber over rendered
+        # messages, deliberately — a regex guessing what looks like an email has
+        # false negatives, and a false negative here is a guest's phone number in
+        # a log. Same reason `org.hibernate.orm.jdbc.bind`/`extract` are OFF
+        # below: close the pipe, do not filter it.
+        #
+        # Hikari hands these to the driver verbatim, so the KEY IS THE DRIVER'S
+        # and is case-sensitive — pgjdbc reads `logServerErrorDetail`, not the
+        # kebab-case Spring would relax it from.
+        # com.donghaeng.config.ServerErrorDetailGuard asserts the resolved value,
+        # including the `?logServerErrorDetail=true` that DATABASE_URL could
+        # carry, which outranks this line.
+        logServerErrorDetail: false
   jpa:
     open-in-view: false
     show-sql: false
@@ -112,16 +136,31 @@ spring:
 
 logging:
   level:
-    # These three belong in the BASE, not in prod. They have no safe default and
+    # These four belong in the BASE, not in prod. They have no safe default and
     # they are what print 하객 names and phone numbers: `bind` logs the parameters
     # sent, `extract` logs the values read back — same data, opposite direction —
     # and neither is covered by `show-sql: false`, which is a different code path.
     # Pinned so that raising the root level to DEBUG during an incident, on any
     # machine, cannot turn them on by accident.
     # The quotes are load-bearing: unquoted OFF is the YAML 1.1 boolean false.
+    #
+    # `com.donghaeng.config.LogLevelGuard` refuses to start when any of them
+    # resolves to DEBUG or below, because a pin in this file is exactly what
+    # LOGGING_LEVEL_ORG_HIBERNATE_ORM_JDBC_BIND=TRACE in a deploy platform walks
+    # past.
     org.hibernate.SQL: 'OFF'
     org.hibernate.orm.jdbc.bind: 'OFF'
     org.hibernate.orm.jdbc.extract: 'OFF'
+    # The DRIVER, one layer below the three above, and it carries the same data
+    # by two routes that `logServerErrorDetail` does not reach:
+    # `QueryExecutorImpl` traces `FE=> Bind(stmt=…,$1=<value>)` with the literal
+    # parameters, and traces the incoming error message through
+    # `ServerErrorMessage.toString()` — which renders `Detail:` UNCONDITIONALLY,
+    # since the flag is consulted one line later, when the exception is built.
+    # Boot installs SLF4JBridgeHandler and LevelChangePropagator, so pgjdbc's
+    # java.util.logging output arrives in logback and follows this level
+    # (notes/2026-08-17-decision-log-masking-mechanism.md).
+    org.postgresql: 'OFF'
 
 springdoc:
   api-docs:

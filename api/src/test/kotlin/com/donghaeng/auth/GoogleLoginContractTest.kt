@@ -1,9 +1,6 @@
 package com.donghaeng.auth
 
 import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import com.donghaeng.auth.SecurityConfig.Companion.AUTHORIZATION_BASE_URI
 import com.donghaeng.auth.account.AppUser
 import com.donghaeng.auth.account.AppUserRepository
@@ -11,10 +8,10 @@ import com.donghaeng.auth.account.OauthIdentityRepository
 import com.donghaeng.auth.session.AuthenticatedUser
 import com.donghaeng.auth.session.SessionTokens
 import com.donghaeng.auth.session.UserSessionRepository
+import com.donghaeng.capturingLog
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -387,17 +384,31 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         // back — and refusing consent is a normal path, not an error
         // (notes/2026-08-13-decision-login-failure-return-path.md).
         val authorization = startAuthorization()
-        val denied =
-            get(
-                "${SecurityConfig.CALLBACK_PATH}?error=access_denied&state=${authorization.parameters["state"]}",
-                authorization.cookies,
-            )
+        val (denied, logged) =
+            capturingLog {
+                get(
+                    "${SecurityConfig.CALLBACK_PATH}?error=access_denied&state=${authorization.parameters["state"]}",
+                    authorization.cookies,
+                )
+            }
 
         assertThat(denied.statusCode()).isEqualTo(302)
         assertThat(denied.location()).hasToString("http://localhost:3000/login#e=denied")
         assertThat(denied.headers().firstValue("Content-Type").orElse(""))
             .doesNotStartWith("application/problem+json")
         assertThat(denied.sessionCookie()).isNull()
+
+        // The two outcomes are told apart in the log and nowhere else — the
+        // browser is sent to the same route either way, and the fragment code is
+        // a word for the person, not a record. So this line IS how "they refused"
+        // is distinguished from "it broke", and deleting it left the suite green.
+        // INFO, not WARN: a refusal is a normal path and must not spend the
+        // attention that the failure line asks for.
+        assertThat(logged.at(Level.INFO).map { it.formattedMessage })
+            .contains("oauth login denied by the user")
+        assertThat(logged.at(Level.WARN))
+            .describedAs("a refused consent is not a failure and must not be logged as one")
+            .isEmpty()
     }
 
     @Test
@@ -432,7 +443,7 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         // from, which is the one detection capability the security record keeps.
         val authorization = startAuthorization()
         val (_, logged) =
-            capturingWarnings {
+            capturingLog {
                 get(
                     "${SecurityConfig.CALLBACK_PATH}?error=a%0D%0A2026-08-13%20INFO%20login%20succeeded" +
                         "&state=${authorization.parameters["state"]}",
@@ -440,7 +451,7 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
                 )
             }
 
-        val message = logged.single().formattedMessage
+        val message = logged.at(Level.WARN).single().formattedMessage
         assertThat(message).doesNotContain("\n").doesNotContain("\r")
         assertThat(message).doesNotContain("login succeeded")
     }
@@ -450,10 +461,11 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
         // The `state` check is what stops a forged callback from logging a victim
         // into the attacker's account. Spring Security owns it; this asserts it is
         // still switched on, since our own success handler sits directly behind it.
-        val (forged, logged) =
-            capturingWarnings {
+        val (forged, captured) =
+            capturingLog {
                 get("${SecurityConfig.CALLBACK_PATH}?code=stub-authorization-code&state=not-ours")
             }
+        val logged = captured.at(Level.WARN)
 
         assertThat(forged.statusCode()).isEqualTo(302)
         assertThat(forged.location()).hasToString("http://localhost:3000/login#e=failed")
@@ -470,20 +482,6 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
             .describedAs("a stack trace was logged for an unauthenticated request")
             .isNull()
         assertThat(logged.single().formattedMessage).contains("oauth login failed")
-    }
-
-    /** Same shape as ErrorDispatchContractTest's, narrowed to WARN. */
-    private fun <T> capturingWarnings(block: () -> T): Pair<T, List<ILoggingEvent>> {
-        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        root.addAppender(appender)
-        try {
-            val result = block()
-            return result to appender.list.filter { it.level == Level.WARN }
-        } finally {
-            root.detachAppender(appender)
-            appender.stop()
-        }
     }
 
     @Test

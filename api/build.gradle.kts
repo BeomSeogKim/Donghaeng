@@ -53,7 +53,16 @@ dependencies {
 
     implementation("org.flywaydb:flyway-core")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
-    runtimeOnly("org.postgresql:postgresql")
+
+    // Compile scope, not `runtimeOnly`, since #93: com.donghaeng.auth.account.IdentityCollision
+    // reads the violated constraint from PSQLException's server error message,
+    // which is a protocol field. The portable-looking alternative — Hibernate's
+    // ConstraintViolationException.getConstraintName() — reaches the same string by
+    // matching an English message template, so it returns null on a server whose
+    // `lc_messages` is not English and the login race silently stops being handled.
+    // The database is pinned to PostgreSQL 16 by decision, and the native queries
+    // in this tree are already Postgres-specific.
+    implementation("org.postgresql:postgresql")
 
     // The package boundary has no compiler behind it: `internal` is MODULE-scoped
     // and `api/` is one module, so every package can see every other package's
