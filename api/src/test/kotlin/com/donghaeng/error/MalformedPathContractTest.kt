@@ -1,14 +1,11 @@
 package com.donghaeng.error
 
 import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import com.donghaeng.SharedPostgres
+import com.donghaeng.capturingLog
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
@@ -62,17 +59,7 @@ class MalformedPathContractTest {
 
     @Test
     fun `a path that is not a valid URI is an ordinary 404, and is not logged as a failure`() {
-        val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-        val appender = ListAppender<ILoggingEvent>().apply { start() }
-        root.addAppender(appender)
-
-        val raw =
-            try {
-                rawRequest("GET /a|b HTTP/1.1")
-            } finally {
-                root.detachAppender(appender)
-                appender.stop()
-            }
+        val (raw, logged) = capturingLog { rawRequest("GET /a|b HTTP/1.1") }
 
         assertThat(raw).startsWith("HTTP/1.1 ${HttpStatus.NOT_FOUND.value()}")
         assertThat(raw).contains("application/problem+json")
@@ -81,7 +68,7 @@ class MalformedPathContractTest {
         assertThat(body["status"].asInt()).isEqualTo(404)
         assertThat(body["code"].asText()).isEqualTo("NOT_FOUND")
 
-        assertThat(appender.list.filter { it.level == Level.ERROR })
+        assertThat(logged.at(Level.ERROR))
             .describedAs("a nonexistent path is not a server failure and must not be logged as one")
             .isEmpty()
     }

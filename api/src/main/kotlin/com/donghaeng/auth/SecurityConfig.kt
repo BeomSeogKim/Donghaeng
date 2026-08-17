@@ -35,10 +35,14 @@ import org.springframework.security.web.savedrequest.NullRequestCache
  * announces itself in CI, whereas retrofitting [CurrentUser] means threading a
  * parameter through every endpoint written in the meantime, by hand and silently.
  *
- * **CSRF is off, and the substitute is named.** v1's answer is `SameSite=Lax` plus
- * no state-changing GET — the pair, not either half, since Lax admits the cookie
- * on top-level GET navigation. A CSRF token is defense in depth and belongs to
- * `#48`.
+ * **CSRF is off, and the substitute is named.** v1's answer is the **CORS
+ * preflight**, forced because every state-changing handler declares a `consumes` no
+ * preflight-free request can satisfy (narrowed 2026-08-13,
+ * notes/2026-08-13-decision-static-front-and-content-type-gate.md; held by
+ * RequestContentTypeTest, observed by ContentTypeGateContractTest).
+ * `SameSite=Lax` and no state-changing GET still stand, but Lax is a *site* control
+ * and a sibling host under our registrable domain is same-site with us, so it does
+ * not close this on its own. A CSRF token is defense in depth and belongs to `#48`.
  *
  * The one state-changing GET this application has is the **OAuth callback**, and
  * it is the exception that proves the rule rather than a violation of it: its
@@ -60,10 +64,11 @@ internal class SecurityConfig {
         http {
             authorizeHttpRequests { authorize(anyRequest, permitAll) }
 
-            // Never silent: the substitute is `SameSite=Lax` plus no
-            // state-changing GET, stated in full above and held by
-            // SessionCookies. A token is #48
-            // (notes/2026-08-10-decision-auth-gate-and-sequence.md, CSRF).
+            // Never silent: the substitute is the CORS preflight forced by
+            // `consumes`, plus `SameSite=Lax` and no state-changing GET, stated in
+            // full above and held by RequestContentTypeTest and SessionCookies. A
+            // token is #48
+            // (notes/2026-08-13-decision-static-front-and-content-type-gate.md).
             csrf { disable() }
 
             // The CORS policy is a bean so a profile can widen it and no profile

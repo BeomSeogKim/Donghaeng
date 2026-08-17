@@ -74,6 +74,7 @@ logging:
     org.hibernate.SQL: 'OFF'
     org.hibernate.orm.jdbc.bind: 'OFF'
     org.hibernate.orm.jdbc.extract: 'OFF'
+    org.postgresql: 'OFF'
 # Deliberately absent, and both are the SAME open item rather than an
 # inheritance: `donghaeng.frontend.base-url` and `donghaeng.cors.allowed-origins`.
 # Neither can be guessed — a wrong CORS origin either breaks the frontend or

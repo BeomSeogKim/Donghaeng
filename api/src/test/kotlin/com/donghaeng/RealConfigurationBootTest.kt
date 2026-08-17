@@ -2,13 +2,18 @@ package com.donghaeng
 
 import com.donghaeng.auth.oauth.LoginDestinationGuard
 import com.donghaeng.config.CorsProperties
+import com.donghaeng.config.LogLevelGuard
 import com.donghaeng.config.RequiredProfileMarker
+import com.donghaeng.config.ServerErrorDetailGuard
+import com.zaxxer.hikari.HikariDataSource
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.flyway.FlywayProperties
 import org.springframework.boot.autoconfigure.web.ErrorProperties
 import org.springframework.boot.autoconfigure.web.ServerProperties
+import org.springframework.boot.logging.LogLevel
+import org.springframework.boot.logging.LoggingSystem
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.ApplicationContext
 import org.springframework.core.env.Environment
@@ -73,6 +78,9 @@ abstract class RealConfigurationBootTest(
     @Autowired
     private lateinit var applicationContext: ApplicationContext
 
+    @Autowired
+    private lateinit var loggingSystem: LoggingSystem
+
     @Test
     fun `the committed configuration boots and reaches postgres`() {
         assertThat(environment.activeProfiles).containsExactly(expectedProfile)
@@ -135,6 +143,48 @@ abstract class RealConfigurationBootTest(
             // is decided (#96/#97).
             else -> assertThat(corsProperties.allowedOrigins).isEmpty()
         }
+    }
+
+    @Test
+    fun `the driver this profile boots does not put row values in its exception messages`() {
+        // The RESOLVED value, read off the pool Boot actually built rather than off
+        // a property string — the map key reaches pgjdbc verbatim, so a value bound
+        // under a differently-cased key is one the driver never reads, and only the
+        // bound object shows which key survived
+        // (notes/2026-08-17-decision-log-masking-mechanism.md).
+        //
+        // What this does NOT cover: that the masking works. That is
+        // ServerErrorDetailMaskingTest, which drives a real unique violation
+        // through the 5xx funnel and reads the log.
+        val hikari = dataSource as HikariDataSource
+        assertThat(hikari.dataSourceProperties["logServerErrorDetail"].toString()).isEqualTo("false")
+
+        // And that something enforces it at startup. ServerErrorDetailGuardTest
+        // proves the guard's behaviour; this proves the deployed context runs it —
+        // a plain @Component, so nothing else would notice its removal.
+        assertThat(applicationContext.getBeansOfType(ServerErrorDetailGuard::class.java)).hasSize(1)
+    }
+
+    @Test
+    fun `no logger that prints row values is verbose in this profile`() {
+        // The RESOLVED levels, which is the whole point: the committed-file sweep in
+        // ProfileConfigurationTest cannot see LOGGING_LEVEL_ORG_POSTGRESQL=TRACE in a
+        // deploy platform, and that pipe is WIDER than the one `#64` closed —
+        // pgjdbc traces bind parameters literally, and renders the server error's
+        // `Detail:` unconditionally, before `logServerErrorDetail` is ever consulted
+        // (notes/2026-08-17-decision-log-masking-mechanism.md).
+        listOf(
+            "org.hibernate.SQL",
+            "org.hibernate.orm.jdbc.bind",
+            "org.hibernate.orm.jdbc.extract",
+            "org.postgresql",
+        ).forEach { logger ->
+            assertThat(loggingSystem.getLoggerConfiguration(logger)?.effectiveLevel)
+                .describedAs("%s prints 하객 names and phone numbers", logger)
+                .isEqualTo(LogLevel.OFF)
+        }
+
+        assertThat(applicationContext.getBeansOfType(LogLevelGuard::class.java)).hasSize(1)
     }
 
     @Test

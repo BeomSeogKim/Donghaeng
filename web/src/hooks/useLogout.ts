@@ -5,10 +5,12 @@ import { sessionQueryKey } from './useSession'
 /**
  * `POST /auth/logout` — ends the session on this device only.
  *
- * POST is not a style choice. v1's CSRF protection is `SameSite=Lax` plus no
- * state-changing GET, and Lax does send the cookie on top-level GET navigation,
- * so a logout reachable by GET could be fired by an `<img>` on any page the
- * couple visit.
+ * POST is not a style choice. `SameSite=Lax` does send the cookie on top-level
+ * GET navigation, so a logout reachable by GET could be fired by an `<img>` on
+ * any page the couple visit. What closes the POST is not Lax either — a sibling
+ * host is same-site with the API — but the CORS preflight forced by the
+ * `Content-Type: application/json` that `apiFetch` sends
+ * (`notes/2026-08-13-decision-static-front-and-content-type-gate.md`).
  *
  * It always answers 204 — no cookie, an expired session, one already revoked,
  * all of them mean "you are not logged in on this device", which is what was

@@ -70,7 +70,8 @@ and tokens.
   **`import` is not a legal Kotlin package name here** — it compiles, but
   ktlint's `standard:package-name` rejects it. (`intake` lost because it would
   also plausibly hold `email_ingest`, a separate domain.)
-- **Layers stay shallow**: Controller (DTO) → Service (tx boundary,
+- **Layers stay shallow**: Controller (DTO) → Service (tx boundary — except
+  `LoginService`, whose retry needs an insert to fail alone, `#93` —
   invariants, aggregate recompute, `GuestChange` writes) → Repository (JPA +
   native aggregation queries). No hexagonal/ports-and-adapters layer.
 - **Split a class when it starts doing two distinct things, not before.** Only
@@ -174,11 +175,11 @@ inline. The parts that constrain everyday backend work:
 - **CSRF in v1 is the CORS preflight, not `SameSite=Lax`** (narrowed 2026-08-13,
   `notes/2026-08-13-decision-static-front-and-content-type-gate.md`). `SameSite`
   is a *site* control and a sibling host shares our registrable domain, so Lax
-  does not close it; what does is that **no endpoint accepts
-  `multipart/form-data`, `x-www-form-urlencoded` or `text/plain`** — held by a
-  CI sweep. Lax and no state-changing GET still stand, and `csrf { disable() }`
-  is still never silent. **`Strict` is wrong here** — the OAuth callback is a
-  top-level cross-site navigation, so it drops the cookie at login.
+  does not close it; what does is that **every POST/PUT/PATCH declares a
+  `consumes` no preflight-free request can satisfy** — the sweep holds it and
+  owns the banned spellings. Lax and no state-changing GET still stand,
+  `csrf { disable() }` is never silent, and **`Strict` is wrong** — the callback
+  is a top-level cross-site navigation, so it drops the cookie at login.
 - **Injection risk lives exactly in the native aggregation queries.** Column
   names go through a whitelist, never string concatenation.
 - **Rate limits are per wedding**, and per link token once links exist —

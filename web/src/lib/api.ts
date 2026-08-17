@@ -51,6 +51,15 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
 
+  // Set here, and on every method that is not a read, so no call site can
+  // forget it — one that did is what broke sign-out. It is not a description of
+  // a body (a request with none still needs it): a JSON content type is not
+  // CORS-safelisted, and the preflight it forces is v1's CSRF gate, so the
+  // API answers 415 to a state-changing request without it.
+  const method = (init.method ?? 'GET').toUpperCase()
+  if (method !== 'GET' && method !== 'HEAD')
+    headers.set('Content-Type', 'application/json')
+
   return await fetch(apiUrl(path), { ...init, headers, credentials: 'include' })
 }
 
