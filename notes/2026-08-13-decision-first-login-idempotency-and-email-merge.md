@@ -20,6 +20,35 @@ people signing in at the same instant never meet. That constraint is the point:
 a global guard would answer `#93` and create a worse problem at the moment the
 product is busiest.
 
+### What building it added to this section (2026-08-17)
+
+**The retry on `ux_app_user_email` is a merge, and that is only safe while the
+column cannot hold an unverified address.** Catching that index and resolving
+again turns "someone claimed an address the index refused" into "seat them on
+the row that already holds it". Today the row is provably provider-verified —
+a biconditional CHECK, a verifier allowlist, and a merge key that is null
+unless the provider said verified. **So `#94`'s self-verification step must
+write the address only *after* confirmation, never before.** Writing it first
+would convert this recovery into the takeover `#94` §2 exists to prevent,
+reached from the other direction. This dependency runs the opposite way to the
+issue order, which is why it is written here rather than left to be noticed.
+
+**Two collisions in a row are reachable, so the retry is bounded at three
+passes, not two.** A login can lose on the email index and then on the identity
+index — different axes, which is what makes "it can only lose the same way
+twice" wrong. Three is provable: an identity loss is always the last loss, and
+an email loss cannot repeat, because both losing rows are committed and neither
+table is user-deletable.
+
+**Login is now a chain of independent commits, not one transaction.** The
+registration attempt runs `REQUIRES_NEW` in its own bean — a rollback-only
+transaction cannot be caught and re-read on — and `login()` itself is no longer
+transactional, because the retry must see rows another transaction committed
+after this login began. A crash between account creation and session issuance
+leaves an account with no session, which the next login adopts. **`#94`'s
+profile write is therefore a third independent commit**, not part of a login
+transaction.
+
 ## `#94` — the merge key must be verified, and we can become the verifier
 
 `#94` has two halves and only the second one matters much. Profile refresh
