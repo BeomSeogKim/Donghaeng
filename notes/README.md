@@ -46,6 +46,7 @@ see that file's `Rules` section for the admission test.
 | `2026-08-13-decision-first-login-idempotency-and-email-merge.md` | First login is idempotent per identity; only a verified address merges, and we can be the verifier |
 | `2026-08-13-decision-login-failure-return-path.md` | A failed callback returns to the front with a closed code in the fragment; the copy is `web/`'s |
 | `2026-08-12-decision-login-slice-by-provider.md` | Login splits by provider; the email merge stays with Google |
+| `2026-08-17-decision-first-domain-endpoint-shape.md` | The pattern fifteen endpoints copy; where the `CurrentWedding` resolver may live; a validation bound is the column's |
 | `2026-08-17-decision-log-masking-mechanism.md` | Masking is the driver's switch and four pinned loggers, not a message scrubber — and a cast is not a validator |
 | `2026-08-12-decision-session-token-shape.md` | The session token is `selector.verifier` — for a testable comparison, not a closed hole |
 | `2026-08-12-decision-cors.md` | CORS denies by default, exact origins only, patterns forbidden at the type level |

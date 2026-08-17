@@ -1,5 +1,6 @@
 package com.donghaeng.auth
 
+import com.donghaeng.ApiFixture
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
@@ -53,7 +54,7 @@ import java.net.http.HttpResponse
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
 @Import(StubGoogleRegistration::class)
-internal class DisabledEndpointContractTest : GoogleLoginFixture() {
+internal class DisabledEndpointContractTest : ApiFixture() {
     @Test
     fun `Spring Security's own logout endpoint does not exist, by either method`() {
         // GET is the one that matters — with `csrf { disable() }` above it in the

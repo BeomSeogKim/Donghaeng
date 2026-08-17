@@ -1,6 +1,6 @@
 package com.donghaeng.auth.session
 
-import com.donghaeng.auth.GoogleLoginFixture
+import com.donghaeng.ApiFixture
 import com.donghaeng.auth.StubGoogleRegistration
 import com.donghaeng.auth.account.AppUser
 import com.donghaeng.auth.account.AppUserRepository
@@ -43,7 +43,7 @@ import kotlin.concurrent.thread
 )
 @ActiveProfiles("dev")
 @Import(StubGoogleRegistration::class)
-internal class SessionResolutionTest : GoogleLoginFixture() {
+internal class SessionResolutionTest : ApiFixture() {
     @Autowired private lateinit var users: AppUserRepository
 
     @Autowired private lateinit var identities: OauthIdentityRepository
