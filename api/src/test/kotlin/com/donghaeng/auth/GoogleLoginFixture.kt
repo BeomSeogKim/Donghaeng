@@ -1,24 +1,15 @@
 package com.donghaeng.auth
 
-import com.donghaeng.SharedPostgres
+import com.donghaeng.ApiFixture
+import com.donghaeng.STUB_AUTHORIZATION_CODE
 import com.donghaeng.auth.oauth.GoogleClientRegistration
-import com.donghaeng.auth.session.SessionTokens
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.boot.test.context.TestConfiguration
-import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
 import org.springframework.security.config.oauth2.client.CommonOAuth2Provider
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
 import java.net.HttpCookie
-import java.net.URI
-import java.net.URLDecoder
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
 /** Fixed, fake, and never a real credential — see [StubOidcProvider]. */
@@ -34,6 +25,9 @@ internal const val STUB_CLIENT_SECRET = "stub-client-secret"
  * default and no `junit-platform.properties` turns it on — the day one does, the
  * per-test `subject`/`email` assignments in the login tests start racing each
  * other and the failures will look like flaky OAuth rather than like this.
+ *
+ * Every test class starts from a known value regardless: [ApiFixture] resets the
+ * four mutable fields before each test.
  */
 internal val STUB_PROVIDER =
     StubOidcProvider(STUB_CLIENT_ID, STUB_CLIENT_SECRET).apply {
@@ -83,75 +77,14 @@ internal data class AuthorizationRequest(
 )
 
 /**
- * Everything the login tests share: a Postgres carrying the migration files, an
- * HTTP client that does NOT follow redirects (every assertion here is about a
- * `Location` header or a `Set-Cookie` on a 302), and a cookie jar the test drives
- * by hand so it can say exactly which cookies a request carried.
+ * The OAuth round trip **taken apart**, for the tests that interfere with a step of
+ * it — a tampered `redirect_uri`, a wrong code, a `state` from another browser, a
+ * session cookie smuggled into the callback.
+ *
+ * A test that only needs to be logged in extends [ApiFixture] and calls `login()`;
+ * everything transport-shaped lives there.
  */
-internal abstract class GoogleLoginFixture {
-    @LocalServerPort
-    protected var port: Int = 0
-
-    protected val mapper = ObjectMapper()
-
-    /**
-     * No cookie handler on purpose. An automatic jar would quietly re-send a
-     * previous test's session and turn "the browser arrived with no cookie" into a
-     * claim nothing checks; here every request carries exactly the cookies the
-     * test named.
-     */
-    private val client: HttpClient =
-        HttpClient
-            .newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build()
-
-    protected fun get(
-        path: String,
-        cookies: List<HttpCookie> = emptyList(),
-    ): HttpResponse<String> {
-        val request =
-            HttpRequest
-                .newBuilder(URI.create("http://localhost:$port$path"))
-                .GET()
-                .apply {
-                    if (cookies.isNotEmpty()) {
-                        header("Cookie", cookies.joinToString("; ") { "${it.name}=${it.value}" })
-                    }
-                }.build()
-        return client.send(request, HttpResponse.BodyHandlers.ofString())
-    }
-
-    /**
-     * Logout is a POST, not a GET, and that is v1's CSRF answer rather than a REST
-     * preference — `SameSite=Lax` admits the cookie on top-level GET navigation,
-     * so a GET logout is an `<img src>` away from signing the couple out.
-     *
-     * **`Content-Type: application/json` even though the body is empty**, because
-     * every state-changing handler declares `consumes` and a request without it
-     * does not match the mapping at all
-     * (notes/2026-08-13-decision-static-front-and-content-type-gate.md). That is
-     * the point rather than an inconvenience — it is what forces the preflight —
-     * and it is what a real client has to send, so the fixture sends it too.
-     * [ContentTypeGateContractTest] is where the absence is asserted instead.
-     */
-    protected fun post(
-        path: String,
-        cookies: List<HttpCookie> = emptyList(),
-    ): HttpResponse<String> {
-        val request =
-            HttpRequest
-                .newBuilder(URI.create("http://localhost:$port$path"))
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .header("Content-Type", "application/json")
-                .apply {
-                    if (cookies.isNotEmpty()) {
-                        header("Cookie", cookies.joinToString("; ") { "${it.name}=${it.value}" })
-                    }
-                }.build()
-        return client.send(request, HttpResponse.BodyHandlers.ofString())
-    }
-
+internal abstract class GoogleLoginFixture : ApiFixture() {
     /** Step one of the round trip: the browser is sent to the provider. */
     protected fun startAuthorization(): AuthorizationRequest {
         val response = get(SecurityConfig.AUTHORIZATION_PATH)
@@ -169,7 +102,7 @@ internal abstract class GoogleLoginFixture {
      */
     protected fun completeAuthorization(
         authorization: AuthorizationRequest,
-        code: String = "stub-authorization-code",
+        code: String = STUB_AUTHORIZATION_CODE,
         extraQuery: String = "",
     ): HttpResponse<String> {
         STUB_PROVIDER.nonce = authorization.parameters["nonce"]
@@ -177,49 +110,11 @@ internal abstract class GoogleLoginFixture {
         return get("${SecurityConfig.CALLBACK_PATH}?code=$code&state=$state$extraQuery", authorization.cookies)
     }
 
-    /** A whole login, from no cookie to the session cookie the server issued. */
-    protected fun login(presented: List<HttpCookie> = emptyList()): HttpCookie {
+    /** A whole login that also presents [presented] at the callback. */
+    protected fun login(presented: List<HttpCookie>): HttpCookie {
         val authorization = startAuthorization()
         val response = completeAuthorization(authorization.copy(cookies = authorization.cookies + presented))
         check(response.statusCode() == 302) { "login did not complete: ${response.statusCode()} ${response.body()}" }
         return response.sessionCookie() ?: error("login issued no session cookie")
-    }
-
-    protected fun HttpResponse<*>.location(): URI = URI.create(headers().firstValue("Location").orElseThrow())
-
-    protected fun HttpResponse<*>.cookies(): List<HttpCookie> = headers().allValues("Set-Cookie").flatMap(HttpCookie::parse)
-
-    protected fun HttpResponse<*>.sessionCookie(): HttpCookie? = cookies().firstOrNull { it.name == SessionTokens.COOKIE_NAME }
-
-    protected fun HttpResponse<*>.setCookieHeader(name: String): String? =
-        headers().allValues("Set-Cookie").firstOrNull { it.startsWith("$name=") }
-
-    protected fun HttpResponse<String>.json(): JsonNode = mapper.readTree(body())
-
-    protected fun queryParameters(uri: URI): Map<String, String> =
-        (uri.rawQuery ?: "")
-            .split("&")
-            .filter { it.contains("=") }
-            .associate { pair ->
-                val (name, value) = pair.split("=", limit = 2)
-                URLDecoder.decode(name, Charsets.UTF_8) to URLDecoder.decode(value, Charsets.UTF_8)
-            }
-
-    companion object {
-        /**
-         * [SharedPostgres], not a container of this fixture's own — which is what
-         * this used to start, three lines above a verbatim copy of
-         * [SharedPostgres.publish]. Two containers for one job, in a class named
-         * for sharing.
-         *
-         * Flyway runs against it, because the suite is the only place it ever does
-         * (notes/2026-08-09-decision-schema-ownership.md) — so these tests run
-         * against `V1` and `V2` exactly as the founder will type them, and the dev
-         * profile's `ddl-auto: validate` compares the entity mappings to the
-         * result.
-         */
-        @JvmStatic
-        @DynamicPropertySource
-        fun productionShapedEnvironment(registry: DynamicPropertyRegistry) = SharedPostgres.publish(registry)
     }
 }

@@ -501,5 +501,78 @@ What it means for `web/`:
 
 ## Endpoints
 
-_No wedding-scoped endpoints yet. The error contract and the authentication
-section above are live and binding._
+_The error contract and the authentication section above are live and binding for
+every endpoint below._
+
+### `POST /weddings`
+
+Status: active (added 2026-08-17, `#123`)
+Auth: session cookie — **and nothing more.** This is the one endpoint in the
+product that is not scoped to a wedding.
+
+웨딩 만들기, the screen a couple sees once, between logging in and the ledger
+(`notes/2026-08-07-design-screens-and-flow.md`). It creates the wedding **and the
+caller's membership in it, in one transaction** — every other request resolves
+`user → membership → wedding`, so a wedding created without a membership is a
+ledger nobody can open, and this endpoint is where a person's first membership
+comes from.
+
+Request
+```json
+{ "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+```
+
+All three members are **required**. `weddingDate` is a plain calendar date
+(`YYYY-MM-DD`), no time and no timezone — a wedding date is a date.
+
+Response 201
+```json
+{ "id": 12, "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+```
+
+`id` is what the client did not have; the rest is echoed back **as stored**, which
+is not always what was sent — see the trimming rule below. There is no `Location`
+header, because there is no `GET /weddings/{id}` to point it at yet.
+
+Carries the recomputed aggregate: **no, and here that is not an exception.** A
+wedding is created empty — no guests, no meal types — so there is no headcount to
+carry. The client's next screen is the ledger, which reads it.
+
+Errors
+- 400 `VALIDATION_FAILED` — a name that is blank, whitespace-only, or longer than
+  100 characters; or a `weddingDate` outside the range the database can store
+  (before 4713 BC or after 5874897 AD).
+- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of the wrong
+  type (an unparseable `weddingDate` among them). **Two codes, one meaning for the
+  user**: the request was wrong. They differ because one failure happens while the
+  body is being read and the other after; do not build different UI for them.
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused
+  **before the body is looked at**, so an anonymous request with an invalid body is
+  a 401 and never a 400.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule, in
+  "Every POST, PUT and PATCH must send `Content-Type: application/json`" above.
+
+Six things are decided here rather than left to the caller to infer.
+
+- **보증인원 is not asked, and cannot be sent.** Couples sign up before booking a
+  venue, so at this moment the venue's number does not exist; the ledger works
+  completely without it and it is set later in 설정. An unknown member such as
+  `guaranteedHeadcount` is **ignored**, not refused — sending it sets nothing.
+- **Meal types are not asked either.** The default is a single type, and the moment
+  a couple first meets meal types is when a guest needs 유아식.
+- **A date in the past is accepted.** A couple building the ledger after the fact
+  is a real case, and a mistyped date is editable in 설정. Do not add a client-side
+  "must be in the future" rule; it would refuse people the server accepts. The only
+  bound is what the column can store, which is not a product rule — if the product
+  should refuse a date twenty years out, that is a decision nobody has made yet.
+- **A second wedding by the same person succeeds.** One person may belong to
+  several weddings, so the API does not refuse the second — the screen is what
+  guides a couple to create one. Do not treat a 201 here as proof they had none.
+- **Names are stored trimmed.** Leading and trailing whitespace is removed before
+  the row is written, which is why the response echoes the stored value. A name
+  that is *only* whitespace is a 400, not an empty name.
+- **100 characters is the limit on each name**, and it is measured **on what you
+  send, before that trim** — so 100 characters plus a trailing space is a 400 even
+  though it would have been stored as 100. Trim in the client and the two agree.
+  The count is in UTF-16 code units, so a name built from astral-plane characters
+  may be refused slightly before 100 visible characters.

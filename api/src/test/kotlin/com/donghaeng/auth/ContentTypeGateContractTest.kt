@@ -1,5 +1,6 @@
 package com.donghaeng.auth
 
+import com.donghaeng.ApiFixture
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
@@ -36,7 +37,7 @@ import java.net.http.HttpResponse
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
 @Import(StubGoogleRegistration::class)
-internal class ContentTypeGateContractTest : GoogleLoginFixture() {
+internal class ContentTypeGateContractTest : ApiFixture() {
     @Test
     fun `a POST carrying a safelisted content type never reaches the handler`() {
         // The attack, as close as a test gets to it: a live session, and a request
