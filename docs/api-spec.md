@@ -117,8 +117,8 @@ Three rules, and they are the contract:
   New codes arrive with new endpoints; the client must not break on one it has
   never seen.
 
-Codes that exist today — all framework-level, since no domain endpoint has
-shipped yet:
+Codes that exist today — framework-level, plus the one domain code a shipped
+endpoint raises:
 
 | `code` | Status | Raised when |
 |---|---|---|
@@ -127,6 +127,7 @@ shipped yet:
 | `UNAUTHENTICATED` | 401 | The request carried no session, or one that has expired, been revoked, or does not match. |
 | `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. **Only reachable where no frontend origin is configured** — otherwise the callback redirects; see `GET /login/oauth2/code/google`. |
 | `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
+| `WEDDING_NOT_FOUND` | 404 | The wedding this request is scoped to could not be resolved for this caller. **One code for four situations on purpose** — no such wedding, a wedding the caller is not a member of, a deleted wedding, and a `{weddingId}` that is not a number. See "Being scoped to a wedding" below. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A `POST`/`PUT`/`PATCH` sent a `Content-Type` the endpoint does not accept, **or sent none at all**. Not an edge case — it is how the CSRF gate refuses a request; see "Every POST, PUT and PATCH must send `Content-Type: application/json`". |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND` | as named | A framework-level error with no more specific code. |
@@ -499,6 +500,58 @@ What it means for `web/`:
   and is therefore same-site with the API. A token stays defense in depth (`#48`),
   not a requirement.
 
+## Being scoped to a wedding
+
+_Added 2026-08-19 (`#5`). Applies to every endpoint whose path contains
+`{weddingId}` — which, apart from `POST /weddings`, is all of them._
+
+**Being logged in is not enough to reach a ledger.** Every wedding-scoped request
+resolves `user → membership → wedding` before the endpoint runs, and the endpoint
+runs only if that walk succeeds. The session does not carry a wedding: a person may
+belong to several, and a couple share one, so which wedding is a property of the
+request and not of the login.
+
+**The wedding id travels in the path and nowhere else.** Never in a body, never in a
+query parameter — a request that puts it anywhere else is a request that chooses its
+own tenant, and no endpoint reads it from there. Do not add `weddingId` to a request
+body even when it feels redundant to leave out.
+
+Two outcomes, and the order between them is contract:
+
+| Situation | Status | `code` |
+|---|---|---|
+| No session, or an expired, revoked or ambiguous one | 401 | `UNAUTHENTICATED` |
+| Anything else that stops the wedding from resolving | 404 | `WEDDING_NOT_FOUND` |
+
+**The 401 is decided first**, before the id and before the body. An anonymous
+request to a wedding-scoped endpoint is 401 whatever id it names and whatever it
+sends — so an anonymous caller never learns that an id exists, and never gets a
+validation error listing the endpoint's fields.
+
+**The 404 is deliberately one answer for four different situations**
+(`notes/2026-08-10-decision-cross-tenant-status-code.md`), and they are
+indistinguishable in every member of the document, not merely in the status:
+
+- the wedding does not exist;
+- it exists and the caller is not a member of it;
+- it existed and was deleted;
+- `{weddingId}` is not a number at all.
+
+That is what stops the API from being a wedding-id oracle: a logged-in stranger
+walking the id space learns nothing about which weddings exist. The cost is that
+`web/` cannot tell "gone" from "not yours" either, and should not try —
+**treat a 404 from a wedding-scoped endpoint as "this ledger is not available to
+you", send the person back to their own starting screen, and never retry the same
+id.**
+
+**403 never appears.** It would mean the caller is inside the wedding and lacks a
+privilege there, and v1 has no roles.
+
+**How the client gets a `weddingId`:** from the `id` in the `POST /weddings`
+response. There is no endpoint yet that lists the weddings a person belongs to, so a
+screen that needs the list is a backend change — ask, do not infer one from a stored
+id.
+
 ## Endpoints
 
 _The error contract and the authentication section above are live and binding for
@@ -532,7 +585,9 @@ Response 201
 
 `id` is what the client did not have; the rest is echoed back **as stored**, which
 is not always what was sent — see the trimming rule below. There is no `Location`
-header, because there is no `GET /weddings/{id}` to point it at yet.
+header (changed 2026-08-19: `GET /weddings/{weddingId}` now exists, but the id in
+the body is what the client uses, so a header repeating it buys nothing). **Keep the
+`id`** — it is the only place a client learns one.
 
 Carries the recomputed aggregate: **no, and here that is not an exception.** A
 wedding is created empty — no guests, no meal types — so there is no headcount to
@@ -576,3 +631,39 @@ Six things are decided here rather than left to the caller to infer.
   though it would have been stored as 100. Trim in the client and the two agree.
   The count is in UTF-16 code units, so a name built from astral-plane characters
   may be refused slightly before 100 visible characters.
+
+### `GET /weddings/{weddingId}`
+
+Status: active (added 2026-08-19, `#5`)
+Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+wedding" above, which is what this endpoint is the first to be governed by.
+
+The wedding itself: the couple's names and the date, as stored. The ledger screen
+reads it to render its header, and it is the call that answers "is this wedding
+still mine?" after an app resume or a shared link.
+
+Response 200
+```json
+{ "id": 12, "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+```
+
+The same shape `POST /weddings` returns, deliberately — one `WeddingResponse` for
+both, so a client caches one type. **No `guaranteedHeadcount`** here either: nothing
+sets it yet, and it arrives with `#8`, which is also where 설정 will read it.
+
+Carries the recomputed aggregate: **no** — it is a read, and there is no aggregate
+on this resource. The headcount is its own endpoint (`#17`).
+
+Errors
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
+  the id is looked at**.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an
+  id that is not a number. One answer for all four; do not try to tell them apart.
+
+Two things this endpoint does **not** do, stated so nobody waits for them:
+
+- **It does not list the couple's weddings.** There is no `GET /weddings`, and a
+  screen that needs one is a backend change.
+- **It is not a membership check to call before every other request.** Every
+  wedding-scoped endpoint resolves membership on its own, on every request; calling
+  this first would double the round trips and prove nothing about the next one.

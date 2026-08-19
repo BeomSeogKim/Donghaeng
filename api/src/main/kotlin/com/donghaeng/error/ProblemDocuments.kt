@@ -16,6 +16,26 @@ internal object ProblemDocuments {
     val INTERNAL_ERROR = "INTERNAL_ERROR"
 
     /**
+     * The request attribute a scope resolver sets when it refuses a request, read
+     * by [GlobalErrorHandler] and by nothing that writes a response.
+     *
+     * It travels on the request rather than in the document because the document is
+     * the thing that must NOT differ: a cross-tenant refusal answers exactly what an
+     * id nobody owns answers, or the pair is a wedding-id oracle
+     * (notes/2026-08-10-decision-cross-tenant-status-code.md). The cost of that is a
+     * membership failure and a typo'd id being indistinguishable in a log too, and
+     * this is what pays it back.
+     *
+     * **What it marks is "a wedding-scoped request was refused", not "this was an
+     * attack".** It does not separate a stranger's wedding from an id that does not
+     * exist — telling those apart needs a query on the refusal path, and the alert
+     * this feeds (a spike in 401/404) does not need them apart. It does separate a
+     * refused resolution from every other 404 this API serves, which nothing did
+     * before.
+     */
+    val SCOPE_REFUSED = "com.donghaeng.error.scope-refused"
+
+    /**
      * The 5xx document, built from the status and the path and nothing else.
      *
      * Constructing a fresh [ProblemDetail] rather than editing the one the
@@ -103,7 +123,10 @@ internal object ProblemDocuments {
     fun logLine(
         status: HttpStatusCode,
         instance: URI?,
-    ): String = "Responding ${status.value()} to ${loggablePath(instance)}"
+        scopeRefused: Boolean = false,
+    ): String =
+        "Responding ${status.value()} to ${loggablePath(instance)}" +
+            if (scopeRefused) " ($SCOPE_REFUSED_NOTE)" else ""
 
     private fun loggablePath(instance: URI?): String {
         val path = instance?.toString() ?: UNKNOWN_PATH
@@ -114,6 +137,9 @@ internal object ProblemDocuments {
         val end = if (path[MAX_PATH_CHARS - 1].isHighSurrogate()) MAX_PATH_CHARS - 1 else MAX_PATH_CHARS
         return path.take(end) + TRUNCATION_MARK
     }
+
+    /** Greppable, and it says what happened rather than what we suspect of the caller. */
+    private const val SCOPE_REFUSED_NOTE = "wedding scope refused"
 
     private const val UNTITLED = "Error"
 

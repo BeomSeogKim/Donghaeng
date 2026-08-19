@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.context.request.RequestAttributes
 import org.springframework.web.context.request.ServletWebRequest
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.method.annotation.HandlerMethodValidationException
@@ -107,16 +108,15 @@ internal class GlobalErrorHandler : ResponseEntityExceptionHandler() {
         // the query string. Same format as the 5xx line above, so an incident
         // greps once. The path-borne-token caveat there applies here too.
         //
-        // What is NOT here yet: a cross-tenant refusal answers 404 identically to
-        // a nonexistent id (notes/2026-08-10-decision-cross-tenant-status-code.md),
-        // and this line is where the two are supposed to become distinguishable.
-        // The mark cannot travel in the problem document — the document is the
-        // thing that must not differ — so #5's resolver has to leave it out of
-        // band, on the request, and this funnel has to read it. Deliberately not
-        // built: #5 owns the resolver that knows the difference. `request` is
-        // already in hand here and in the other producer, so adding it is a local
-        // change in two places rather than a signature threaded through anything.
-        if (statusCode.is4xxClientError) logger.info(ProblemDocuments.logLine(statusCode, instanceOf(request)))
+        // A cross-tenant refusal answers 404 identically to a nonexistent id
+        // (notes/2026-08-10-decision-cross-tenant-status-code.md), so this line is
+        // where the two become distinguishable at all. The mark cannot travel in
+        // the problem document — the document is the thing that must not differ —
+        // so #5's resolver leaves it on the request and this funnel reads it. See
+        // ProblemDocuments.SCOPE_REFUSED for exactly how much it distinguishes.
+        if (statusCode.is4xxClientError) {
+            logger.info(ProblemDocuments.logLine(statusCode, instanceOf(request), scopeRefused(request)))
+        }
 
         val problem = response.body as? ProblemDetail ?: return response
         if (problem.properties?.containsKey(DomainException.CODE) != true) {
@@ -133,6 +133,10 @@ internal class GlobalErrorHandler : ResponseEntityExceptionHandler() {
      * [ProblemDocuments.pathOrNull].
      */
     private fun instanceOf(request: WebRequest): URI? = ProblemDocuments.pathOrNull((request as? ServletWebRequest)?.request?.requestURI)
+
+    /** Whether a scope resolver refused this request — set on the request, never in the response. */
+    private fun scopeRefused(request: WebRequest): Boolean =
+        request.getAttribute(ProblemDocuments.SCOPE_REFUSED, RequestAttributes.SCOPE_REQUEST) == true
 
     /**
      * Anything not already claimed by an inherited handler. Without it the

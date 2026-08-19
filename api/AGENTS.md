@@ -169,9 +169,9 @@ inline. The parts that constrain everyday backend work:
   endpoint written in the meantime, by hand and silently. This is a design,
   not deferred hardening, and it is only honest because two tests hold it: an
   anonymous request to a wedding-scoped endpoint is 401, an authenticated
-  non-member is 404. **Forgetting the resolver must fail closed** — `#5` ships
-  either an interceptor that denies undeclared handlers or a build-time check
-  that every handler takes a resolved principal. Never neither.
+  non-member is 404. **Forgetting the resolver fails closed** — `ResolvedPrincipalTest`
+  refuses a handler declaring neither principal, one under `{weddingId}` without
+  `WeddingScope`, and any principal the REQUEST supplies (decided 2026-08-19).
 - **CSRF in v1 is the CORS preflight, not `SameSite=Lax`** (narrowed 2026-08-13,
   `notes/2026-08-13-decision-static-front-and-content-type-gate.md`). `SameSite`
   is a *site* control and a sibling host shares our registrable domain, so Lax
