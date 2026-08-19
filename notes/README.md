@@ -18,6 +18,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-19-decision-launch-date-and-google-only.md` | **Launch is 2026-08-31.** v1 ships on Google alone; the "does this block v1?" gate |
 | `2026-08-11-decision-deletion-and-infant-meals.md` | 유아식 does not adjust 보증인원; deletion cannot trigger `GuestChange` retention |
 | `2026-08-11-decision-import-row-rejection.md` | A bad 관계 rejects the row, not the file — supersedes the synonym table |
 | `2026-08-06-decision-v1-scope-and-meals.md` | The v1 cut; meal types per Wedding |
