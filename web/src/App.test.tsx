@@ -4,6 +4,7 @@ import { HttpResponse, http } from 'msw'
 import { useLocation, useNavigate } from 'react-router'
 import { expect, it } from 'vitest'
 import { App } from './App'
+import type { Session } from './hooks/useSession'
 import { apiError } from './lib/api'
 import { renderWithProviders } from './test/render'
 import { server } from './test/server'
@@ -70,7 +71,19 @@ const unauthenticated = () =>
     { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
   )
 
-const signedIn = (name: string | null) => HttpResponse.json({ id: 12, name })
+/**
+ * The success body, typed from the generated document rather than written out.
+ * A double is only worth the file it lives in while it answers what the server
+ * answers — and a mock the API outgrew stays green forever, which is the exact
+ * failure `#39` exists to close. Renaming a field in `MeResponse` now fails
+ * here, not in production.
+ *
+ * The problem documents below are deliberately NOT typed this way: the
+ * generated `ProblemDetail` is Spring's own and carries no `code` (`#66`), and
+ * `code` is the only member anything branches on. Their shape comes from
+ * docs/api-spec.md, which is where it is actually defined.
+ */
+const signedIn = (name: Session['name']) => HttpResponse.json<Session>({ id: 12, name })
 
 /**
  * The refusal, as the API actually writes it — an ordinary problem document,

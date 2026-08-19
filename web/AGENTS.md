@@ -81,6 +81,24 @@ coverage target.
   place `credentials: 'include'` is written. A bare `fetch` sends no cookie, and
   the API answers 401 — which reads as "not logged in", not as the bug it is.
 
+### The generated API types (built 2026-08-19)
+
+`notes/2026-08-19-decision-generated-api-types.md`. **`src/lib/api-types.gen.ts`
+is generated and committed** — regenerate with `cd api && ./gradlew openapi`,
+then `npm run generate:api-types`; CI's `seam` job re-derives it and fails on
+any difference. Reach an endpoint's shape through `paths[…]`, not through the
+schema name, so the path and status are checked too; **index response bodies by
+`*/*`** and do not try to fix that here (`#66`).
+
+- **The error shape is the one exception and stays hand-written in
+  `lib/api.ts`**, because the generated `ProblemDetail` is Spring's own and has
+  no `code` — the one member anything branches on. Nothing else may declare an
+  API shape, and **MSW success doubles are typed from the generated types**: a
+  mock the API outgrew stays green forever.
+- The generator is pinned at `openapi-typescript@6` because 7 peers on
+  `typescript@^5` and this repo runs the native `typescript@^7`, which has no
+  compiler API. **Do not "upgrade" it**; it moves when the generator does.
+
 ### The token bridge (built 2026-08-08)
 
 `web/src/index.css` **imports** `design/tokens.css` rather than copying it, and

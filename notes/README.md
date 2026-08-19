@@ -65,6 +65,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-19-decision-generated-api-types.md` | The generated types are committed; a `seam` CI job refuses a stale one; what stays hand-written |
 | `2026-08-13-decision-frontend-routing.md` | Plain `<Routes>`, no loaders; the session gate sits above the table |
 | `2026-08-10-decision-design-value-enforcement.md` | Our own checker, not the linter |
 | `2026-08-08-decision-frontend-architecture.md` | Flat until it scatters; React Query; the token bridge |

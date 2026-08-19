@@ -1,6 +1,6 @@
 import { buttonClassName } from '../components/Button'
 import { useLogout } from '../hooks/useLogout'
-import type { Session } from '../lib/api-shapes'
+import type { Session } from '../hooks/useSession'
 
 /**
  * What a signed-in person sees. The ledger takes this place when it exists
