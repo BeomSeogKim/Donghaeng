@@ -50,6 +50,40 @@ Two fields are not optional on any mutating endpoint:
   second round trip. If the answer is "no", say why.
 - **Errors** — including which ones deliberately hide existence.
 
+## The generated OpenAPI document
+
+_Added 2026-08-19 (`#39`)._
+
+`web/` generates its TypeScript types from **`api/build/openapi.json`**. That file
+is produced from the running application by
+
+```
+cd api && ./gradlew openapi
+```
+
+and is written by `./gradlew build` too, as a side effect of the test that asserts
+what is in it. It is a build artifact and is **not committed**, so anything that
+needs it — CI included — regenerates it.
+
+**The document carries shapes; this file carries meaning.** A field name or a type
+that disagrees between the two is a bug in the backend. Everything else below is a
+property of the document the generator will meet:
+
+- OpenAPI **3.1.0**.
+- **Response bodies are keyed `*/*`, not `application/json`.** No handler declares
+  `produces`, so springdoc emits the wildcard. The server sends `application/json`
+  on success and `application/problem+json` on an error, always.
+- **The `ProblemDetail` schema is Spring's own and does not carry `code`** — the one
+  member the frontend switches on (`#66`). The error shape is the one defined above,
+  not the one the document describes.
+- **Only the statuses an endpoint's entry names are in it.** The universal ones — a
+  415 from the content-type gate, a masked 500 — are in this file only.
+- **A `consumes` is invisible.** `POST /auth/logout` shows no request body and still
+  refuses a request without `Content-Type: application/json`.
+- The two OAuth endpoints are absent, as their own entries say.
+- **The document itself is 404 in every deployed environment.** `/v3/api-docs` is
+  enabled only in the build that writes the file; do not fetch it at runtime.
+
 ## Errors
 
 _Added 2026-08-10. Applies to every endpoint, present and future._

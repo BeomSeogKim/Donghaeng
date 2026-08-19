@@ -111,6 +111,26 @@ tasks.withType<Test> {
     systemProperty("spring.flyway.enabled", "true")
 }
 
+// The seam's artifact: `build/openapi.json`, which `web/` generates its TypeScript
+// types from (notes/2026-08-08-decision-build-workflow.md, #39). It is written by
+// OpenApiDocumentTest — a booted application answering `/v3/api-docs` — so
+// `./gradlew build` already produces it, and this task adds the two things that
+// invocation cannot have:
+//
+//   - The output is DECLARED. `test --tests '...OpenApiDocumentTest'` is a task
+//     with no knowledge of the file, so deleting the file and re-running reports
+//     UP-TO-DATE and hands `web/` nothing, or worse, yesterday's contract.
+//   - A name the frontend can be told, that does not embed a test class name.
+tasks.register<Test>("openapi") {
+    group = "documentation"
+    description = "Writes build/openapi.json from the running application."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    // Gradle fails a filter that matches nothing, so a renamed test is loud.
+    filter { includeTestsMatching("com.donghaeng.OpenApiDocumentTest") }
+    outputs.file(layout.buildDirectory.file("openapi.json"))
+}
+
 // The Dockerfile copies build/libs/*.jar. With the plain jar enabled, the glob
 // matches two files the day anything runs `build` instead of `bootJar` — and
 // the plain jar is not runnable. Nothing consumes this project as a library.

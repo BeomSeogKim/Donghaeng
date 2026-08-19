@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestComponent
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.web.bind.annotation.GetMapping
@@ -565,7 +566,13 @@ internal class GoogleLoginContractTest : GoogleLoginFixture() {
  * Exists only to declare `AuthenticatedUser` WITHOUT `@CurrentUser`, which is the
  * shape a future handler will write by accident and which must still route through
  * the resolver.
+ *
+ * `@TestComponent` keeps it to the `@Import` above. Without it the component scan —
+ * rooted at `com.donghaeng`, with the test classes on that classpath — maps
+ * `/test-current-user/bare` into every `@SpringBootTest` context, and
+ * `OpenApiDocumentTest` publishes it to `web/` as an endpoint of the API (`#118`).
  */
+@TestComponent
 @RestController
 internal class BareCurrentUserProbeController {
     @GetMapping("/test-current-user/bare")

@@ -78,6 +78,7 @@ see that file's `Rules` section for the admission test.
 |---|---|
 | `2026-08-13-decision-drop-the-stop-pipeline.md` | **No development ritual.** What was removed, and what it cost |
 | `2026-08-13-decision-static-front-and-content-type-gate.md` | The front ships static; no endpoint accepts a CORS-safelisted content type, and CI sweeps for it |
+| `2026-08-19-decision-openapi-artifact.md` | The seam's document is a test artifact at `api/build/openapi.json`; a test-source controller is a `@TestComponent` or it is published |
 | `2026-08-08-decision-development-tempo.md` | *Superseded* — vertical slices; one stop; the comprehension gate |
 | `2026-08-08-decision-work-tracking.md` | GitHub Issues via `gh`; two milestones, four labels |
 | `2026-08-08-decision-build-workflow.md` | *Partly superseded* — the CI jobs; never merge a red check |

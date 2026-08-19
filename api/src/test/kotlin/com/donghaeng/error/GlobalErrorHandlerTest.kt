@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.boot.test.context.TestComponent
+import org.springframework.context.annotation.Import
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
@@ -51,6 +53,10 @@ import org.springframework.web.server.ResponseStatusException
 // papering over a difference. The chain as it really runs is asserted by
 // ErrorDispatchContractTest, which boots the whole application.
 @AutoConfigureMockMvc(addFilters = false)
+// The controller below is a `@TestComponent`, so no component scan will find it —
+// including this slice's. Registered explicitly instead, which is the whole point:
+// it exists for this file and reaches no other context (#118).
+@Import(ErrorContractController::class)
 class GlobalErrorHandlerTest {
     @Autowired
     private lateinit var mockMvc: MockMvc
@@ -379,6 +385,15 @@ private class LeakyServerException :
         null,
     )
 
+/**
+ * **`@TestComponent`, and it is load-bearing.** The application's component scan is
+ * rooted at `com.donghaeng` with the test classes on that classpath, so a bare
+ * `@RestController` here maps every `/test-errors` path into every
+ * `@SpringBootTest` context — and `OpenApiDocumentTest` then publishes eight
+ * test-only paths to `web/` as part of the API (`#118`). Boot's `TypeExcludeFilter` skips a `@TestComponent`
+ * during the scan; the `@Import` above is what puts it back, here only.
+ */
+@TestComponent
 @RestController
 @RequestMapping("/test-errors")
 internal class ErrorContractController {
