@@ -1,16 +1,27 @@
 package com.donghaeng
 
-import com.tngtech.archunit.core.domain.JavaAnnotation
-import com.tngtech.archunit.core.domain.JavaClass
+import com.donghaeng.auth.StubGoogleRegistration
 import com.tngtech.archunit.core.domain.JavaClasses
-import com.tngtech.archunit.core.domain.JavaMethod
 import com.tngtech.archunit.core.domain.JavaModifier
-import com.tngtech.archunit.core.domain.JavaParameter
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import com.tngtech.archunit.core.importer.ImportOption
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
+import org.springframework.core.MethodParameter
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.DynamicPropertyRegistry
+import org.springframework.test.context.DynamicPropertySource
+import org.springframework.web.method.HandlerMethod
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+import java.lang.reflect.GenericArrayType
+import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Type
+import java.lang.reflect.TypeVariable
+import java.lang.reflect.WildcardType
 
 /**
  * **Forgetting the resolver has to fail closed** — `#5`'s hard acceptance
@@ -19,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping
  *
  * `authorizeHttpRequests` is `permitAll` in every environment, so a handler that
  * declares no resolved principal is open to anonymous callers, and a handler under
- * `/weddings/{weddingId}` that declares no [WEDDING] is open to every logged-in
+ * `/weddings/{weddingId}` that declares no [WeddingScope] is open to every logged-in
  * stranger. Nothing goes red for either on its own: the endpoint works, the tests
  * someone wrote for it pass, and the hole is visible only by reading the signature.
  * So the signatures are swept.
@@ -44,23 +55,47 @@ import org.springframework.web.bind.annotation.RequestMapping
  * be a second registry of what is public, kept by hand, whose own failure mode is a
  * legitimately public endpoint answering 401 in production.
  *
- * **And an interceptor's reach would have to be cut back to this one anyway.** It
- * sees every handler in the context, including ones we did not write — springdoc's
- * `/v3/api-docs` (generated in the build, `#39`) and the `ERROR` dispatch among
- * them — so it would need its own exemptions for framework handlers, at which point
- * what it covers is exactly what is swept here.
- *
  * The cost is stated rather than hidden: this fires at build time, so it protects
  * `main` through CI rather than the running process. That is the same standing this
  * repository's other gates have, and it is why the merge rule is "a red check is
  * never merged".
+ *
+ * ## Why it boots the application instead of reading class files
+ *
+ * The first version read bytecode with ArchUnit and modelled Spring's mapping rules
+ * itself. **Two handlers that Spring serves were invisible to that model**, both
+ * found by writing them and watching the suite stay green:
+ *
+ * - a class-level `@RequestMapping("/weddings/{weddingId}")` **on an abstract base
+ *   controller**, since annotations were read from the declaring class only. A
+ *   shared base is the ordinary way sibling endpoints get factored, so this was the
+ *   likeliest of the two to happen for real.
+ * - `@GetMapping("/weddings/{id}/…")`, since the check was a substring test for the
+ *   literal `{weddingId}`. Spring maps and serves it; the resolver never sees a
+ *   variable by that name, and the handler reads the id straight from the path.
+ *
+ * Both are the same mistake — **a private model of which requests reach which
+ * method**. So the rules below run against
+ * [RequestMappingHandlerMapping.getHandlerMethods], which IS that mapping, resolved
+ * by Spring through the type hierarchy and every composed annotation. Nothing here
+ * emulates Spring any more, which is the only version of this that can be trusted
+ * as the gate.
+ *
+ * It costs a context, and the context serves the test classpath's own controllers
+ * as well as the application's — so the swept set is narrowed to the classes that
+ * ship, by name, from the same production-only import ArchUnit uses.
  */
-class ResolvedPrincipalTest {
+@SpringBootTest
+@ActiveProfiles("dev")
+@Import(StubGoogleRegistration::class)
+internal class ResolvedPrincipalTest {
+    @Autowired private lateinit var mappings: RequestMappingHandlerMapping
+
     @Test
-    fun `the sweep actually reaches the handlers, and sees both kinds of principal`() {
+    fun `the sweep reaches what the application serves, and sees both kinds of principal`() {
         // Every assertion below is "for each handler", which an empty list
-        // satisfies, and a partially narrowed import is the quiet failure — the
-        // classpath read is `build/classes`, not the source tree.
+        // satisfies, and the production-only narrowing is exactly the thing that
+        // could quietly empty it.
         assertThat(handlers().map(::nameOf))
             .contains(
                 "AuthController.me",
@@ -71,6 +106,10 @@ class ResolvedPrincipalTest {
             )
         assertThat(handlers().filter { principalsOf(it).contains(CALLER) }.map(::nameOf)).contains("AuthController.me")
         assertThat(handlers().filter { principalsOf(it).contains(WEDDING) }.map(::nameOf)).contains("WeddingController.read")
+
+        // The paths are read off the mapping, not off the annotation, so the
+        // inherited-prefix case is covered by construction rather than by a rule.
+        assertThat(pathsOf(handlers().single { nameOf(it) == "WeddingController.read" })).contains("/weddings/{weddingId}")
     }
 
     @Test
@@ -92,18 +131,31 @@ class ResolvedPrincipalTest {
     }
 
     @Test
-    fun `a handler under a wedding template takes the resolved scope, never the path variable`() {
+    fun `a wedding path names its variable weddingId, and its handler takes the resolved scope`() {
         val unscoped =
-            handlers()
-                .filter { handler -> pathsOf(handler).any { WEDDING_TEMPLATE in it } }
-                .filterNot { principalsOf(it).contains(WEDDING) }
-                .map { "${nameOf(it)} is mapped under $WEDDING_TEMPLATE without taking a WeddingScope" }
+            handlers().flatMap { handler ->
+                pathsOf(handler).mapNotNull { path ->
+                    val named = weddingVariableOf(path)
+                    when {
+                        // The rename. `/weddings/{id}` is mapped and served, and the
+                        // resolver looks up `weddingId` and finds nothing — so the id
+                        // in the path is one nobody checked the membership for.
+                        named != null && named != WEDDING_ID ->
+                            "${nameOf(handler)} maps $path, whose wedding variable is named `$named` and not `$WEDDING_ID`"
+                        // The omission, wherever the template sits in the path.
+                        "{$WEDDING_ID}" in path && !principalsOf(handler).contains(WEDDING) ->
+                            "${nameOf(handler)} maps $path without taking a WeddingScope"
+                        else -> null
+                    }
+                }
+            }
 
         assertThat(unscoped)
             .describedAs(
-                "A wedding id read straight out of the path is a wedding id the caller chose. Membership is what " +
-                    "makes it theirs, and the resolver is the only thing that checks it " +
-                    "(notes/2026-08-17-decision-first-domain-endpoint-shape.md).",
+                "A wedding id read straight out of the path is a wedding id the caller chose; membership is what " +
+                    "makes it theirs, and the resolver is the only thing that checks it. The NAME is half the rule " +
+                    "because the resolver reads the variable by name — see WEDDING_ID_VARIABLE in " +
+                    "CurrentWeddingResolution.kt (notes/2026-08-19-decision-wedding-scope-gate.md).",
             ).isEmpty()
     }
 
@@ -116,51 +168,48 @@ class ResolvedPrincipalTest {
         // may carry no request-binding annotation at all, whichever it is.
         val supplied =
             handlers().flatMap { handler ->
-                handler.parameters
-                    .filter { it.rawType.name in PRINCIPALS }
-                    .flatMap { parameter -> parameter.annotations.map { it.rawType.name } }
+                handler.methodParameters
+                    .filter { it.parameterType.name in PRINCIPALS }
+                    .flatMap { parameter -> parameter.parameterAnnotations.map { it.annotationClass.java.name } }
                     .filter { it in REQUEST_BINDING }
                     .map { "${nameOf(handler)} takes a resolved principal annotated $it" }
             }
 
         assertThat(supplied)
             .describedAs(
-                "Spring resolves @RequestBody/@ModelAttribute/@RequestParam/@RequestPart/@PathVariable before it " +
-                    "asks a custom resolver, so the annotation turns the parameter into request data: `?id=42` " +
-                    "becomes the caller. Declare the parameter bare — the type IS the match, and `@CurrentUser` / " +
-                    "`@CurrentWedding` are the only annotations it may carry (`#37`).",
+                "Spring resolves a request-binding annotation before it asks a custom resolver, so the annotation " +
+                    "turns the parameter into request data: `?id=42` becomes the caller. Declare the parameter " +
+                    "bare — the type IS the match, and `@CurrentUser` / `@CurrentWedding` are the only annotations " +
+                    "it may carry (`#37`).",
             ).isEmpty()
     }
 
     @Test
-    fun `no type the request can bind into declares a principal or a wedding id`() {
+    fun `no type the request can bind into reaches a principal or declares a wedding id`() {
         // The same spelling one level down, where a parameter annotation cannot be
         // seen: `data class Req(val caller: AuthenticatedUser, ...)` behind a
-        // `@RequestBody` is Jackson populating the identity from the body. Walked
-        // transitively from every parameter a request can bind, because the nesting
-        // has no depth limit.
+        // `@RequestBody` is Jackson populating the identity from the body.
         //
-        // `weddingId` is refused in the same walk and for the same reason one level
-        // out: a wedding id that arrives in a request is a wedding id the caller
-        // chose, and the resolver is what makes one trustworthy.
+        // Walked through GENERIC types, not raw ones: `List<Row>` inside a body is
+        // the shape the import and vendor-email intakes will send, and a walk that
+        // erased the type argument would pass a `Row` it would have refused on its
+        // own.
         val smuggled =
             bindingReachableTypes().flatMap { type ->
-                type.fields
-                    .filterNot { it.modifiers.contains(JavaModifier.SYNTHETIC) }
-                    .mapNotNull { field ->
-                        when {
-                            field.rawType.name in PRINCIPALS -> "${type.simpleName}.${field.name} is a resolved principal"
-                            field.name == WEDDING_ID -> "${type.simpleName}.${field.name} carries a wedding id"
-                            else -> null
-                        }
-                    }
+                val reachedPrincipal =
+                    if (type.name in PRINCIPALS) listOf("${type.simpleName} is reachable from a bound parameter") else emptyList()
+                reachedPrincipal +
+                    type.declaredFields
+                        .filter { it.name == WEDDING_ID }
+                        .map { "${type.simpleName}.${it.name} carries a wedding id" }
             }
 
         assertThat(smuggled)
             .describedAs(
                 "A type reachable from a bound parameter is a type the request fills in. A principal there is the " +
                     "caller declaring who they are; a wedding id there is the caller declaring whose ledger this " +
-                    "is. Neither may come from the request (`#5`, `#37`).",
+                    "is. Neither may come from the request (`#5`, `#37`), and `docs/api-spec.md` promises `web/` " +
+                    "that the wedding id travels in the path and nowhere else.",
             ).isEmpty()
     }
 
@@ -173,7 +222,7 @@ class ResolvedPrincipalTest {
         // request; anything that stores one has either extended its lifetime beyond
         // the request or is a request DTO the walk failed to reach.
         val held =
-            classes
+            productionClasses
                 .flatMap { it.fields }
                 .filterNot { it.modifiers.contains(JavaModifier.SYNTHETIC) }
                 .filter { it.rawType.name in PRINCIPALS }
@@ -185,62 +234,88 @@ class ResolvedPrincipalTest {
     }
 
     /**
-     * Every type a request can bind a value into, transitively. Starts from the
-     * parameters Spring binds from the request — the annotated ones, and any
-     * un-annotated application type, which Spring's catch-all
+     * What this application serves, minus the test classpath's own controllers —
+     * which the context scans as readily as the application's own, and which are
+     * nobody's endpoints (`#118`). Narrowed by production class NAME rather than by
+     * package, so a test controller that shares a package is still excluded.
+     */
+    private fun handlers(): List<HandlerMethod> =
+        mappings.handlerMethods.values
+            .filter { it.beanType.name in productionClassNames }
+            .distinctBy { it.method }
+
+    /** Every path Spring serves this handler at, prefix and hierarchy already resolved. */
+    private fun pathsOf(handler: HandlerMethod): Set<String> =
+        mappings.handlerMethods
+            .filterValues { it.method == handler.method }
+            .keys
+            .flatMap(::patternsOf)
+            .toSet()
+
+    private fun patternsOf(info: RequestMappingInfo): Set<String> =
+        info.pathPatternsCondition?.patternValues ?: info.patternsCondition?.patterns.orEmpty()
+
+    /**
+     * The variable a wedding path opens with, or `null` when the path is not one.
+     * `{weddingId:\\d+}` names `weddingId`; the regex suffix is part of the pattern
+     * syntax, not of the name.
+     */
+    private fun weddingVariableOf(path: String): String? =
+        WEDDING_PATH
+            .find(path)
+            ?.groupValues
+            ?.get(1)
+            ?.substringBefore(':')
+
+    /** Which resolved principals this handler declares, keyed on the TYPE — never on an annotation. */
+    private fun principalsOf(handler: HandlerMethod): Set<String> =
+        handler.methodParameters
+            .map { it.parameterType.name }
+            .filter { it in PRINCIPALS }
+            .toSet()
+
+    private fun nameOf(handler: HandlerMethod): String = "${handler.beanType.simpleName}.${handler.method.name}"
+
+    /**
+     * Every type a request can bind a value into, transitively and through type
+     * arguments. Starts from the parameters Spring binds from the request — the
+     * annotated ones, and any un-annotated application type, which Spring's catch-all
      * `ServletModelAttributeMethodProcessor` populates out of the query string.
      */
-    private fun bindingReachableTypes(): Set<JavaClass> {
-        val reached = mutableSetOf<JavaClass>()
-        val pending = ArrayDeque(handlers().flatMap { it.parameters }.filter(::isRequestBound).map { it.rawType })
+    private fun bindingReachableTypes(): Set<Class<*>> {
+        val reached = mutableSetOf<Class<*>>()
+        val pending = ArrayDeque<Type>()
+        handlers()
+            .flatMap { it.methodParameters.toList() }
+            .filter(::isRequestBound)
+            .forEach { pending += it.genericParameterType }
+
         while (pending.isNotEmpty()) {
-            val type = pending.removeFirst()
-            if (!type.name.startsWith("$ROOT.") || !reached.add(type)) continue
-            pending += type.fields.map { it.rawType }
-            pending += type.constructors.flatMap { it.rawParameterTypes }
+            rawTypesOf(pending.removeFirst()).forEach { raw ->
+                if (!raw.name.startsWith("$ROOT.") || !reached.add(raw)) return@forEach
+                raw.declaredFields.forEach { pending += it.genericType }
+                raw.declaredConstructors.forEach { pending += it.genericParameterTypes.toList() }
+            }
         }
         return reached
     }
 
-    private fun isRequestBound(parameter: JavaParameter): Boolean {
-        if (parameter.rawType.name in PRINCIPALS) return false
-        if (parameter.annotations.any { it.rawType.name in REQUEST_BINDING }) return true
-        return parameter.rawType.name.startsWith("$ROOT.")
-    }
-
-    /** Which resolved principals this handler declares, keyed on the TYPE — never on an annotation. */
-    private fun principalsOf(handler: JavaMethod): Set<String> =
-        handler.parameters
-            .map { it.rawType.name }
-            .filter { it in PRINCIPALS }
-            .toSet()
-
-    /** Its own mapping and the class-level one it inherits — a prefix carries the template just as well. */
-    private fun pathsOf(handler: JavaMethod): List<String> = handler.mappings().flatMap { it.strings("value") + it.strings("path") }
-
-    /**
-     * A handler is a method that maps something itself. A class-level
-     * `@RequestMapping` does not make every method on the class one, which is why
-     * [mappings] is not the test here.
-     */
-    private fun handlers(): List<JavaMethod> =
-        classes.flatMap { it.methods }.filter { method -> method.annotations.any { it.rawType.isMapping() } }
-
-    private fun JavaMethod.mappings(): List<JavaAnnotation<*>> = (annotations + owner.annotations).filter { it.rawType.isMapping() }
-
-    private fun JavaClass.isMapping(): Boolean =
-        name == RequestMapping::class.java.name ||
-            isAnnotatedWith(RequestMapping::class.java) ||
-            isMetaAnnotatedWith(RequestMapping::class.java)
-
-    private fun JavaAnnotation<*>.strings(attribute: String): List<String> =
-        when (val value = get(attribute).orElse(null)) {
-            is Array<*> -> value.filterIsInstance<String>()
-            is String -> listOf(value)
+    /** The classes a declared type can actually hold: itself, its type arguments, its bounds. */
+    private fun rawTypesOf(type: Type): List<Class<*>> =
+        when (type) {
+            is Class<*> -> if (type.isArray) rawTypesOf(type.componentType) else listOf(type)
+            is ParameterizedType -> rawTypesOf(type.rawType) + type.actualTypeArguments.flatMap(::rawTypesOf)
+            is GenericArrayType -> rawTypesOf(type.genericComponentType)
+            is WildcardType -> (type.upperBounds + type.lowerBounds).flatMap(::rawTypesOf)
+            is TypeVariable<*> -> type.bounds.flatMap(::rawTypesOf)
             else -> emptyList()
         }
 
-    private fun nameOf(handler: JavaMethod): String = "${handler.owner.simpleName}.${handler.name}"
+    private fun isRequestBound(parameter: MethodParameter): Boolean {
+        if (parameter.parameterType.name in PRINCIPALS) return false
+        if (parameter.parameterAnnotations.any { it.annotationClass.java.name in REQUEST_BINDING }) return true
+        return parameter.parameterType.name.startsWith("$ROOT.")
+    }
 
     private companion object {
         const val ROOT = "com.donghaeng"
@@ -255,11 +330,17 @@ class ResolvedPrincipalTest {
 
         const val WEDDING_ID = "weddingId"
 
-        const val WEDDING_TEMPLATE = "{$WEDDING_ID}"
+        val WEDDING_PATH = Regex("""^/weddings/\{([^}]+)}""")
 
         /**
          * Every annotation that makes Spring build a parameter out of the request,
          * each resolved ahead of any custom resolver.
+         *
+         * The last three are not reachable as an impersonation today — there is no
+         * converter from a header or a cookie to a principal, so the attempt is a 500
+         * rather than a forged identity. They are here because this list is what
+         * fifteen endpoints will trust, and "everything the request supplies" has to
+         * mean it.
          */
         val REQUEST_BINDING =
             setOf(
@@ -268,6 +349,9 @@ class ResolvedPrincipalTest {
                 "org.springframework.web.bind.annotation.RequestParam",
                 "org.springframework.web.bind.annotation.RequestPart",
                 "org.springframework.web.bind.annotation.PathVariable",
+                "org.springframework.web.bind.annotation.RequestHeader",
+                "org.springframework.web.bind.annotation.CookieValue",
+                "org.springframework.web.bind.annotation.MatrixVariable",
             )
 
         /**
@@ -286,9 +370,15 @@ class ResolvedPrincipalTest {
          */
         val PUBLIC = setOf("AuthController.logout", "ProblemErrorController.handle")
 
-        val classes: JavaClasses =
+        val productionClasses: JavaClasses =
             ClassFileImporter()
                 .withImportOption(ImportOption.DoNotIncludeTests())
                 .importPackages(ROOT)
+
+        val productionClassNames: Set<String> = productionClasses.map { it.name }.toSet()
+
+        @JvmStatic
+        @DynamicPropertySource
+        fun database(registry: DynamicPropertyRegistry) = SharedPostgres.publish(registry)
     }
 }

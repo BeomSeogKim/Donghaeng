@@ -34,11 +34,28 @@ check.
 the running process. That is the standing every other gate in this repository has.
 
 Five rules ship, each verified by writing a handler that breaks it: a handler with
-no principal; a handler under `{weddingId}` with no `WeddingScope`; a principal
-carrying a request-binding annotation; a binding-reachable type declaring a
-principal or a `weddingId` property; and — broader, because a walk can be wrong
-about what it reaches while a ban cannot — nothing anywhere holding a principal as
-state.
+no principal; a wedding path whose variable is not named `weddingId`, or that is
+named it and takes no `WeddingScope`; a principal carrying a request-binding
+annotation; a binding-reachable type reaching a principal or declaring a `weddingId`
+property; and — broader, because a walk can be wrong about what it reaches while a
+ban cannot — nothing anywhere holding a principal as state.
+
+**The sweep reads `RequestMappingHandlerMapping`, not class files, and that was
+earned.** The first version modelled Spring's mapping rules itself with ArchUnit,
+and an audit served two handlers straight past it: a class-level
+`@RequestMapping("/weddings/{weddingId}")` **on an abstract base controller**, which
+a declared-annotations-only reading never saw, and `@GetMapping("/weddings/{id}/…")`,
+which a substring test for the literal `{weddingId}` never saw. Both are the same
+mistake — *a private model of which requests reach which method* — so the rules now
+run against the mapping Spring actually serves, resolved through the type hierarchy.
+The name is half the rule, because the resolver looks the variable up by name.
+
+**A walk, not a name ban, for `weddingId` in a request body.** The walk resolves
+generic type arguments, so a `weddingId` nested in a `List<Row>` inside a body is
+refused exactly as a bare one is. The blanket alternative — ban the field name
+everywhere, as the principal ban does — cannot be used here: every wedding-scoped
+*entity* legitimately declares `weddingId`, so the ban would need an exception list
+that grows with the schema, which is the kind of list that stops being read.
 
 ## 2. Resolution filters `wedding.deleted_at`, and the test proves the resolver did it
 
@@ -53,6 +70,20 @@ wedding-scoped endpoint reads something else, and for those the resolver is the 
 thing standing between a deleted wedding and its guest list. So the test asserts the
 refusal came from the resolution path, via the mark below, and it was re-verified by
 deleting the condition again.
+
+## 2b. A tenancy test needs a second tenant who *has* something
+
+The same vacuity, one query to the left, and it survived the first review: the
+cross-tenant test logged in an outsider who **owned no wedding at all**, so "not a
+member of this wedding" and "not a member of anything" were the same state to the
+entire suite. Replacing the resolver's membership check with one that drops
+`weddingId` — every couple reading every other couple's ledger — left 211 tests
+green.
+
+**A tenancy assertion is only an assertion if the refused caller is a member of
+something else.** The outsider now creates their own wedding before probing the
+first, and the mutation was re-run to confirm it goes red. This is a rule about
+every wedding-scoped test that follows, not a fix to one of them.
 
 ## 3. A refused resolution is marked on the request, for the log only
 

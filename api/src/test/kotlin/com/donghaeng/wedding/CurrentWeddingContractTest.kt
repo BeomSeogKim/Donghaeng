@@ -96,7 +96,15 @@ internal class CurrentWeddingContractTest : ApiFixture() {
     @Test
     fun `an authenticated non-member is 404, and is told exactly what a stranger id is told`() {
         val weddingId = createWedding(login())
+
+        // **The outsider gets a wedding of their own first**, and that line is the
+        // test. Without it, "not a member of THIS wedding" and "not a member of
+        // anything" are the same state to the whole suite — so the resolver could
+        // drop `weddingId` from its membership query, handing every couple every
+        // other couple's ledger, and stay green. Verified by making exactly that
+        // mutation and watching this go red.
         val outsider = loginAs("someone-else")
+        createWedding(outsider)
 
         val refused = get("/weddings/$weddingId", listOf(outsider))
         val nonexistent = get("/weddings/${weddingId + 10_000}", listOf(outsider))
@@ -162,7 +170,9 @@ internal class CurrentWeddingContractTest : ApiFixture() {
         // the security record's alerting on 401/404/429 spikes needs to tell a walk
         // over the id space apart from every other 404 this API serves.
         val weddingId = createWedding(login())
+        // A member of a DIFFERENT wedding, for the reason the test above gives.
         val outsider = loginAs("someone-else")
+        createWedding(outsider)
 
         val (response, log) = capturingLog { get("/weddings/$weddingId", listOf(outsider)) }
 

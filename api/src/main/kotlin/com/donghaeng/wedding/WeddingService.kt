@@ -65,6 +65,11 @@ internal class WeddingService(
         callerId: Long,
         weddingId: Long,
     ): WeddingScope? {
+        // **The order is load-bearing, not incidental.** Membership first means a
+        // non-member and an id nobody owns both cost exactly one indexed lookup and
+        // return at the same point; asking about the wedding first would make a
+        // stranger's real wedding cost two queries and a nonexistent one cost one,
+        // which is the same oracle the 404 exists to close, restated as timing.
         if (!memberships.existsByWeddingIdAndUserIdAndDeletedAtIsNull(weddingId, callerId)) return null
         if (!weddings.existsByIdAndDeletedAtIsNull(weddingId)) return null
         return WeddingScope(id = weddingId, callerId = callerId)
