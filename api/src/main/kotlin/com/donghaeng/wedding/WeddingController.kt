@@ -25,10 +25,13 @@ class WeddingController internal constructor(
     private val weddings: WeddingService,
 ) {
     /**
-     * 웨딩 만들기 (`#7`), and **the one endpoint in the product not scoped to a
-     * wedding**: it takes a caller and no `CurrentWedding`, because this is where a
-     * person's first membership comes from and there is nothing to resolve until it
-     * has run (notes/2026-08-10-decision-auth-gate-and-sequence.md).
+     * 웨딩 만들기 (`#7`), and one of the two endpoints in the product not scoped to a
+     * wedding ([list] is the other, `#132`): it takes a caller and no
+     * `CurrentWedding`, because this is where a person's first membership comes from
+     * and there is nothing to resolve until it has run
+     * (notes/2026-08-10-decision-auth-gate-and-sequence.md). Both are named in
+     * `ScopelessWeddingEndpointTest`, and a third is a design change rather than a
+     * line in that list.
      *
      * [AuthenticatedUser] is the first parameter so that an anonymous request is
      * refused before its body is read — one answer, rather than one that tells the
@@ -54,6 +57,37 @@ class WeddingController internal constructor(
         @CurrentUser caller: AuthenticatedUser,
         @Valid @RequestBody request: CreateWeddingRequest,
     ): WeddingResponse = weddings.create(caller.id, request)
+
+    /**
+     * 내 웨딩 목록 (`#132`), and **the only wedding READ that takes no `WeddingScope`**
+     * — it is what a client calls before it has an id, so there is no id to resolve.
+     * `#124` branches its 최초 1회 screen on whether this is empty, and `#15` reloads
+     * the ledger from it after a refresh loses the id.
+     *
+     * The exemption is deliberate and it is written down, not inferred from the path
+     * happening to lack `{weddingId}`: `ScopelessWeddingEndpointTest` names this
+     * handler and [create] and refuses every other handler under `/weddings` that
+     * declares no [WeddingScope], so a sixteenth endpoint cannot inherit the property
+     * by copying this signature.
+     *
+     * **What stands in for the scope is the membership join** in
+     * [WeddingRepository.findAllLiveForMember] — it can only return rows the resolver
+     * would have accepted — plus [AuthenticatedUser], which under `permitAll` is the
+     * only thing between this endpoint and an anonymous one.
+     */
+    @Operation(summary = "The weddings the caller is a member of, newest first")
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "The caller's weddings — an empty array when they have none."),
+        ApiResponse(
+            responseCode = "401",
+            description = "No session, or an expired or revoked one.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+    )
+    @GetMapping("/weddings")
+    fun list(
+        @CurrentUser caller: AuthenticatedUser,
+    ): List<WeddingResponse> = weddings.list(caller.id)
 
     /**
      * The first wedding-scoped endpoint in the product (`#5`), and the shape the

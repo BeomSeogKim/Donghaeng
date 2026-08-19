@@ -1,6 +1,8 @@
 package com.donghaeng.wedding
 
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 /**
  * **`deleted_at is null` is spelled out here even though `@SQLRestriction` on
@@ -14,4 +16,35 @@ internal interface WeddingRepository : JpaRepository<Wedding, Long> {
     fun existsByIdAndDeletedAtIsNull(id: Long): Boolean
 
     fun findByIdAndDeletedAtIsNull(id: Long): Wedding?
+
+    /**
+     * The weddings a person is a live member of — `#132`, and **the one wedding read
+     * with no `{weddingId}` to resolve**, so the join here IS the scope. It returns
+     * exactly the rows [WeddingService.scopeFor] would accept one at a time, and the
+     * two conditions are the same two, for the same reasons: a revoked membership
+     * must not keep a ledger, and a soft-deleted wedding must not stay readable to
+     * everyone who was ever in it.
+     *
+     * A join rather than two queries because there is no association to traverse:
+     * [Membership] holds ids, not a `@ManyToOne`, so `wedding/` can carry its own
+     * rows without mapping `auth/`'s.
+     *
+     * Newest first, which the spec publishes: `web/` opens the first entry, and an
+     * order the database chose would open a different ledger after a refresh. The id
+     * breaks a tie, because two weddings created in the same microsecond otherwise
+     * order arbitrarily.
+     */
+    @Query(
+        """
+        select w from Wedding w, Membership m
+        where m.weddingId = w.id
+          and m.userId = :userId
+          and m.deletedAt is null
+          and w.deletedAt is null
+        order by w.createdAt desc, w.id desc
+        """,
+    )
+    fun findAllLiveForMember(
+        @Param("userId") userId: Long,
+    ): List<Wedding>
 }

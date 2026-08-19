@@ -109,6 +109,9 @@ mark; never the body, a header, or who was asking.
 - **Listing the weddings a person belongs to.** There is no `GET /weddings`; the
   client keeps the id from `POST /weddings`. `docs/api-spec.md` says so rather than
   leaving the frontend to infer it.
+  **Superseded 2026-08-20** (`2026-08-20-decision-listing-the-callers-weddings.md`):
+  `GET /weddings` exists, and because it carries no `{weddingId}` the sweep above
+  neither catches nor exempts it — a second allowlist names it.
 - **Rate limiting the refusal path.** The standing unit is per wedding and per link
   token, and a refused resolution has neither — the same gap `#98` already holds for
   every other pre-auth path.

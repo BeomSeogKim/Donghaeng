@@ -76,6 +76,22 @@ internal class WeddingService(
     }
 
     /**
+     * The caller's weddings (`#132`) — the answer to "does this person have one, and
+     * which", which a client needs **before** it has an id: `#124` branches the
+     * 최초 1회 screen on it and `#15` reloads the ledger with it after a refresh.
+     *
+     * **A list because a person may belong to several**, not because v1 shows more
+     * than one. The screen guides a couple to make exactly one; an API that answered
+     * a single wedding would be wrong the first time that stops being true, and
+     * unrepairable without a shape change on the seam.
+     *
+     * An empty list is an ordinary answer here and is not an error — it is precisely
+     * the state 최초 1회 is asking about.
+     */
+    @Transactional(readOnly = true)
+    fun list(callerId: Long): List<WeddingResponse> = weddings.findAllLiveForMember(callerId).map { it.toWeddingResponse() }
+
+    /**
      * The wedding itself, for a caller a [WeddingScope] has already been resolved
      * for — so this may not be called with an id that arrived any other way.
      *
