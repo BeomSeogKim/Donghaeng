@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     kotlin("jvm") version "2.2.21"
     kotlin("plugin.spring") version "2.2.21"
@@ -109,6 +111,20 @@ tasks.withType<Test> {
     // asserted by ProfileConfigurationTest, RealConfigurationBootTest and
     // SchemaOwnershipGuardTest.
     systemProperty("spring.flyway.enabled", "true")
+
+    // Gradle's default prints `java.lang.AssertionError at OpenApiDocumentTest.kt:82`
+    // and stops. For an assertion whose CONTENT is the diagnosis — that one declares
+    // an exact set of endpoint paths, so which path is extra or missing is the bug —
+    // the log names the test and withholds the answer. That cost real time twice in one day (#141).
+    //
+    // `events("failed")` is the whole point: this is the failure case only, and a
+    // green run's output is unchanged.
+    testLogging {
+        events("failed")
+        exceptionFormat = TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
 }
 
 // The seam's artifact: `build/openapi.json`, which `web/` generates its TypeScript
