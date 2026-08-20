@@ -1,5 +1,10 @@
 # Decision — what we buy against the merge-order hole, and what we do not (2026-08-20)
 
+> **Corrected the same day (`#143`).** The operational rule below said *re-run the
+> open PRs*. Re-running is a trap: it replays the recorded merge SHA and never
+> re-checks against the new `main`. The remedy is **rebase and push**. See
+> **Correction** at the end; the root `AGENTS.md` line was fixed to match.
+
 `#138`. `#136`/`#137` fixed the symptom — a red `main`. This records the hole and
 the deliberately small purchase.
 
@@ -69,3 +74,34 @@ Splitting `seam` off its `needs: api` edge is **not** the answer and was conside
 the job certifies generated types against the document that `api` produces, so
 running it without that artifact would certify against nothing — which the workflow
 already says in its own comment.
+
+## Correction — re-running replays the stale merge SHA (same day, `#143`)
+
+The rule above was wrong in the one place it had to be right, and it cost the rest
+of the afternoon.
+
+`#137` merged at `11:35:42Z`. `#133` and `#131` were closed and reopened at `11:40Z`
+to force a fresh pipeline. Both runs checked out a merge into **`2b828d6`** — `main`
+*before* `#137`:
+
+    #133  Merge 7ce8b88 into 2b828d6
+    #131  Merge affc8f9 into 2b828d6
+
+GitHub had not yet recomputed `refs/pull/N/merge`, and a *re-run* of a workflow
+replays the SHA that run recorded. So the same pre-`#137` failure appeared twice,
+looking for all the world like a property of those branches.
+
+**It was diagnosed wrong twice** — first as an environment difference between CI and
+a laptop, then as order-dependent flakiness attributed to `#118`, which had already
+been closed that morning with its named fix applied. What settled it was pulling the
+`api-test-results` artifact and reading the checkout line, neither of which is
+visible from the PR page.
+
+Rebasing both branches onto `main` and force-pushing turned `#131` green
+immediately. `#133` then went red on `seam` — correctly, and for the first time,
+because `api` finally passed and stopped masking it (the paragraph above predicted
+exactly this). Its committed types were regenerated and it went green.
+
+**What generalises:** a re-run answers "was this commit red?", never "is this branch
+red against `main` today?". Only a new merge ref answers the second question, and
+only a push produces one.
