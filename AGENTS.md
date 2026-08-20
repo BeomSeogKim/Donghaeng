@@ -93,6 +93,12 @@ what that costs. Everything below still binds.
   means *deployable* — `prod-boot` boots the real config, `docker` asserts the
   shipped image answers 404 on `/v3/api-docs`, `/swagger-ui`, `/actuator`.
   **Merging is the founder's, never an agent's.**
+- **A check that is green is not the same as a check that ran.** Nothing re-runs
+  an open PR when `main` moves under it, so **after every merge, re-run the open
+  PRs before merging the next one** — two green PRs cut from one base merged into
+  a red `main` on 2026-08-20. And a *skipped* job is unknown, never passed:
+  `seam` is `needs: api`, so a red `api` hides it
+  (`notes/2026-08-20-decision-merge-order-gate.md`).
 - **Two milestones** (`v1`, `post-v1` — deferred, never cancelled) and **four
   labels** (`api`, `web`, `infra`, `open-question`); don't add more, labels stop
   meaning anything once they multiply. **`open-question` closes only by writing

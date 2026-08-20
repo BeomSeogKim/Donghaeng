@@ -86,6 +86,7 @@ see that file's `Rules` section for the admission test.
 | `2026-08-08-decision-work-tracking.md` | GitHub Issues via `gh`; two milestones, four labels |
 | `2026-08-20-decision-guest-entry-side-and-companions.md` | 측은 기본값을 갖지 않는다; 동반인원은 대표자를 따르므로 행이 아니라 숫자다 |
 | `2026-08-20-decision-mutation-response-envelope.md` | 뮤테이션 응답은 `{resource, headcount}` — 봉투 금지 규칙이 좁혀진다 |
+| `2026-08-20-decision-merge-order-gate.md` | 두 PR이 따로는 초록, 합치면 빨강 — 무엇을 사고 무엇을 안 샀나 |
 | `2026-08-08-decision-build-workflow.md` | *Partly superseded* — the CI jobs; never merge a red check |
 | `2026-08-11-decision-claude-setup.md` | Where a behaviour lives — skill vs hook vs prose; the prompt cleanup |
 | `2026-08-11-decision-agents-md-hierarchy.md` | AGENTS.md becomes a hierarchy, and gains an eviction rule |

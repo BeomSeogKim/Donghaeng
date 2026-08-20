@@ -24,6 +24,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # `edited` is here for exactly one of its causes: when a base branch merges,
+    # GitHub retargets its children onto `main` and fires `edited` — not
+    # `synchronize` — so without this a retargeted PR shows a green merge button
+    # with ZERO checks, which reads like "passed" at a glance. It cost a red
+    # `main` on 2026-08-20 (#138). It also fires on title and body edits, which
+    # re-runs the pipeline for nothing; `cancel-in-progress` above bounds that,
+    # and at this repo's PR volume it is cheaper than the failure it prevents.
+    #
+    # Listing `types` at all replaces the default, so the default three are
+    # spelled out here — dropping one would silently stop checking PRs.
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
