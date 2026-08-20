@@ -21,12 +21,25 @@ nothing else. Everything below loads on demand.
 **Read your subtree's file before writing code in it** — and re-read it after a
 `/compact`, which re-injects only this root file.
 
-## Pick up here (last session: 2026-08-13)
+## Pick up here (last session: 2026-08-19)
 
-**Google login works end to end.** `#37` is merged, `V1`+`V2` are applied to
-dev by hand, and a real browser round trip issues a `DH_SESSION` cookie that
-`/auth/me` resolves. `api/src/main` now has `auth/` (composition root),
-`auth/account/`, `auth/oauth/`, `auth/session/`, `config/` and `error/`.
+**LAUNCH IS 2026-08-31 and that date is fixed**
+(`notes/2026-08-19-decision-launch-date-and-google-only.md`). Scope is the
+only thing that moves. **A discovered issue is asked "does this block v1?" —
+if not it goes to `post-v1` and the train does not stop.** The first eleven
+days closed 35 issues and zero of the 22 v1 feature issues, because that gate
+did not exist; it exists now.
+
+**v1 launches on Google alone.** `#89` (카카오 · 네이버) is `post-v1` — the
+blocker is Kakao's and Naver's external review queues, not the mappers. `#110`
+and the rest of `#94` went with it, having no trigger without a second
+provider.
+
+**Auth and the first domain endpoint are done.** `POST /weddings` landed
+(`#123`), and the shape fifteen more endpoints copy is in
+`notes/2026-08-17-decision-first-domain-endpoint-shape.md` — read it before
+writing the sixteenth. **The whole schema already exists** in `V1`, guests and
+meals included; the ledger needs no new tables.
 
 ⚠️ **DDL applied by hand must be applied as `donghaeng_app`.** Applying it as
 a personal superuser leaves every table owned by that role and the app gets
@@ -36,10 +49,7 @@ relnamespace='public'::regnamespace and relkind in ('r','S') and
 pg_get_userbyid(relowner) <> 'donghaeng_app';` must be `0`.
 
 **What is next, open, and left is `gh` — not this file.**
-`gh issue list --milestone v1`, `--label open-question` for the undecided. The
-build order and why auth lands *after* login are in
-`notes/2026-08-10-decision-auth-gate-and-sequence.md`. Design has no remaining
-blocker; success criteria are deferred until after the MVP.
+`gh issue list --milestone v1`, `--label open-question` for the undecided.
 
 ## Working style
 
