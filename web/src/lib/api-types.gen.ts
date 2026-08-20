@@ -21,12 +21,56 @@ export interface paths {
     /** The wedding, for a caller who is a member of it */
     get: operations["read"];
   };
+  "/weddings/{weddingId}/guests": {
+    /** Add a guest to the ledger */
+    post: operations["createGuest"];
+  };
 }
 
 export type webhooks = Record<string, never>;
 
 export interface components {
   schemas: {
+    readonly CreateGuestRequest: {
+      /**
+       * @description 배려사항 — belongs to the person and carries forward to seating
+       * @example 휠체어 좌석
+       */
+      readonly accessibilityNote?: string | null;
+      /**
+       * @description As entered — normalising for matching is the matcher's job
+       * @example 010-1234-5678
+       */
+      readonly contact?: string | null;
+      /** @description 예상 참석 여부. Omitted, it is 참석 — the couple corrects what they hear */
+      readonly expectedAttending?: boolean | null;
+      /**
+       * Format: int32
+       * @description 참석 인원, this guest included — not a companion count. Omitted, it is 1
+       * @example 2
+       */
+      readonly expectedPartySize?: number | null;
+      /**
+       * @description One of the seven aggregation groups. Omitted, the guest is OTHER (기타)
+       * @enum {string|null}
+       */
+      readonly groupCategory?: "FAMILY" | "RELATIVE" | "COUSIN" | "PARENTS_GUEST" | "FRIEND" | "COWORKER" | "OTHER";
+      /**
+       * @description The couple's own label for the group. Never aggregated on
+       * @example 대학교 동아리 친구들
+       */
+      readonly groupLabel?: string | null;
+      /**
+       * @description The guest's name — the one thing the couple must type
+       * @example 김영수
+       */
+      readonly name: string;
+      /**
+       * @description 신랑측 or 신부측. Required: there is no value that means 'not stated'
+       * @enum {string}
+       */
+      readonly side: "GROOM" | "BRIDE";
+    };
     readonly CreateWeddingRequest: {
       /**
        * @description The bride's name
@@ -44,6 +88,24 @@ export interface components {
        * @example 2026-10-10
        */
       readonly weddingDate: string;
+    };
+    readonly GuestMutationResponse: {
+      readonly guest: components["schemas"]["GuestResponse"];
+    };
+    readonly GuestResponse: {
+      readonly accessibilityNote?: string | null;
+      readonly contact?: string | null;
+      readonly expectedAttending: boolean;
+      /** Format: int32 */
+      readonly expectedPartySize: number;
+      /** @enum {string} */
+      readonly groupCategory: "FAMILY" | "RELATIVE" | "COUSIN" | "PARENTS_GUEST" | "FRIEND" | "COWORKER" | "OTHER";
+      readonly groupLabel?: string | null;
+      /** Format: int64 */
+      readonly id: number;
+      readonly name: string;
+      /** @enum {string} */
+      readonly side: "GROOM" | "BRIDE";
     };
     readonly MeResponse: {
       /** Format: int64 */
@@ -151,6 +213,45 @@ export interface operations {
       200: {
         content: {
           readonly "*/*": components["schemas"]["WeddingResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller is not a member of it, and when it has been deleted. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** Add a guest to the ledger */
+  createGuest: {
+    parameters: {
+      path: {
+        weddingId: number;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["CreateGuestRequest"];
+      };
+    };
+    responses: {
+      /** @description The guest was added to this wedding's ledger. */
+      201: {
+        content: {
+          readonly "*/*": components["schemas"]["GuestMutationResponse"];
+        };
+      };
+      /** @description A blank or over-long name, a party size below 1, an over-long optional field, or a body that could not be read. */
+      400: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
         };
       };
       /** @description No session, or an expired or revoked one. */

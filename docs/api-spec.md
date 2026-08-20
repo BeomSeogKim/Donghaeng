@@ -91,8 +91,10 @@ _Added 2026-08-10. Applies to every endpoint, present and future._
 Every error response **this application produces** is an **RFC 9457 Problem
 Details** document served as `application/problem+json`
 (`notes/2026-08-07-decision-backend-api-conventions.md`) — whatever raised it,
-and whether or not it reached a controller. A success response has no envelope;
-an error is the only shape the API wraps.
+and whether or not it reached a controller. A success response has no *generic*
+envelope — a mutation's `{resource, headcount}` is that endpoint's own shape
+(`notes/2026-08-20-decision-mutation-response-envelope.md`) — so an error is the
+only document every endpoint has in common.
 
 One boundary, stated because it is observable rather than because it is likely.
 A request the HTTP connector rejects **while parsing the request line** — a
@@ -701,3 +703,160 @@ Two things this endpoint does **not** do, stated so nobody waits for them:
 - **It is not a membership check to call before every other request.** Every
   wedding-scoped endpoint resolves membership on its own, on every request; calling
   this first would double the round trips and prove nothing about the next one.
+
+### `POST /weddings/{weddingId}/guests`
+
+Status: active (added 2026-08-20, `#134` — the backend half of `#11`)
+Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+wedding" above.
+
+하객 추가, the direct-entry sheet, and the first write that puts a row in the ledger.
+**Direct entry is the primary intake path, not a fallback**: attendance normally
+reaches a couple through their parents and KakaoTalk, so most rows in most ledgers
+are written here rather than imported or parsed.
+
+Request
+```json
+{
+  "name": "김영수",
+  "side": "GROOM",
+  "groupCategory": "FRIEND",
+  "groupLabel": "대학교 동아리 친구들",
+  "contact": "010-1234-5678",
+  "accessibilityNote": "휠체어 좌석",
+  "expectedAttending": true,
+  "expectedPartySize": 2
+}
+```
+
+**`name` and `side` are required; everything else is optional.** A body of
+`{"name":"김영수","side":"GROOM"}` is a complete request.
+
+| Member | Required | Omitted, it is | Bound |
+|---|---|---|---|
+| `name` | yes | — | 1–100 characters, not whitespace-only |
+| `side` | yes | — | `GROOM` or `BRIDE` |
+| `groupCategory` | no | `OTHER` | one of the seven below |
+| `groupLabel` | no | `null` | ≤ 100 characters |
+| `contact` | no | `null` | ≤ 30 characters |
+| `accessibilityNote` | no | `null` | ≤ 500 characters |
+| `expectedAttending` | no | `true` (참석) | — |
+| `expectedPartySize` | no | `1` | an integer ≥ 1 |
+
+**An omitted optional member and an explicit `null` mean exactly the same thing to
+the server** — both take the default, so a control the couple left alone can be sent
+as `null` rather than built into the body conditionally.
+
+**`groupCategory` is the one member you cannot send as `null`, and that is the
+generated type rather than this endpoint.** It is an enum, and `openapi-typescript`
+renders an enum as the union of its values with no `null` branch — the document's
+`enum` list does not carry `null` either — so the generated `CreateGuestRequest`
+types it `"FAMILY" | … | "OTHER" | undefined`. Omit it; the result is identical to
+the `null` the server would also have accepted. Every other optional member is typed
+`T | null`.
+
+`groupCategory` is one of `FAMILY` · `RELATIVE` · `COUSIN` · `PARENTS_GUEST` ·
+`FRIEND` · `COWORKER` · `OTHER` (가족 · 친척 · 사촌 · 혼주 손님 · 친구 · 직장동료 ·
+기타). An eighth value is a 400. **The ledger aggregates on this and never on
+`groupLabel`** — free labels fracture on typing variants, and a fractured group is a
+wrong number, so do not offer the label as a filter or a grouping.
+
+Response 201
+```json
+{
+  "guest": {
+    "id": 41,
+    "name": "김영수",
+    "side": "GROOM",
+    "groupCategory": "OTHER",
+    "groupLabel": null,
+    "contact": null,
+    "accessibilityNote": null,
+    "expectedAttending": true,
+    "expectedPartySize": 1
+  }
+}
+```
+
+The row **as stored**, which is not always what was sent — see the trimming rule
+below. There is no `Location` header and no `GET` for a single guest yet.
+
+Carries the recomputed aggregate: **not yet, and the shape already has room for
+it.** The mutation answers `{ "guest": … }` today and
+`{ "guest": …, "headcount": … }` when `#17` lands — **an added member, never a
+changed shape**, and the member is absent rather than `null` until then
+(`notes/2026-08-20-decision-mutation-response-envelope.md`). `web/` should read
+`response.guest` from the start and must not unwrap it; the same envelope is what
+`#12`'s edit and the attendance toggle return. Until `#17`, a screen that shows a
+number refetches it.
+
+Errors
+- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only or over 100
+  characters; an over-long `groupLabel`, `contact` or `accessibilityNote`; an
+  `expectedPartySize` below 1.
+- 400 `MALFORMED_REQUEST_BODY` — `name` or `side` omitted or sent as `null`; a
+  `side` or `groupCategory` outside its list; an `expectedPartySize` that is not an
+  integer or does not fit in 32 bits. **Two codes, one meaning for the user**: the
+  request was wrong. They differ because one failure happens while the body is being
+  read and the other after; do not build different UI for them.
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
+  the body is looked at**, so an anonymous request with an invalid body is a 401.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an
+  id that is not a number. One answer for all four.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
+
+Eight things the caller should not have to infer.
+
+- **`side` is required, has no default, and is editable afterwards.**
+  `wedding_side` holds 신랑측 and 신부측 and nothing else — there is no value meaning
+  "not stated" the way `OTHER` does for the group — so any default would be a claim
+  the couple never made, on one of the ledger's two filters and an aggregation axis
+  (`notes/2026-08-20-decision-guest-entry-side-and-companions.md` §1). Required at
+  entry is not required forever: the edit endpoint (`#12`, `#8`) changes it. The add
+  sheet should therefore make side a two-option control, and may pre-select one, but
+  the pre-selection is a frontend affordance and not this endpoint's promise.
+- **The confirmed slots are not written and are not published.** Couple input writes
+  the *expected* slots only; `confirmedAttending` and `confirmedPartySize` stay
+  `null` on the row, and `null` there means **UNKNOWN — never zero and never 불참**.
+  They join `GuestResponse` with the endpoint that can set them (`#12`, `#23`).
+- **`expectedPartySize` is the attending headcount including the guest**, not a
+  companion count. A couple bringing one guest sends `2`. **A party of zero is not a
+  party**: 불참 is `expectedAttending: false`, and a size of `0` is a 400.
+- **A companion follows the head guest**
+  (`notes/2026-08-20-decision-guest-entry-side-and-companions.md` §2–3). The party
+  size is a count with no 측 and no attendance of its own: a companion is on the head
+  guest's side, and **a guest with `expectedAttending: false` contributes zero to the
+  meal headcount whatever their party size says.** The size is kept rather than
+  erased, so flipping attendance back to 참석 restores the count rather than making
+  the couple retype what it had already told us. A party that splits — a companion on
+  the other 측, or a head who cannot come while their companion still can — is not
+  expressible in one row: **register that person as their own guest.**
+- **`expectedAttending` defaults to 참석** because the couple corrects what they hear
+  about 불참, and that is fewer taps. Do not present the control as unset. That
+  default and the meal count following the party size are
+  `notes/2026-08-06-design-ledger-and-import.md` §4; the party-of-one and `OTHER`
+  defaults in the table above are
+  `notes/2026-08-20-decision-guest-entry-side-and-companions.md` §4.
+- **Per-meal-type counts are not accepted here.** They hang off meal types only the
+  couple can create (`#10`), so a guest is added first and their meals set after
+  (`#14`). 유아식 included: it is counted beside the 식대 인원, never inside it.
+- **Values are stored trimmed, and a blank optional field is stored as nothing.**
+  Leading and trailing whitespace is removed, and a field that is empty afterwards
+  comes back as `null` rather than `""` — so `{"contact":"  "}` is a guest with no
+  contact, not a guest whose contact is two spaces. A `name` that is only whitespace
+  is a 400. Every length bound is measured **on what you send, before that trim**;
+  trim in the client and the two agree.
+- **A second guest with the same name succeeds, and is a second row.** Direct entry
+  needs no matching — the couple is looking at the ledger and naming a person into
+  it, so 동명이인 is not a conflict here. The matching pipeline runs on the import and
+  vendor-email channels, which arrive holding a name and have to find out who it
+  means.
+
+Two things this endpoint does **not** do:
+
+- **It does not write an audit row.** `GuestChange` records one row per changed
+  field with an old value and a new one, which a creation has neither of; the audit
+  write path arrives with editing (`#25`).
+- **It does not accept `weddingId` in the body.** The wedding travels in the path
+  and nowhere else; an unknown member is ignored, so sending one writes into the
+  wedding in the path regardless.
