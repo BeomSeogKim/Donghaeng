@@ -14,6 +14,8 @@ export interface paths {
     get: operations["me"];
   };
   "/weddings": {
+    /** The weddings the caller is a member of, newest first */
+    get: operations["list"];
     /** Create a wedding and the creator's membership in it */
     post: operations["create"];
   };
@@ -163,6 +165,23 @@ export interface operations {
       200: {
         content: {
           readonly "*/*": components["schemas"]["MeResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** The weddings the caller is a member of, newest first */
+  list: {
+    responses: {
+      /** @description The caller's weddings — an empty array when they have none. */
+      200: {
+        content: {
+          readonly "*/*": readonly components["schemas"]["WeddingResponse"][];
         };
       };
       /** @description No session, or an expired or revoked one. */

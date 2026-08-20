@@ -44,6 +44,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-20-decision-listing-the-callers-weddings.md` | `GET /weddings` answers 최초 1회 from the session; a scopeless wedding endpoint is named in an allowlist, never inferred from the path |
 | `2026-08-19-decision-wedding-scope-gate.md` | The gate fails closed by a build-time sweep, not an interceptor; resolution filters `wedding.deleted_at`; a refusal is marked in the log only |
 | `2026-08-13-decision-first-login-idempotency-and-email-merge.md` | First login is idempotent per identity; only a verified address merges, and we can be the verifier |
 | `2026-08-13-decision-login-failure-return-path.md` | A failed callback returns to the front with a closed code in the fragment; the copy is `web/`'s |

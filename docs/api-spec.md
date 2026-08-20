@@ -538,8 +538,9 @@ What it means for `web/`:
 
 ## Being scoped to a wedding
 
-_Added 2026-08-19 (`#5`). Applies to every endpoint whose path contains
-`{weddingId}` — which, apart from `POST /weddings`, is all of them._
+_Added 2026-08-19 (`#5`); amended 2026-08-20 (`#132`). Applies to every endpoint
+whose path contains `{weddingId}` — which is all of them apart from `POST /weddings`
+and `GET /weddings`._
 
 **Being logged in is not enough to reach a ledger.** Every wedding-scoped request
 resolves `user → membership → wedding` before the endpoint runs, and the endpoint
@@ -583,10 +584,17 @@ id.**
 **403 never appears.** It would mean the caller is inside the wedding and lacks a
 privilege there, and v1 has no roles.
 
-**How the client gets a `weddingId`:** from the `id` in the `POST /weddings`
-response. There is no endpoint yet that lists the weddings a person belongs to, so a
-screen that needs the list is a backend change — ask, do not infer one from a stored
-id.
+**How the client gets a `weddingId`:** from `GET /weddings`, the caller's own
+weddings (added 2026-08-20, `#132`), or from the `id` in the `POST /weddings`
+response. **`GET /weddings` is the one to reach for after a page load** — a stored id
+is a guess about a membership that may since have been revoked, while the list is the
+membership, answered fresh.
+
+**`GET /weddings` and `POST /weddings` are the only two endpoints in the product that
+are not scoped to a wedding**, and that is a closed set rather than a pattern to
+copy. Both answer from the session alone because neither has a wedding in mind yet;
+anything that reads or writes a wedding's *contents* puts the id in the path, where
+the membership walk above checks it.
 
 ## Endpoints
 
@@ -596,8 +604,8 @@ every endpoint below._
 ### `POST /weddings`
 
 Status: active (added 2026-08-17, `#123`)
-Auth: session cookie — **and nothing more.** This is the one endpoint in the
-product that is not scoped to a wedding.
+Auth: session cookie — **and nothing more.** One of the two endpoints in the product
+that are not scoped to a wedding (changed 2026-08-20: `GET /weddings` is the other).
 
 웨딩 만들기, the screen a couple sees once, between logging in and the ledger
 (`notes/2026-08-07-design-screens-and-flow.md`). It creates the wedding **and the
@@ -668,6 +676,57 @@ Six things are decided here rather than left to the caller to infer.
   The count is in UTF-16 code units, so a name built from astral-plane characters
   may be refused slightly before 100 visible characters.
 
+### `GET /weddings`
+
+Status: active (added 2026-08-20, `#132`)
+Auth: session cookie — **and nothing more.** Together with `POST /weddings` this is
+one of the two endpoints not scoped to a wedding; see "Being scoped to a wedding".
+
+**The weddings the caller is a member of**, which is the question a client has before
+it has a `weddingId`. Two screens ask it:
+
+- **로그인 직후** — an empty array means this person has no wedding, so the flow is
+  `로그인 → 웨딩 만들기 → 원장`; a non-empty one means it is `로그인 → 원장`. This is
+  what makes "최초 1회" decidable (`notes/2026-08-07-design-screens-and-flow.md`).
+- **원장, after a reload** — the id from `POST /weddings` does not survive a refresh,
+  so the ledger reloads by calling this and taking the first entry.
+
+Response 200
+```json
+[
+  { "id": 12, "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+]
+```
+
+A bare array, no envelope, and **each entry is the same `WeddingResponse`**
+`POST /weddings` and `GET /weddings/{weddingId}` return — one type for all three.
+
+**An empty array is the ordinary answer for a person with no wedding**, not a 404.
+Do not treat it as an error state; it is the branch 최초 1회 exists for.
+
+**Ordered newest first** (most recently created), and the order is contract — a
+client that takes `[0]` gets the same wedding on every reload. It is *not* a claim
+about which wedding is "current": v1 has no way to switch weddings and no notion of
+a last-viewed one, so a person with several is out of scope until that is designed.
+
+**A list, even though v1 guides a couple to make exactly one.** One person may belong
+to several weddings, and the API may not claim otherwise — an endpoint that answered
+a single object would have to change shape the first time that matters.
+
+Errors
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. **An anonymous
+  request is 401 and never an empty array**; the two would otherwise be
+  indistinguishable to a client, and this endpoint has nothing but the session
+  standing in front of it.
+
+Two things it does not do:
+
+- **It does not tell you whether a wedding was deleted or a membership revoked.**
+  Both simply stop appearing — a wedding the couple soft-deleted, and one a person
+  was removed from, are absent for the same reason and look identical.
+- **It is not a membership check to call before other requests.** Every
+  wedding-scoped endpoint resolves membership on its own, on every request.
+
 ### `GET /weddings/{weddingId}`
 
 Status: active (added 2026-08-19, `#5`)
@@ -698,8 +757,8 @@ Errors
 
 Two things this endpoint does **not** do, stated so nobody waits for them:
 
-- **It does not list the couple's weddings.** There is no `GET /weddings`, and a
-  screen that needs one is a backend change.
+- **It does not list the couple's weddings.** `GET /weddings` does, added
+  2026-08-20 — this one reads a wedding the client already has an id for.
 - **It is not a membership check to call before every other request.** Every
   wedding-scoped endpoint resolves membership on its own, on every request; calling
   this first would double the round trips and prove nothing about the next one.
