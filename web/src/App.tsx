@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 import { BrandMark } from './components/BrandMark'
 import { Screen } from './components/Screen'
 import { SessionUnavailable } from './components/SessionUnavailable'
-import { useSession } from './hooks/useSession'
+import { type Session, useSession } from './hooks/useSession'
+import { createWeddingPath } from './lib/routes'
+import { CreateWeddingPage } from './pages/CreateWeddingPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 
@@ -15,10 +18,10 @@ import { LoginPage } from './pages/LoginPage'
  * React Query cache. Two of them would eventually disagree about the headcount,
  * which is the number this product may never get wrong.
  *
- * The guard is a ternary per route because there are two routes. It becomes a
- * layout route rendering an <Outlet> the moment there are several protected
- * screens; that is a mechanical change, and inventing it now would mean
- * inventing the nesting too.
+ * The guard is one function applied per route, because that is all the two
+ * protected screens share. It becomes a layout route rendering an <Outlet> the
+ * moment they share a shell as well — that is a mechanical change, and
+ * inventing the nesting before there is anything to put in it would not be.
  *
  * NOTHING RENDERS BEFORE THE ANSWER. The session is resolved above the table, so
  * no screen is shown to someone who might not be entitled to it and the login
@@ -48,22 +51,18 @@ export function App() {
 
   const person = session.data
 
+  /** A screen only a signed-in person may see, handed the person it is for. */
+  const signedIn = (screen: (who: Session) => ReactNode) =>
+    person === null ? <Navigate replace to="/login" /> : screen(person)
+
   return (
     <Routes>
       <Route
         element={person === null ? <LoginPage /> : <Navigate replace to="/" />}
         path="/login"
       />
-      <Route
-        element={
-          person === null ? (
-            <Navigate replace to="/login" />
-          ) : (
-            <HomePage session={person} />
-          )
-        }
-        path="/"
-      />
+      <Route element={signedIn((who) => <HomePage session={who} />)} path="/" />
+      <Route element={signedIn(() => <CreateWeddingPage />)} path={createWeddingPath} />
       {/* The OAuth callback returns the browser to the configured frontend
           origin — the root — so there is no callback route to write. Anything
           else is a mistyped URL, and the root will sort out where it belongs. */}
