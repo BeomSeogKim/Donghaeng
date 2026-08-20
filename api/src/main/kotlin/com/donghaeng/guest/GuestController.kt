@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -133,9 +134,37 @@ class GuestController internal constructor(
     @GetMapping("/weddings/{weddingId}/guests")
     fun list(
         @CurrentWedding wedding: WeddingScope,
-        @Parameter(description = "신랑측 or 신부측. Omitted or empty, both sides")
+        request: HttpServletRequest,
+        @Parameter(description = "신랑측 or 신부측. Sent at most once; omitted or empty, both sides")
         @RequestParam(required = false) side: WeddingSide?,
-        @Parameter(description = "참석 or 불참, read as the headcount reads it. Omitted or empty, both")
+        @Parameter(description = "참석 or 불참. Sent at most once; omitted or empty, both")
         @RequestParam(required = false) attendance: AttendanceFilter?,
-    ): List<GuestResponse> = guests.list(wedding, side, attendance)
+    ): List<GuestResponse> {
+        refuseRepeated(request, SIDE, ATTENDANCE)
+        return guests.list(wedding, side, attendance)
+    }
+
+    /**
+     * The raw query is read here because a bound parameter cannot see the difference
+     * that matters: Spring resolves `?side=GROOM&side=BRIDE` into the FIRST value and
+     * the handler is handed something indistinguishable from a caller who sent one.
+     * [RepeatedFilterException] carries why that may not be answered 200.
+     *
+     * Declared after [CurrentWedding] like every other request-supplied parameter, so
+     * a stranger's request is refused by the resolver before this reads anything they
+     * sent.
+     */
+    private fun refuseRepeated(
+        request: HttpServletRequest,
+        vararg filters: String,
+    ) {
+        filters
+            .firstOrNull { (request.getParameterValues(it)?.size ?: 0) > 1 }
+            ?.let { throw RepeatedFilterException(it) }
+    }
+
+    private companion object {
+        private const val SIDE = "side"
+        private const val ATTENDANCE = "attendance"
+    }
 }

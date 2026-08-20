@@ -944,6 +944,15 @@ a cleared filter chip may send the parameter unconditionally. Any other value is
 400. **An unknown query parameter is ignored**, which is what a `groupCategory=…`
 sent "just in case" would be — see below.
 
+**Send each filter at most once. `?side=GROOM&side=BRIDE` is a 400, not "both".**
+This is the one place where the obvious client-side spelling would have been
+answered wrongly rather than refused: a repeated parameter binds to its first value,
+so unrefused it would have returned 신랑측 only — a 200, a plausible-looking ledger,
+and no signal that half of it is missing. **"Both" is spelled by leaving the filter
+out** (or sending it empty). The rule holds even when the repetition is harmless
+(`?side=GROOM&side=GROOM`): it is refused for being repeated, not for what it says,
+because a client that can emit one can emit the other.
+
 Response 200
 ```json
 [
@@ -1022,10 +1031,21 @@ does nothing.
 
 #### What `attendance` filters on
 
-**The value the headcount counts: the confirmed answer when there is one, and the
-couple's expected value otherwise** (`notes/2026-08-05-design-meal-headcount.md`
-§1). The ledger and the headcount are one screen, so a guest under the 참석 chip is
-a guest the number counts as attending — those two may never disagree.
+**The confirmed answer when there is one, and the couple's expected value
+otherwise** — per guest, `confirmed`, else `expected`.
+
+**What the headcount will do with attendance is not settled, and this is a
+constraint on it rather than a description of it.** 식대 인원 is a sum of per-guest
+meal counts (`notes/2026-08-05-design-meal-headcount.md` §1); whether and how it
+gates on attendance first is `#17`'s, and the founder has been asked. What already
+binds is that 원장과 인원수는 한 화면 — a guest shown under the 참석 chip may not be
+a guest the number treats as 불참 — so **whatever `#17` reads attendance through has
+to be this same fallback.** If it ends up reading something else, this filter is
+what changes, and this entry with it.
+
+For `web/` today the consequence is small and worth stating plainly: every guest has
+an `expectedAttending`, no endpoint writes a confirmed value yet (`#13`), so until
+then this filter selects on `expectedAttending` and the chips are exact.
 
 **There is no `UNKNOWN` value, and its absence is deliberate.** `expectedAttending`
 is always present, so the value this filters on is never unknown. 아직 모르는 N명 —
@@ -1043,10 +1063,11 @@ never zero, never 불참**, exactly as `POST /weddings/{weddingId}/guests` alrea
 says. They will be added members on an existing shape, so nothing breaks.
 
 Errors
-- 400 `BAD_REQUEST` — a `side` or `attendance` value outside its set. **A third
-  code with the same meaning for the user as `VALIDATION_FAILED` and
-  `MALFORMED_REQUEST_BODY`**: the request was wrong. It differs because the value
-  failed to convert before any validation ran; do not build separate UI for it.
+- 400 `BAD_REQUEST` — a `side` or `attendance` value outside its set, **or either
+  filter sent more than once**. One code for both, deliberately: they mean the same
+  thing to the person looking at the screen, and it is the same meaning
+  `VALIDATION_FAILED` and `MALFORMED_REQUEST_BODY` carry elsewhere — the request was
+  wrong. Do not build separate UI for them.
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
   the filters are parsed**, so an anonymous request with a nonsense filter is a 401.
 - 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an

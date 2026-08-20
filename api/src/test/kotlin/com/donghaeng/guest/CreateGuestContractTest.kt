@@ -1,17 +1,11 @@
 package com.donghaeng.guest
 
-import com.donghaeng.ApiFixture
-import com.donghaeng.auth.STUB_PROVIDER
 import com.donghaeng.auth.StubGoogleRegistration
 import com.donghaeng.wedding.WeddingSide
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.net.HttpCookie
 import java.net.http.HttpResponse
@@ -33,28 +27,11 @@ import java.net.http.HttpResponse
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
 @Import(StubGoogleRegistration::class)
-internal class CreateGuestContractTest : ApiFixture() {
-    @Autowired private lateinit var jdbc: JdbcTemplate
-
-    /**
-     * Both ends, and in FK order. The container is shared with every other test
-     * class and `guest` references `wedding`, which references `app_user`, so a
-     * guest left behind here fails the `weddings.deleteAll()` in the wedding tests
-     * and the `users.deleteAll()` in the login tests — in whichever class happens to
-     * run next. SQL rather than `deleteAll()`, which cannot see a soft-deleted row.
-     */
-    @BeforeEach
-    @AfterEach
-    fun clean() {
-        jdbc.update("delete from guest")
-        jdbc.update("delete from membership")
-        jdbc.update("delete from wedding")
-    }
-
+internal class CreateGuestContractTest : GuestFixture() {
     @Test
     fun `a name and a side are the whole of it, and the defaults fill in the rest`() {
         val session = login()
-        val userId = me(session)
+        val userId = callerId(session)
         val weddingId = createWedding(session)
 
         val response = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""")
@@ -405,23 +382,4 @@ internal class CreateGuestContractTest : ApiFixture() {
 
     private fun rows(weddingId: Long): List<Map<String, Any?>> =
         jdbc.queryForList("select * from guest where wedding_id = ? order by id", weddingId)
-
-    private fun withoutInstance(response: HttpResponse<String>): Map<*, *> =
-        mapper.readValue(response.body(), Map::class.java).filterKeys { it != "instance" }
-
-    private fun me(session: HttpCookie): Long = get("/auth/me", listOf(session)).json()["id"].asLong()
-
-    private fun createWedding(session: HttpCookie): Long =
-        post(
-            "/weddings",
-            listOf(session),
-            """{"weddingDate":"2026-10-10","groomName":"김신랑","brideName":"이신부"}""",
-        ).json()["id"]
-            .asLong()
-
-    /** A second person, with their own `app_user` row and their own session. */
-    private fun loginAs(subject: String): HttpCookie {
-        STUB_PROVIDER.subject = subject
-        return login()
-    }
 }

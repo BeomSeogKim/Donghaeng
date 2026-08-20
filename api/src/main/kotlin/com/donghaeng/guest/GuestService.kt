@@ -61,22 +61,19 @@ internal class GuestService(
     }
 
     /**
-     * The ledger (`#15`) — the wedding's live 하객, narrowed by 측 and 참석 상태 and
-     * by nothing else, in the order they were entered.
+     * The ledger (`#15`) — the wedding's live 하객, narrowed by 측 and 참석 상태 and by
+     * nothing else, oldest first, all of it in one response.
      *
-     * **Both filters are optional and neither is a page.** The whole ledger is
-     * returned in one response; the reasoning is in `docs/api-spec.md`, where the
-     * frontend can read it.
-     *
-     * **The group is deliberately not a parameter here.** It is an axis the couple
-     * reads in the aggregate, never one that narrows the list, and `groupLabel`
-     * fractures on typing variants besides
-     * (notes/2026-08-06-design-ledger-and-import.md §1). Adding one "for symmetry"
-     * is the change this sentence exists to stop.
+     * Every one of those is a decision rather than an implementation detail, and
+     * they are argued once, in
+     * `notes/2026-08-20-decision-the-ledger-read-and-its-filters.md`: no page, entry
+     * order as contract, 그룹 excluded on purpose, and what the attendance filter
+     * commits `#17` to. **A third filter, or a page, is a change to that record
+     * first.**
      *
      * No aggregate rides along: this is a read, and the headcount is `#17`'s own
-     * endpoint (notes/2026-08-20-decision-mutation-response-envelope.md, which binds
-     * mutations).
+     * endpoint (notes/2026-08-20-decision-mutation-response-envelope.md binds
+     * mutations, not this).
      */
     @Transactional(readOnly = true)
     fun list(

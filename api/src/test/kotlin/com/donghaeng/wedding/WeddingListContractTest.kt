@@ -1,7 +1,6 @@
 package com.donghaeng.wedding
 
 import com.donghaeng.ApiFixture
-import com.donghaeng.auth.STUB_PROVIDER
 import com.donghaeng.auth.StubGoogleRegistration
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
@@ -12,7 +11,6 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
-import java.net.HttpCookie
 
 /**
  * THE RED GATE OF `#132`: **the caller's weddings, from the session alone.**
@@ -137,22 +135,5 @@ internal class WeddingListContractTest : ApiFixture() {
         val second = createWedding(session, "박신랑")
 
         assertThat(get("/weddings", listOf(session)).json().map { it["id"].asLong() }).containsExactly(second, first)
-    }
-
-    private fun createWedding(
-        session: HttpCookie,
-        groomName: String,
-    ): Long =
-        post(
-            "/weddings",
-            listOf(session),
-            """{"weddingDate":"2026-10-10","groomName":"$groomName","brideName":"이신부"}""",
-        ).json()["id"]
-            .asLong()
-
-    /** A second person with their own `app_user` row and their own session. */
-    private fun loginAs(subject: String): HttpCookie {
-        STUB_PROVIDER.subject = subject
-        return login()
     }
 }

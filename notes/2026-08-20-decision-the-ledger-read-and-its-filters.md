@@ -46,20 +46,29 @@ the client every row, answering it later costs a client-side sort rather than an
 API change. That is the second dividend of not paging, and it is why this was not
 worth sending back to the founder as a blocking question.
 
-## 3. 참석 상태 filters on what the headcount counts
+## 3. 참석 상태 filters on `coalesce(confirmed, expected)` — as a constraint on `#17`
 
-`attendance=ATTENDING | NOT_ATTENDING`, selecting on
-`coalesce(confirmed_attending, expected_attending)` — the same fallback the 식대
-인원 sums (`2026-08-05-design-meal-headcount.md` §1).
+`attendance=ATTENDING | NOT_ATTENDING`, selecting per guest on the confirmed answer
+when there is one and the couple's expected value otherwise.
 
-**Because 원장과 인원수는 한 화면이다, the filter and the number may not disagree.**
-An expected-only predicate would have shown a guest under the 참석 chip while the
-number beside it counted them 불참, and that is the failure this product's first
-value forbids. Nothing writes a confirmed value until `#13`, so the predicate is
-written today against a column that is still always NULL — deliberately, since the
-alternative is a filter whose meaning changes silently the day `#13` lands. The
-test that holds it writes `confirmed_attending` through JDBC, because no endpoint
-can.
+**Corrected on review, and the correction is the point.** The first draft of this
+record, the spec and two KDocs all said this is "the value the headcount sums",
+which is not a fact anyone has established. 식대 인원 is a sum of *per-meal-type
+counts* (`2026-08-05-design-meal-headcount.md` §1), and whether the aggregation gates
+on attendance first is `#17`'s call — `V1__baseline_schema.sql` says so in the
+`guest` comment, in its own words, and the founder has been asked. Writing an open
+question down as settled is how a wrong number gets built on top of it.
+
+So what this decides is **a constraint `#17` must satisfy, not a description of it**:
+원장과 인원수는 한 화면이므로 a guest under the 참석 chip may not be a guest the
+number treats as 불참. Whatever `#17` reads attendance through has to be this same
+per-guest fallback; if it ends up reading something else, this filter changes with
+it, and the seam does too.
+
+Nothing writes a confirmed value until `#13`, so the predicate is written today
+against a column that is still always NULL — deliberately, since the alternative is
+a filter whose meaning changes silently the day `#13` lands. The test that holds it
+writes `confirmed_attending` through JDBC, because no endpoint can.
 
 **There is no `UNKNOWN` value and there may not be one on this parameter.**
 `expected_attending` is NOT NULL, so the filtered value is never unknown. 아직
@@ -92,16 +101,43 @@ null. Neither set may be empty, since `in ()` is not SQL; the service is where t
 is guaranteed, and it is the only reason the two live in the service rather than in
 the query.
 
+## 5. A filter sent twice is refused, never resolved
+
+`?side=GROOM&side=BRIDE` is what "both chips selected" looks like when a client
+builds its query out of filter state, and nothing on the seam forbids it — the
+generated type says `side?: "GROOM" | "BRIDE"`, and a repeated parameter is a
+property of the URL, not of the type.
+
+Spring binds a repeated parameter to a scalar target by keeping the **first** value.
+So the unrefused behaviour was: the caller asks for both sides, gets 신랑측 only,
+**status 200, no error, and nothing in the response that could tell them.** A wrong
+ledger that looks right is the worst outcome available to a product whose first
+value is 정직함 · 믿음직함, and it is worse than a 400 by a wide margin — the 400
+happens once, in development, on the first call.
+
+**So it is a 400, with the same `code` an unconvertible value gets.** Two codes for
+"your filter was wrong" would buy `web/` a distinction it has no different copy for.
+Refused for being *repeated* rather than for what it says, so `?side=GROOM&side=GROOM`
+is also a 400: a client that can emit one can emit the other, and a rule with a
+harmless-case exemption is a rule nobody can predict. **"Both" already had a
+spelling — leave the filter out.**
+
+The cost, stated: the handler reads the raw query, because a bound parameter cannot
+see the difference. That is one `HttpServletRequest` in one signature, and it is
+declared after `WeddingScope` so a stranger is still refused before anything they
+sent is read.
+
 ## What this does not decide
 
 - **How the ledger is sorted on screen.** §2 makes it the client's, and it stays a
   design question.
 - **Where the 미확인 count is shown, and whether it becomes a filter.** `#17` owns
   the number; the parameter shape above is what a later chip would have to use.
+- **What the headcount reads first**, per §3. Asked, not answered here.
 - **이름 검색** (`#16`). Not this endpoint's, and §1 is what lets it start
   client-side.
 
-Refs `#147`, `#15`, `#16`, `#17`, `#13`,
+Refs `#147`, `#15`, `#16`, `#17`, `#13`, `#149`,
 `2026-08-07-design-screens-and-flow.md`,
 `2026-08-06-design-ledger-and-import.md`,
 `2026-08-05-design-meal-headcount.md`,

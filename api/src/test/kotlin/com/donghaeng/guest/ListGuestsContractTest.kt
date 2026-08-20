@@ -1,16 +1,10 @@
 package com.donghaeng.guest
 
-import com.donghaeng.ApiFixture
-import com.donghaeng.auth.STUB_PROVIDER
 import com.donghaeng.auth.StubGoogleRegistration
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
-import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.net.HttpCookie
 import java.net.http.HttpResponse
@@ -39,18 +33,7 @@ import java.net.http.HttpResponse
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
 @Import(StubGoogleRegistration::class)
-internal class ListGuestsContractTest : ApiFixture() {
-    @Autowired private lateinit var jdbc: JdbcTemplate
-
-    /** Both ends, in FK order, for the reason `CreateGuestContractTest` gives. */
-    @BeforeEach
-    @AfterEach
-    fun clean() {
-        jdbc.update("delete from guest")
-        jdbc.update("delete from membership")
-        jdbc.update("delete from wedding")
-    }
-
+internal class ListGuestsContractTest : GuestFixture() {
     @Test
     fun `the ledger is a bare array of the same rows POST returns, oldest first`() {
         val session = login()
@@ -90,6 +73,25 @@ internal class ListGuestsContractTest : ApiFixture() {
                 "expectedAttending",
                 "expectedPartySize",
             )
+    }
+
+    @Test
+    fun `the order is the entry order, not the order the rows were written`() {
+        // Three rows created in sequence agree on `created_at`, on `id` and on the
+        // order the heap hands them back, so they cannot tell an ordered query from
+        // an unordered one: delete the `order by` and that assertion stays green.
+        // This row is written LAST and dated FIRST, so only `created_at` can put it
+        // where the contract says it goes.
+        //
+        // An import is exactly this shape — a batch of rows carrying the moment the
+        // couple's parents wrote them, not the moment we stored them.
+        val session = login()
+        val weddingId = createWedding(session)
+        val userId = callerId(session)
+        val entered = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""")
+        val backdated = insertGuest(weddingId, userId, name = "이영희", createdAt = "2020-01-01T00:00:00Z")
+
+        assertThat(ids(list(session, weddingId, ""))).containsExactly(backdated, entered)
     }
 
     @Test
@@ -145,6 +147,10 @@ internal class ListGuestsContractTest : ApiFixture() {
         assertThat(ids(list(session, weddingId, "?attendance=NOT_ATTENDING")))
             .containsExactly(expectedNot, confirmedNot)
         assertThat(ids(list(session, weddingId, ""))).hasSize(4)
+
+        // An empty value is no filter, exactly as it is for `side` — the spec
+        // publishes that for both parameters, so both are asserted.
+        assertThat(ids(list(session, weddingId, "?attendance="))).hasSize(4)
     }
 
     @Test
@@ -245,14 +251,55 @@ internal class ListGuestsContractTest : ApiFixture() {
     }
 
     @Test
-    fun `an anonymous request is 401, whatever it asks for`() {
+    fun `an anonymous request is 401, and is refused before its filters are parsed`() {
         val session = login()
         val weddingId = createWedding(session)
 
-        val response = get("/weddings/$weddingId/guests?side=GROOM")
+        // **Both filters are nonsense on purpose.** With legal values this passes
+        // whether or not the claim holds, and the claim is published: the spec tells
+        // `web/` that an anonymous request with a bad filter is a 401 and never a
+        // 400. What makes it true is that `WeddingScope` is declared BEFORE `side`
+        // and `attendance` in the handler and Spring resolves in declaration order
+        // — so a reorder would falsify a published sentence with nothing else going
+        // red. `CurrentUserParameterTest` sweeps the order; this is what says why it
+        // matters here.
+        val response = get("/weddings/$weddingId/guests?side=BOTH&attendance=UNKNOWN")
 
         assertThat(response.statusCode()).isEqualTo(401)
+        assertThat(response.headers().firstValue("Content-Type")).hasValue("application/problem+json")
         assertThat(response.json()["code"].asText()).isEqualTo("UNAUTHENTICATED")
+    }
+
+    @Test
+    fun `a filter sent twice is refused, never quietly narrowed to the first value`() {
+        // **`?side=GROOM&side=BRIDE` is what "both chips selected" looks like when a
+        // client builds the query from its filter state**, and the generated type
+        // does not forbid it. Spring hands a two-element array to a scalar target
+        // and the converter keeps the first, so unrefused this answers 200 with 신랑측
+        // only: the caller asked for every guest and got half of them, with no error
+        // and nothing in the response saying so. A wrong ledger that looks right is
+        // the one outcome this product may not produce
+        // (notes/2026-08-20-decision-the-ledger-read-and-its-filters.md §5).
+        val session = login()
+        val weddingId = createWedding(session)
+        val groom = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""")
+        val bride = addGuest(session, weddingId, """{"name":"이영희","side":"BRIDE"}""")
+
+        listOf(
+            "?side=GROOM&side=BRIDE",
+            "?attendance=ATTENDING&attendance=NOT_ATTENDING",
+            // Repeating one value is the same mistake with the answer it would have
+            // given by accident; it is refused for being repeated, not for what it
+            // says.
+            "?side=GROOM&side=GROOM",
+        ).forEach { query ->
+            val response = list(session, weddingId, query)
+            assertThat(response.statusCode()).describedAs(query).isEqualTo(400)
+            assertThat(response.json()["code"].asText()).describedAs(query).isEqualTo("BAD_REQUEST")
+        }
+
+        // "Both" already has a spelling, and it is the absence of the filter.
+        assertThat(ids(list(session, weddingId, ""))).containsExactly(groom, bride)
     }
 
     @Test
@@ -280,7 +327,7 @@ internal class ListGuestsContractTest : ApiFixture() {
         // slowest test in the suite for no extra coverage.
         val session = login()
         val weddingId = createWedding(session)
-        val userId = me(session)
+        val userId = callerId(session)
         insertGuests(weddingId, userId, count = 300)
 
         val response = list(session, weddingId, "")
@@ -314,40 +361,37 @@ internal class ListGuestsContractTest : ApiFixture() {
         attending: Boolean,
     ) = jdbc.update("update guest set confirmed_attending = ? where id = ?", attending, guestId)
 
+    /**
+     * A ledger row written straight to the table, which is the only way to choose
+     * its `created_at` — the API is the clock everywhere else, deliberately.
+     */
+    private fun insertGuest(
+        weddingId: Long,
+        userId: Long,
+        name: String,
+        createdAt: String,
+    ): Long =
+        jdbc.queryForObject(
+            """
+            insert into guest (wedding_id, name, side, group_category, expected_attending, expected_party_size,
+                               created_by, created_at, updated_by, updated_at)
+            values (?, ?, 'GROOM'::wedding_side, 'OTHER', true, 1, ?, ?::timestamptz, ?, ?::timestamptz)
+            returning id
+            """.trimIndent(),
+            Long::class.java,
+            weddingId,
+            name,
+            userId,
+            createdAt,
+            userId,
+            createdAt,
+        )!!
+
     private fun insertGuests(
         weddingId: Long,
         userId: Long,
         count: Int,
     ) = repeat(count) { index ->
-        jdbc.update(
-            """
-            insert into guest (wedding_id, name, side, group_category, expected_attending, expected_party_size,
-                               created_by, created_at, updated_by, updated_at)
-            values (?, ?, 'GROOM'::wedding_side, 'OTHER', true, 1, ?, now(), ?, now())
-            """.trimIndent(),
-            weddingId,
-            "하객$index",
-            userId,
-            userId,
-        )
-    }
-
-    private fun withoutInstance(response: HttpResponse<String>): Map<*, *> =
-        mapper.readValue(response.body(), Map::class.java).filterKeys { it != "instance" }
-
-    private fun me(session: HttpCookie): Long = get("/auth/me", listOf(session)).json()["id"].asLong()
-
-    private fun createWedding(session: HttpCookie): Long =
-        post(
-            "/weddings",
-            listOf(session),
-            """{"weddingDate":"2026-10-10","groomName":"김신랑","brideName":"이신부"}""",
-        ).json()["id"]
-            .asLong()
-
-    /** A second person, with their own `app_user` row and their own session. */
-    private fun loginAs(subject: String): HttpCookie {
-        STUB_PROVIDER.subject = subject
-        return login()
+        insertGuest(weddingId, userId, name = "하객$index", createdAt = "2026-08-01T00:00:00Z")
     }
 }

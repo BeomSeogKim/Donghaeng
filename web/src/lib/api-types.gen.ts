@@ -254,9 +254,9 @@ export interface operations {
   listGuests: {
     parameters: {
       query?: {
-        /** @description 신랑측 or 신부측. Omitted or empty, both sides */
+        /** @description 신랑측 or 신부측. Sent at most once; omitted or empty, both sides */
         side?: "GROOM" | "BRIDE";
-        /** @description 참석 or 불참, read as the headcount reads it. Omitted or empty, both */
+        /** @description 참석 or 불참. Sent at most once; omitted or empty, both */
         attendance?: "ATTENDING" | "NOT_ATTENDING";
       };
       path: {
