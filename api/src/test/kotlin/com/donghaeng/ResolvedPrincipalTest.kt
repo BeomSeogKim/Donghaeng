@@ -113,6 +113,37 @@ internal class ResolvedPrincipalTest {
     }
 
     @Test
+    fun `nothing compiled from test source is mapped into a context that did not ask for it`() {
+        // The narrowing above is a filter on a set that should not need one, and a
+        // filter is how a leak stops being visible: `handlers()` drops a test
+        // controller silently, and every rule in this class then passes over an
+        // endpoint the application is really serving. So the un-narrowed set is
+        // asserted here, once, and this is the assertion that `#118` is closed by.
+        //
+        // Not vacuous by construction: this test class is itself compiled to the
+        // test output, so a detector that had stopped recognising it — a Gradle
+        // layout change, a jar-packaged test classpath — goes red rather than quiet.
+        assertThat(compiledFromTestSource(javaClass))
+            .describedAs("%s must be recognisable as test source, or the sweep below asserts nothing", javaClass.name)
+            .isTrue()
+
+        val leaked =
+            mappings.handlerMethods
+                .filterValues { compiledFromTestSource(it.beanType) }
+                .map { (info, handler) -> "${handler.beanType.name} maps $info" }
+
+        assertThat(leaked)
+            .describedAs(
+                "The component scan is rooted at `com.donghaeng` and the test classes are on that classpath, so a " +
+                    "`@RestController` declared in test source maps into EVERY @SpringBootTest context — this one, " +
+                    "and the one OpenApiDocumentTest publishes to `web/` as the API. This context imports no " +
+                    "controller, so it should serve none. Annotate the fixture `@TestComponent`, which Boot's " +
+                    "TypeExcludeFilter skips during the scan, and `@Import` it back in the one test that needs it " +
+                    "(`#118`).",
+            ).isEmpty()
+    }
+
+    @Test
     fun `every handler takes a resolved principal, or is named public right here`() {
         val undeclared =
             handlers()
@@ -234,15 +265,32 @@ internal class ResolvedPrincipalTest {
     }
 
     /**
-     * What this application serves, minus the test classpath's own controllers —
-     * which the context scans as readily as the application's own, and which are
-     * nobody's endpoints (`#118`). Narrowed by production class NAME rather than by
-     * package, so a test controller that shares a package is still excluded.
+     * What this application serves, minus everything else the context maps —
+     * springdoc's and Boot's own handlers, and any controller the test classpath
+     * leaked in, which the scan would pick up as readily as the application's own.
+     * Narrowed by production class NAME rather than by package, so a test controller
+     * that shares a package is still excluded — and that leak is separately forbidden
+     * rather than merely filtered, because a filter is what would hide it (`#118`).
      */
     private fun handlers(): List<HandlerMethod> =
         mappings.handlerMethods.values
             .filter { it.beanType.name in productionClassNames }
             .distinctBy { it.method }
+
+    /**
+     * Where the class file came from, which is the only thing that distinguishes a
+     * fixture from an endpoint: a test controller may sit in a shipped package, carry
+     * no test-only annotation once the scan has registered it, and is otherwise an
+     * ordinary bean. Asked of the code source rather than of the production name set
+     * `handlers()` uses, so a third-party handler — springdoc's, Boot's — is neither
+     * counted as a leak nor mistaken for ours.
+     */
+    private fun compiledFromTestSource(type: Class<*>): Boolean =
+        type.protectionDomain
+            ?.codeSource
+            ?.location
+            ?.path
+            ?.let(TEST_OUTPUT::containsMatchIn) == true
 
     /** Every path Spring serves this handler at, prefix and hierarchy already resolved. */
     private fun pathsOf(handler: HandlerMethod): Set<String> =
@@ -331,6 +379,14 @@ internal class ResolvedPrincipalTest {
         const val WEDDING_ID = "weddingId"
 
         val WEDDING_PATH = Regex("""^/weddings/\{([^}]+)}""")
+
+        /**
+         * The test source set's compiler output. Deliberately the same three layouts
+         * `ImportOption.DoNotIncludeTests` matches on — Gradle, Maven, IntelliJ — since
+         * both notions of "this class is a test class" are load-bearing in this file
+         * and one recognising a location the other does not is a silent gap.
+         */
+        val TEST_OUTPUT = Regex("""/(build/classes/([^/]+/)?test|target/test-classes|out/test)/""")
 
         /**
          * Every annotation that makes Spring build a parameter out of the request,
