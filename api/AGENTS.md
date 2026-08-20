@@ -95,9 +95,9 @@ and tokens.
 
 `notes/2026-08-07-decision-backend-api-conventions.md`.
 
-- **Success responses have no envelope** — the resource's own DTO, returned
-  directly. One first-party client, no pagination, no API versioning, so a
-  `{data: ...}` wrapper buys nothing.
+- **No generic envelope** (`{data: ...}`) — a read returns the resource's own
+  DTO directly. But a **mutation on a wedding-scoped resource** returns
+  `{resource, headcount}`: ledger and headcount are one screen (2026-08-20).
 - **Errors are RFC 9457 Problem Details**, via Spring Boot 3's native
   `ProblemDetail` — `spring.mvc.problemdetails.enabled=true` plus one global
   `@ControllerAdvice`. Extended with a **`code`** field (e.g.
