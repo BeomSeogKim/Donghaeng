@@ -17,6 +17,10 @@ export interface paths {
     /** Create a wedding and the creator's membership in it */
     post: operations["create"];
   };
+  "/weddings/{weddingId}": {
+    /** The wedding, for a caller who is a member of it */
+    get: operations["read"];
+  };
 }
 
 export type webhooks = Record<string, never>;
@@ -129,6 +133,34 @@ export interface operations {
       };
       /** @description No session, or an expired or revoked one. */
       401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** The wedding, for a caller who is a member of it */
+  read: {
+    parameters: {
+      path: {
+        weddingId: number;
+      };
+    };
+    responses: {
+      /** @description The caller is a member of this wedding. */
+      200: {
+        content: {
+          readonly "*/*": components["schemas"]["WeddingResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller is not a member of it, and when it has been deleted. */
+      404: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];
         };
