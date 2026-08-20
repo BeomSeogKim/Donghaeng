@@ -44,6 +44,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-20-decision-row-concurrency-and-the-audit-trail.md` | 같은 컬럼 경쟁은 마지막 쓰기가 이기되 덮인 값은 `guest_change`에 남는다; `@Version` 없음, 상대적 변경 금지 |
 | `2026-08-20-decision-listing-the-callers-weddings.md` | `GET /weddings` answers 최초 1회 from the session; a scopeless wedding endpoint is named in an allowlist, never inferred from the path |
 | `2026-08-19-decision-wedding-scope-gate.md` | The gate fails closed by a build-time sweep, not an interceptor; resolution filters `wedding.deleted_at`; a refusal is marked in the log only |
 | `2026-08-13-decision-first-login-idempotency-and-email-merge.md` | First login is idempotent per identity; only a verified address merges, and we can be the verifier |

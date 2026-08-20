@@ -216,28 +216,23 @@ inline. The parts that constrain everyday backend work:
 The product facts these implement are in the root `AGENTS.md`. What follows is
 how `api/` is required to implement them.
 
-- **Every wedding-scoped aggregate root carries `wedding_id`**; anything
-  reached only through its root does not. So `GuestChange` has it (queried
-  independently). This binds tables that don't exist yet — seating and 축의금
-  arrive as roots and carry it from the start. It is what makes "every
-  wedding-scoped root filters on `wedding_id`" mechanically checkable instead
-  of a per-query judgement, and a cross-wedding leak is not an ordinary bug.
+- **Every wedding-scoped aggregate root carries `wedding_id`**; anything reached
+  only through its root does not. So `GuestChange` has it (queried
+  independently), and seating and 축의금 will carry it from the start.
   **Amended 2026-08-11** (`notes/2026-08-11-decision-baseline-schema-calls.md`):
   a `wedding_id` present **for integrity is not a root marker**.
   `guest_meal_count` carries one because `meal_type_id` arrives in a request
   body and so bypasses `CurrentWedding` — a row joining one wedding's guest to
-  another's meal type inserted cleanly. Composite FKs to `guest (id,
-  wedding_id)` and `meal_type (id, wedding_id)` make that row
-  *unrepresentable*; the table is still not a root. **The distinction is
-  checkable, not arguable: an integrity column appears in a composite FK to a
-  parent's `(id, wedding_id)`, a root's does not** — and `#80`'s allowlist test
-  carries it as an explicit exception.
-  **An integrity `wedding_id` is an FK component and never a query
-  predicate**: `select sum(expected_count) from guest_meal_count where
-  wedding_id = ?` counts soft-deleted 하객's meals, because `@SQLRestriction`
-  cannot reach a native query — it over-counts silently, and over-counting
-  보증인원 is money. Every read joins `guest` and filters `guest.deleted_at`.
-  Held by `GuestMealCountSchemaTest`.
+  another's meal type inserted cleanly, and composite FKs to `guest (id,
+  wedding_id)` / `meal_type (id, wedding_id)` make it *unrepresentable*.
+  **The distinction is checkable, not arguable: an integrity column appears in a
+  composite FK to a parent's `(id, wedding_id)`, a root's does not** — `#80`'s
+  allowlist test carries it as an explicit exception.
+  **An integrity `wedding_id` is an FK component and never a query predicate**:
+  `select sum(expected_count) from guest_meal_count where wedding_id = ?` counts
+  soft-deleted 하객's meals — `@SQLRestriction` cannot reach a native query, so
+  it over-counts silently, and over-counting 보증인원 is money. Every read joins
+  `guest` and filters `guest.deleted_at`. Held by `GuestMealCountSchemaTest`.
 - **Every delete is soft** (decided 2026-08-10,
   `notes/2026-08-10-decision-soft-delete.md`) — but only on rows a *user* can
   delete. `guest`, `membership`, meal type and `wedding` carry `deleted_at`;
@@ -263,16 +258,21 @@ how `api/` is required to implement them.
   returns with the RSVP links; the varchar rule binds it whenever it does.)
 - **The session never knows the wedding.** Each request resolves
   user → membership → wedding; one person may belong to several.
-- **`GuestChange` is the audit log**: one row per changed field with old value,
-  new value, who, when, and the source (`MANUAL` / `VENDOR_EMAIL` / `IMPORT`
-  plus a nullable FK to the ingest or import that caused it). It is what makes
-  "이 숫자 누가 바꿨어?" answerable, and it covers fields the response model
-  never reached — meal-type distribution among them.
-- **v1 has no `RsvpResponse` / `ResponseMatch`** (dropped 2026-08-06):
-  confirmed values are written straight onto `Guest`, and matching runs as
-  logic whose results are consumed on screen, never persisted. The response
-  model returns when the RSVP links do — the condition is **writes that happen
-  while nobody is watching**, which v1 has none of.
+- **Every mutation writes `GuestChange` in the same transaction** (`#25`, in v1
+  as of 2026-08-20): one row per changed **field** — old, new, who, when, source
+  (`MANUAL` / `VENDOR_EMAIL` / `IMPORT` + nullable FK to the ingest or import).
+  A **create** writes none; `guest.created_by` / `created_at` answer "누가"
+  there. This is what makes "이 숫자 누가 바꿨어?" answerable.
+- **`@DynamicUpdate` on every wedding-scoped entity; no `@Version`; no relative
+  mutation** (`notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md`).
+  Same-column races end in last-write-wins and that is **accepted** — every
+  payload is absolute, and the overwritten value survives in `GuestChange`.
+  **The argument dies the moment an endpoint takes an increment or a "toggle"
+  verb**, so none may: `#14` is "갈비탕 2", never "갈비탕 +1".
+- **v1 has no `RsvpResponse` / `ResponseMatch`** (dropped 2026-08-06): confirmed
+  values go straight onto `Guest`, matching results are consumed on screen and
+  never persisted. Returns with the RSVP links — the trigger is **writes that
+  happen while nobody is watching**.
 - **Import matching loads the wedding's guests once and matches in memory.**
   It is the only v1 operation that is easy to get badly wrong.
 - **Import idempotency is by file hash** — a matching hash is not processed at
