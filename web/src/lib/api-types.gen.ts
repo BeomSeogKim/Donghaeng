@@ -24,6 +24,8 @@ export interface paths {
     get: operations["read"];
   };
   "/weddings/{weddingId}/guests": {
+    /** The wedding's ledger, filtered by side and attendance */
+    get: operations["listGuests"];
     /** Add a guest to the ledger */
     post: operations["createGuest"];
   };
@@ -232,6 +234,46 @@ export interface operations {
       200: {
         content: {
           readonly "*/*": components["schemas"]["WeddingResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller is not a member of it, and when it has been deleted. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** The wedding's ledger, filtered by side and attendance */
+  listGuests: {
+    parameters: {
+      query?: {
+        /** @description 신랑측 or 신부측. Omitted or empty, both sides */
+        side?: "GROOM" | "BRIDE";
+        /** @description 참석 or 불참, read as the headcount reads it. Omitted or empty, both */
+        attendance?: "ATTENDING" | "NOT_ATTENDING";
+      };
+      path: {
+        weddingId: number;
+      };
+    };
+    responses: {
+      /** @description The whole ledger, oldest first — an empty array when the couple has entered nobody yet. */
+      200: {
+        content: {
+          readonly "*/*": readonly components["schemas"]["GuestResponse"][];
+        };
+      };
+      /** @description A `side` or `attendance` value outside its set. */
+      400: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
         };
       };
       /** @description No session, or an expired or revoked one. */
