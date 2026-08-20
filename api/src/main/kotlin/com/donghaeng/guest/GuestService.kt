@@ -13,13 +13,12 @@ internal class GuestService(
      * Writes one ledger row, in the wedding the resolver already proved is the
      * caller's — so [WeddingScope.id] is the only place `wedding_id` can come from.
      *
-     * **Of the three defaults, one is recorded and two are not.** 참석 is
+     * **The three defaults are applied here and decided in two records.** 참석 is
      * notes/2026-08-06-design-ledger-and-import.md §4, which holds exactly two
      * defaults: that one, and the expected meal count following the party size —
      * `#14`'s, since per-meal-type counts hang off `meal_type` rows only `#10` can
-     * create. **A party of one and 기타 are in no record**: they are stated in
-     * `docs/api-spec.md` and nowhere else, and are decisions being made here rather
-     * than applied from one.
+     * create. A party of one and 기타 are
+     * notes/2026-08-20-decision-guest-entry-side-and-companions.md §4.
      *
      * **The confirmed slots stay null**, which is the model and not an omission:
      * couple input writes the expected slots only, and a blank confirmed slot means

@@ -2,14 +2,13 @@ package com.donghaeng.guest
 
 /**
  * What a write to the ledger answers: the row that changed, and — once `#17` exists
- * — the number it moved (root AGENTS.md, Standing product facts).
+ * — the number it moved
+ * (notes/2026-08-20-decision-mutation-response-envelope.md).
  *
- * **The wrapper exists because `headcount` is coming.** `web/` generates its types
- * from this class, so `{ guest }` gaining a second member is additive where a bare
- * [GuestResponse] becoming `{ guest, headcount }` is a frontend build break. The
- * member with nothing behind it is absent rather than null: computing a number
- * before `#17` decides what it counts would be a wrong number, and a wrong number
- * here is money.
+ * **A one-member wrapper is not redundant here; do not inline it to a bare
+ * [GuestResponse].** That record is why: the wrapper is what makes `headcount`
+ * additive to `web/`'s generated types, and why the member is absent rather than
+ * null until `#17` decides what it counts.
  */
 data class GuestMutationResponse(
     val guest: GuestResponse,

@@ -91,8 +91,10 @@ _Added 2026-08-10. Applies to every endpoint, present and future._
 Every error response **this application produces** is an **RFC 9457 Problem
 Details** document served as `application/problem+json`
 (`notes/2026-08-07-decision-backend-api-conventions.md`) — whatever raised it,
-and whether or not it reached a controller. A success response has no envelope;
-an error is the only shape the API wraps.
+and whether or not it reached a controller. A success response has no *generic*
+envelope — a mutation's `{resource, headcount}` is that endpoint's own shape
+(`notes/2026-08-20-decision-mutation-response-envelope.md`) — so an error is the
+only document every endpoint has in common.
 
 One boundary, stated because it is observable rather than because it is likely.
 A request the HTTP connector rejects **while parsing the request line** — a
@@ -780,13 +782,13 @@ The row **as stored**, which is not always what was sent — see the trimming ru
 below. There is no `Location` header and no `GET` for a single guest yet.
 
 Carries the recomputed aggregate: **not yet, and the shape already has room for
-it.** The headcount is `#17` and does not exist; computing one here before that stop
-decides what it counts would be a wrong number, which is the one thing this product
-may not ship. So the mutation answers `{ "guest": … }` today and
+it.** The mutation answers `{ "guest": … }` today and
 `{ "guest": …, "headcount": … }` when `#17` lands — **an added member, never a
-changed shape.** `web/` should read `response.guest` from the start and must not
-unwrap it; the same envelope is what `#12`'s edit and the attendance toggle will
-return. Until then, a screen that shows a number refetches it.
+changed shape**, and the member is absent rather than `null` until then
+(`notes/2026-08-20-decision-mutation-response-envelope.md`). `web/` should read
+`response.guest` from the start and must not unwrap it; the same envelope is what
+`#12`'s edit and the attendance toggle return. Until `#17`, a screen that shows a
+number refetches it.
 
 Errors
 - 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only or over 100
@@ -803,17 +805,16 @@ Errors
   id that is not a number. One answer for all four.
 - 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
 
-Seven things are decided here rather than left to the caller to infer.
+Eight things the caller should not have to infer.
 
-- **`side` is required even though the sheet's rule is "the only required field is a
-  name".** `wedding_side` holds 신랑측 and 신부측 and nothing else — there is no value
-  meaning "not stated" the way `OTHER` does for the group — and side is both a ledger
-  filter and an aggregation axis, so a default would file guests under a side the
-  couple never chose and then count them there. The add sheet should therefore make
-  side a two-option control, and may pre-select one, but the pre-selection is a
-  frontend affordance and not this endpoint's promise. **If the founder decides a
-  default belongs here, that is a backend change** — relaxing a required member
-  breaks no client.
+- **`side` is required, has no default, and is editable afterwards.**
+  `wedding_side` holds 신랑측 and 신부측 and nothing else — there is no value meaning
+  "not stated" the way `OTHER` does for the group — so any default would be a claim
+  the couple never made, on one of the ledger's two filters and an aggregation axis
+  (`notes/2026-08-20-decision-guest-entry-side-and-companions.md` §1). Required at
+  entry is not required forever: the edit endpoint (`#12`, `#8`) changes it. The add
+  sheet should therefore make side a two-option control, and may pre-select one, but
+  the pre-selection is a frontend affordance and not this endpoint's promise.
 - **The confirmed slots are not written and are not published.** Couple input writes
   the *expected* slots only; `confirmedAttending` and `confirmedPartySize` stay
   `null` on the row, and `null` there means **UNKNOWN — never zero and never 불참**.
@@ -821,8 +822,21 @@ Seven things are decided here rather than left to the caller to infer.
 - **`expectedPartySize` is the attending headcount including the guest**, not a
   companion count. A couple bringing one guest sends `2`. **A party of zero is not a
   party**: 불참 is `expectedAttending: false`, and a size of `0` is a 400.
+- **A companion follows the head guest**
+  (`notes/2026-08-20-decision-guest-entry-side-and-companions.md` §2–3). The party
+  size is a count with no 측 and no attendance of its own: a companion is on the head
+  guest's side, and **a guest with `expectedAttending: false` contributes zero to the
+  meal headcount whatever their party size says.** The size is kept rather than
+  erased, so flipping attendance back to 참석 restores the count rather than making
+  the couple retype what it had already told us. A party that splits — a companion on
+  the other 측, or a head who cannot come while their companion still can — is not
+  expressible in one row: **register that person as their own guest.**
 - **`expectedAttending` defaults to 참석** because the couple corrects what they hear
-  about 불참, and that is fewer taps. Do not present the control as unset.
+  about 불참, and that is fewer taps. Do not present the control as unset. That
+  default and the meal count following the party size are
+  `notes/2026-08-06-design-ledger-and-import.md` §4; the party-of-one and `OTHER`
+  defaults in the table above are
+  `notes/2026-08-20-decision-guest-entry-side-and-companions.md` §4.
 - **Per-meal-type counts are not accepted here.** They hang off meal types only the
   couple can create (`#10`), so a guest is added first and their meals set after
   (`#14`). 유아식 included: it is counted beside the 식대 인원, never inside it.
