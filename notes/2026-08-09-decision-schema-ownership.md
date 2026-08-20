@@ -178,3 +178,60 @@ guarded by a test that reads a file.
   the schema in his head and typing it himself.
 - **The schema starts changing weekly.** Manual application scales inversely
   with frequency.
+
+## Which role applies it — `donghaeng_app`, always (#105, 2026-08-20)
+
+This record said *who* applies DDL and never said *as whom*, and the gap cost a
+day. Applying `#37`'s baseline through DataGrip connected as `addy` — a personal
+superuser, and the natural default that tool offers — created 12 tables, 11
+sequences, every index and one enum type owned by `addy`. The app connects as
+`donghaeng_app`, so it answered `permission denied for table app_user` and
+nothing before boot said a word. Recovery was 12 `ALTER TABLE … OWNER TO` plus
+one `ALTER TYPE`; indexes and identity sequences follow their table.
+
+**So: connect as `donghaeng_app` and apply the DDL as that role.** Not as a
+personal superuser, not with a `SET ROLE` afterwards.
+
+The failure is worth naming precisely, because its shape is what makes it repeat:
+**the schema comes out perfect.** `\dt` looks right, every column is there,
+`validate` would pass if the app could read the catalog at all. The first signal
+is a permission error at boot, which reads as *"did I type the schema wrong?"*
+and sends you looking in the wrong place entirely. And it degrades rather than
+breaks as the schema grows — a `V3` applied under the wrong role leaves every
+existing table fine, so the app boots and only the new feature is dead.
+
+### The check, to run after every hand-applied migration
+
+```sql
+select count(*) from pg_class
+ where relnamespace = 'public'::regnamespace
+   and relkind in ('r', 'S')
+   and pg_get_userbyid(relowner) <> 'donghaeng_app';
+```
+
+Must be `0`. Anything else names the number of objects that will be invisible to
+the app until it boots.
+
+### Why this is not in the SQL file
+
+The obvious fix — put `ALTER … OWNER TO donghaeng_app` in the migration — breaks
+the property this whole record rests on: **there is no second copy of the DDL.**
+Testcontainers runs the same files through Flyway, and that container has no
+`donghaeng_app` role, so the statement fails and takes the suite with it. The
+ownership requirement is a property of *how the file is applied*, not of the
+file, and it belongs with the person applying it.
+
+### Not doing: a separate migration role (#52)
+
+The stronger mechanism is privilege separation — a runtime role that owns
+nothing and cannot `DROP`, with migrations running as a distinct owner role.
+Deferred to post-v1 on 2026-08-20, and the reason is that it would answer this
+same question in the opposite direction: `#105` writes down *"apply as the app
+role"*, and `#52` would make that exactly wrong. Answering them apart is how the
+record ends up contradicting itself.
+
+For v1 the trade is cheap and the exposure is small: the founder applies every
+DDL statement by hand, in his own terminal, and there is one application role.
+Splitting it now buys no accident that is currently possible. It becomes real
+when a migration runs unattended — which is the same trigger as "hand-applied
+DDL drifts twice" above.

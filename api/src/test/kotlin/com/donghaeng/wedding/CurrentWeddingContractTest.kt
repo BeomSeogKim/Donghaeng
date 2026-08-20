@@ -2,7 +2,6 @@ package com.donghaeng.wedding
 
 import ch.qos.logback.classic.Level
 import com.donghaeng.ApiFixture
-import com.donghaeng.auth.STUB_PROVIDER
 import com.donghaeng.auth.StubGoogleRegistration
 import com.donghaeng.capturingLog
 import org.assertj.core.api.Assertions.assertThat
@@ -14,8 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
-import java.net.HttpCookie
-import java.net.http.HttpResponse
 
 /**
  * THE RED GATE OF `#5`: `user → membership → wedding` resolution, observed on the
@@ -184,27 +181,5 @@ internal class CurrentWeddingContractTest : ApiFixture() {
         // Status and path and the mark, and nothing else — never the body, never a
         // header, never who was asking.
         assertThat(record.formattedMessage).doesNotContain("DH_SESSION")
-    }
-
-    private fun withoutInstance(response: HttpResponse<String>): Map<*, *> =
-        mapper.readValue(response.body(), Map::class.java).filterKeys { it != "instance" }
-
-    private fun createWedding(session: HttpCookie): Long =
-        post(
-            "/weddings",
-            listOf(session),
-            """{"weddingDate":"2026-10-10","groomName":"김신랑","brideName":"이신부"}""",
-        ).json()["id"]
-            .asLong()
-
-    /**
-     * A second person, with their own `app_user` row and their own session. The
-     * standing fact this exists for: a person may belong to several weddings and a
-     * wedding to several people, so "the caller's wedding" is never a property of the
-     * session — it is a walk that can fail.
-     */
-    private fun loginAs(subject: String): HttpCookie {
-        STUB_PROVIDER.subject = subject
-        return login()
     }
 }

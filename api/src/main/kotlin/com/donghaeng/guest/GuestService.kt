@@ -1,6 +1,7 @@
 package com.donghaeng.guest
 
 import com.donghaeng.wedding.WeddingScope
+import com.donghaeng.wedding.WeddingSide
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -58,6 +59,37 @@ internal class GuestService(
             )
         return guest.toGuestMutationResponse()
     }
+
+    /**
+     * The ledger (`#15`) — the wedding's live 하객, narrowed by 측 and 참석 상태 and by
+     * nothing else, oldest first, all of it in one response.
+     *
+     * Every one of those is a decision rather than an implementation detail, and
+     * they are argued once, in
+     * `notes/2026-08-20-decision-the-ledger-read-and-its-filters.md`: no page, entry
+     * order as contract, 그룹 excluded on purpose, and what the attendance filter
+     * commits `#17` to. **A third filter, or a page, is a change to that record
+     * first.**
+     *
+     * No aggregate rides along: this is a read, and the headcount is `#17`'s own
+     * endpoint (notes/2026-08-20-decision-mutation-response-envelope.md binds
+     * mutations, not this).
+     */
+    @Transactional(readOnly = true)
+    fun list(
+        wedding: WeddingScope,
+        side: WeddingSide?,
+        attendance: AttendanceFilter?,
+    ): List<GuestResponse> =
+        guests
+            .findLedger(
+                weddingId = wedding.id,
+                // An absent filter is every value rather than a null parameter, for
+                // the reason GuestRepository.findLedger gives. Both sets are
+                // non-empty by construction, which is what that query relies on.
+                sides = side?.let(::setOf) ?: WeddingSide.entries.toSet(),
+                attendance = attendance?.let { setOf(it.attending) } ?: setOf(true, false),
+            ).map { it.toGuestResponse() }
 
     private fun String?.trimmedOrNull(): String? = this?.trim()?.ifEmpty { null }
 }

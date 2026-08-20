@@ -58,7 +58,7 @@ internal class CreateWeddingContractTest : ApiFixture() {
     @Test
     fun `a logged-in person creates a wedding, and the membership that reaches it`() {
         val session = login()
-        val userId = me(session)
+        val userId = callerId(session)
 
         val response = create(session, body())
 
@@ -192,7 +192,7 @@ internal class CreateWeddingContractTest : ApiFixture() {
         // them to make one, the API does not refuse the second
         // (root AGENTS.md, Standing product facts).
         val session = login()
-        val userId = me(session)
+        val userId = callerId(session)
 
         val first = create(session, body())
         val second = create(session, body(date = "2027-03-03"))
@@ -244,8 +244,6 @@ internal class CreateWeddingContractTest : ApiFixture() {
         bride: String = "이신부",
         extra: String = "",
     ): String = """{"weddingDate":"$date","groomName":"$groom","brideName":"$bride"$extra}"""
-
-    private fun me(session: HttpCookie): Long = get("/auth/me", listOf(session)).json()["id"].asLong()
 
     private fun headcountOf(weddingId: Long): Int? =
         jdbc.queryForObject("select guaranteed_headcount from wedding where id = ?", Int::class.javaObjectType, weddingId)

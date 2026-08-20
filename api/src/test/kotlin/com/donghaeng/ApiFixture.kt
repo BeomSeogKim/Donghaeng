@@ -30,6 +30,15 @@ internal const val STUB_AUTHORIZATION_CODE = "stub-authorization-code"
  * APART — the state parameter, a tampered callback, a smuggled cookie — stays in
  * `GoogleLoginFixture`.** What lives here is [login], which hands back a session and
  * says nothing about how it was earned.
+ *
+ * **The four helpers below moved here when the fourth copy of them appeared** —
+ * every wedding-scoped test needs a wedding to be scoped to, a second person to be
+ * refused as, the caller's own id to check an audit column against, and a problem
+ * document with `instance` taken off so two refusals can be compared. None of them
+ * is a claim about a domain; each is the same arrangement four test classes were
+ * making by hand. A helper that says something about ONE domain — the FK-ordered
+ * `clean()` the guest tests share, for instance — belongs in that domain's own
+ * fixture instead.
  */
 internal abstract class ApiFixture {
     @LocalServerPort
@@ -107,6 +116,57 @@ internal abstract class ApiFixture {
         check(callback.statusCode() == 302) { "login did not complete: ${callback.statusCode()} ${callback.body()}" }
         return callback.sessionCookie() ?: error("login issued no session cookie")
     }
+
+    /**
+     * A wedding, and the caller's membership in it — the state every wedding-scoped
+     * endpoint needs before it can be called at all. Created over HTTP rather than
+     * inserted, so a test is scoped to a wedding the API itself would accept.
+     *
+     * [groomName] is a parameter only because a test that creates two weddings wants
+     * to tell them apart in a failure message.
+     */
+    protected fun createWedding(
+        session: HttpCookie,
+        groomName: String = "김신랑",
+    ): Long =
+        post(
+            "/weddings",
+            listOf(session),
+            """{"weddingDate":"2026-10-10","groomName":"$groomName","brideName":"이신부"}""",
+        ).json()["id"]
+            .asLong()
+
+    /**
+     * A second person, with their own `app_user` row and their own session.
+     *
+     * The standing fact this exists for: a person may belong to several weddings and
+     * a wedding to several people, so "the caller's wedding" is never a property of
+     * the session — it is a walk that can fail, and a tenancy test needs someone for
+     * it to fail for (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
+     */
+    protected fun loginAs(subject: String): HttpCookie {
+        STUB_PROVIDER.subject = subject
+        return login()
+    }
+
+    /**
+     * The caller's own id, for the audit columns no response publishes.
+     *
+     * Named for what it returns rather than for the endpoint it asks: `SessionResolutionTest`
+     * has its own `me()` that hands back the whole response, and that one is about
+     * `/auth/me` itself.
+     */
+    protected fun callerId(session: HttpCookie): Long = get("/auth/me", listOf(session)).json()["id"].asLong()
+
+    /**
+     * A problem document with `instance` removed, which is the only member two
+     * refusals of DIFFERENT ids may legitimately differ in. Comparing what is left
+     * is how "a stranger's wedding answers exactly what a nonexistent one answers"
+     * is asserted rather than asserted-about
+     * (notes/2026-08-10-decision-cross-tenant-status-code.md).
+     */
+    protected fun withoutInstance(response: HttpResponse<String>): Map<*, *> =
+        mapper.readValue(response.body(), Map::class.java).filterKeys { it != "instance" }
 
     private fun uri(path: String): URI = URI.create("http://localhost:$port$path")
 
