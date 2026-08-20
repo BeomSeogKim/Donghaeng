@@ -1,6 +1,7 @@
 package com.donghaeng.guest
 
 import com.donghaeng.wedding.WeddingScope
+import com.donghaeng.wedding.WeddingSide
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -58,6 +59,40 @@ internal class GuestService(
             )
         return guest.toGuestMutationResponse()
     }
+
+    /**
+     * The ledger (`#15`) — the wedding's live 하객, narrowed by 측 and 참석 상태 and
+     * by nothing else, in the order they were entered.
+     *
+     * **Both filters are optional and neither is a page.** The whole ledger is
+     * returned in one response; the reasoning is in `docs/api-spec.md`, where the
+     * frontend can read it.
+     *
+     * **The group is deliberately not a parameter here.** It is an axis the couple
+     * reads in the aggregate, never one that narrows the list, and `groupLabel`
+     * fractures on typing variants besides
+     * (notes/2026-08-06-design-ledger-and-import.md §1). Adding one "for symmetry"
+     * is the change this sentence exists to stop.
+     *
+     * No aggregate rides along: this is a read, and the headcount is `#17`'s own
+     * endpoint (notes/2026-08-20-decision-mutation-response-envelope.md, which binds
+     * mutations).
+     */
+    @Transactional(readOnly = true)
+    fun list(
+        wedding: WeddingScope,
+        side: WeddingSide?,
+        attendance: AttendanceFilter?,
+    ): List<GuestResponse> =
+        guests
+            .findLedger(
+                weddingId = wedding.id,
+                // An absent filter is every value rather than a null parameter, for
+                // the reason GuestRepository.findLedger gives. Both sets are
+                // non-empty by construction, which is what that query relies on.
+                sides = side?.let(::setOf) ?: WeddingSide.entries.toSet(),
+                attendance = attendance?.let { setOf(it.attending) } ?: setOf(true, false),
+            ).map { it.toGuestResponse() }
 
     private fun String?.trimmedOrNull(): String? = this?.trim()?.ifEmpty { null }
 }

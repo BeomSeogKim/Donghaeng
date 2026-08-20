@@ -919,3 +919,144 @@ Two things this endpoint does **not** do:
 - **It does not accept `weddingId` in the body.** The wedding travels in the path
   and nowhere else; an unknown member is ignored, so sending one writes into the
   wedding in the path regardless.
+
+### `GET /weddings/{weddingId}/guests`
+
+Status: active (added 2026-08-20, `#147` — the backend half of `#15`)
+Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+wedding" above.
+
+원장, the ledger itself — **the screen every other v1 screen opens on top of**
+(`notes/2026-08-07-design-screens-and-flow.md`). The couple's whole loop is "scan
+the list, tap what you heard, watch the number move", so this is the most-called
+read in the product and the one a client should treat as the ledger's source of
+truth after every mutation.
+
+Query parameters — **two filters, both optional, and there is no third**:
+
+| Parameter | Values | Omitted (or sent empty) |
+|---|---|---|
+| `side` | `GROOM` · `BRIDE` | both sides |
+| `attendance` | `ATTENDING` · `NOT_ATTENDING` | both |
+
+`?side=` and `?attendance=` with an empty value mean the same as omitting them, so
+a cleared filter chip may send the parameter unconditionally. Any other value is a
+400. **An unknown query parameter is ignored**, which is what a `groupCategory=…`
+sent "just in case" would be — see below.
+
+Response 200
+```json
+[
+  {
+    "id": 41,
+    "name": "김영수",
+    "side": "GROOM",
+    "groupCategory": "FRIEND",
+    "groupLabel": "대학교 동아리 친구들",
+    "contact": "010-1234-5678",
+    "accessibilityNote": "휠체어 좌석",
+    "expectedAttending": true,
+    "expectedPartySize": 2
+  }
+]
+```
+
+A bare array, no envelope, and **each entry is the same `GuestResponse`
+`POST /weddings/{weddingId}/guests` returns** under its `guest` member — one type
+for the list, the create, and every edit to come. An empty ledger is `[]` and a 200,
+never a 404.
+
+Carries the recomputed aggregate: **no, and this is not the exception the rule
+warns about.** The `{resource, headcount}` envelope is a *mutation* rule
+(`notes/2026-08-20-decision-mutation-response-envelope.md`); this is a read, and the
+headcount is its own endpoint (`#17`). Until `#17` exists, a screen that shows a
+number refetches it.
+
+#### It does not paginate, and it will not for v1
+
+**Answered here rather than left to the frontend to guess: this endpoint returns
+the wedding's entire live ledger in one response. Do not build infinite scroll, a
+page cursor, or a "load more" control.** The reasoning, so that a later reader can
+tell whether it still holds:
+
+- **The collection is bounded by the wedding, not by the product.** A real ledger is
+  200–800 rows and the couple built every one of them; there is no growth path that
+  turns it into a feed. At 800 rows this response is tens of kilobytes, gzipped.
+- **The screen needs the whole list anyway.** The couple scans for a person, and
+  이름 검색 (`#16`) is the second most-used control in the product. A search that
+  can only see the page in hand is wrong, and a paged list forces the search to the
+  server before anyone has asked it to be there.
+- **Paging fights the ledger's one interaction.** Tapping attendance mutates a row
+  and the client refetches; merging that into cached pages, in the presence of
+  out-of-order responses, is a class of bug this product cannot afford — a number
+  that moves backwards is the one thing it may not do.
+- **Sorting stays free.** Because the client holds every row, it may order the list
+  however the screen wants — by 이름 with `Intl.Collator('ko')`, for instance —
+  without the server committing to a collation whose behaviour differs between a
+  laptop's Postgres and a managed one.
+
+**If that ever changes it will be a new response shape and a spec change announced
+here**, not a silently added parameter. A client that pre-builds for pages today is
+building against a shape nobody has designed.
+
+#### Order
+
+**Oldest first — the order the rows were entered — and the order is contract.** A
+list whose order the database chose would reshuffle between two reads of the same
+ledger, and the couple taps by position. Entry order also preserves the order of an
+imported file, which is the order the parents wrote it in.
+
+It is not a claim that entry order is the *right* reading order for the screen. The
+client has the whole list, so any other order is a client-side sort; that is the
+cheap half of the previous section.
+
+#### 그룹 is not a filter, and that is a decision
+
+The seven `groupCategory` values are an **aggregation axis** — something the couple
+reads as a breakdown of the number, never a way to narrow the list
+(`notes/2026-08-06-design-ledger-and-import.md` §1) — and `groupLabel` is worse
+still, since free labels fracture on typing variants. **Do not add a group control
+to the ledger's filter row** and do not send `groupCategory` as a query parameter:
+it is ignored, so the list comes back unnarrowed and the UI would show a filter that
+does nothing.
+
+#### What `attendance` filters on
+
+**The value the headcount counts: the confirmed answer when there is one, and the
+couple's expected value otherwise** (`notes/2026-08-05-design-meal-headcount.md`
+§1). The ledger and the headcount are one screen, so a guest under the 참석 chip is
+a guest the number counts as attending — those two may never disagree.
+
+**There is no `UNKNOWN` value, and its absence is deliberate.** `expectedAttending`
+is always present, so the value this filters on is never unknown. 아직 모르는 N명 —
+the guests with no *confirmed* answer — is a **second, overlapping axis** (a 참석
+guest can also be 미확인), so it cannot be a third value of this parameter; if the
+product ever wants that chip it arrives as its own parameter, and `?attendance=UNKNOWN`
+is a 400 today.
+
+#### The confirmed slots are still not published
+
+`confirmedAttending` and `confirmedPartySize` are not members of `GuestResponse`,
+here or anywhere — nothing in v1 writes them yet, and they join the shape with the
+endpoint that can (`#13`, `#12`). When they do, **`null` there means UNKNOWN —
+never zero, never 불참**, exactly as `POST /weddings/{weddingId}/guests` already
+says. They will be added members on an existing shape, so nothing breaks.
+
+Errors
+- 400 `BAD_REQUEST` — a `side` or `attendance` value outside its set. **A third
+  code with the same meaning for the user as `VALIDATION_FAILED` and
+  `MALFORMED_REQUEST_BODY`**: the request was wrong. It differs because the value
+  failed to convert before any validation ran; do not build separate UI for it.
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
+  the filters are parsed**, so an anonymous request with a nonsense filter is a 401.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an
+  id that is not a number. One answer for all four.
+
+Three things this endpoint does **not** do:
+
+- **It does not return soft-deleted guests.** A guest the couple deleted is gone
+  from every filter combination, and there is no parameter that brings them back.
+- **It does not search.** 이름 검색 is `#16`; until it lands, the client filters the
+  list it already holds.
+- **It does not write.** In particular it writes no `GuestChange` row — the audit
+  log records changes, and reading is not one.
