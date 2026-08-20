@@ -20,9 +20,14 @@ import org.springframework.web.bind.annotation.RequestMapping
  * way, with the right status for the wrong reason.
  *
  * A per-endpoint test can only cover the endpoints someone remembered to write one
- * for, and there are fifteen handlers to come plus `#5`'s `CurrentWedding`, which
- * lands as a second resolved parameter with the same property. So it is swept, like
- * the content-type gate next door.
+ * for, and there are fifteen handlers to come. So it is swept, like the content-type
+ * gate next door.
+ *
+ * Since `#5` there is a second resolved parameter with the same property —
+ * `WeddingScope`, which fails a request that gets past the session with a 404. The
+ * rule generalises: **every parameter a resolver produces comes before every
+ * parameter the request supplies**, because the first parameter that fails decides
+ * the answer.
  */
 class CurrentUserParameterTest {
     @Test
@@ -45,6 +50,29 @@ class CurrentUserParameterTest {
                 "A handler whose body parameter comes first validates the body BEFORE the session is resolved, so an " +
                     "anonymous request is answered 400 with the endpoint's own validation messages instead of 401. " +
                     "Declare the caller first (notes/2026-08-10-decision-auth-gate-and-sequence.md).",
+            ).isEmpty()
+    }
+
+    @Test
+    fun `no resolved parameter comes after one the request supplies`() {
+        val misordered =
+            handlers().mapNotNull { handler ->
+                val types = handler.parameters.map { it.type.name }
+                val lastResolved = types.indexOfLast { it in RESOLVED }
+                val firstSupplied = types.indexOfFirst { it !in RESOLVED }
+                if (firstSupplied in 0..<lastResolved) {
+                    "${nameOf(handler)} resolves at $lastResolved, after a request-supplied parameter at $firstSupplied"
+                } else {
+                    null
+                }
+            }
+
+        assertThat(misordered)
+            .describedAs(
+                "Argument resolution is declaration order, and the first parameter that fails decides the answer. A " +
+                    "WeddingScope declared after the body validates a stranger's request before it finds out the " +
+                    "wedding is not theirs — a 400 listing the endpoint's fields where the contract says 404 " +
+                    "(notes/2026-08-10-decision-auth-gate-and-sequence.md).",
             ).isEmpty()
     }
 
@@ -72,6 +100,11 @@ class CurrentUserParameterTest {
          * exists for.
          */
         const val CALLER = "com.donghaeng.auth.session.AuthenticatedUser"
+
+        /** Which wedding, resolved from the caller's membership — `#5`'s parameter. */
+        const val WEDDING = "com.donghaeng.wedding.WeddingScope"
+
+        val RESOLVED = setOf(CALLER, WEDDING)
 
         val classes: JavaClasses =
             ClassFileImporter()
