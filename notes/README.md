@@ -66,6 +66,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-19-decision-generated-api-types.md` | The generated types are committed; a `seam` CI job refuses a stale one; what stays hand-written |
 | `2026-08-13-decision-frontend-routing.md` | Plain `<Routes>`, no loaders; the session gate sits above the table |
 | `2026-08-10-decision-design-value-enforcement.md` | Our own checker, not the linter |
 | `2026-08-08-decision-frontend-architecture.md` | Flat until it scatters; React Query; the token bridge |
@@ -79,6 +80,7 @@ see that file's `Rules` section for the admission test.
 |---|---|
 | `2026-08-13-decision-drop-the-stop-pipeline.md` | **No development ritual.** What was removed, and what it cost |
 | `2026-08-13-decision-static-front-and-content-type-gate.md` | The front ships static; no endpoint accepts a CORS-safelisted content type, and CI sweeps for it |
+| `2026-08-19-decision-openapi-artifact.md` | The seam's document is a test artifact at `api/build/openapi.json`; a test-source controller is a `@TestComponent` or it is published |
 | `2026-08-08-decision-development-tempo.md` | *Superseded* — vertical slices; one stop; the comprehension gate |
 | `2026-08-08-decision-work-tracking.md` | GitHub Issues via `gh`; two milestones, four labels |
 | `2026-08-08-decision-build-workflow.md` | *Partly superseded* — the CI jobs; never merge a red check |

@@ -10,6 +10,7 @@
     "build": "vite build && npm run check:tokens",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:design": "node scripts/check-design-values.mjs",
+    "generate:api-types": "openapi-typescript ../api/build/openapi.json --alphabetize --immutable-types -o src/lib/api-types.gen.ts",
     "lint": "biome check --error-on-warnings . && npm run check:design",
     "format": "biome format --write .",
     "fix": "biome check --write .",
@@ -35,9 +36,15 @@
     "@vitejs/plugin-react": "^6.0.5",
     "jsdom": "^30.0.1",
     "msw": "^2.15.0",
+    "openapi-typescript": "^6.7.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "undici": "^8.10.0"
+    }
   }
 }

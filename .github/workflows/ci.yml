@@ -70,6 +70,21 @@ jobs:
           path: api/build/reports/tests/test
           if-no-files-found: ignore
 
+      # The seam, handed to the `seam` job below. `build` writes this file as a
+      # side effect of the test that asserts what is in it
+      # (notes/2026-08-19-decision-openapi-artifact.md), so it is a real
+      # description of what this commit's API serves rather than a document
+      # anyone maintains.
+      #
+      # No `if: always()` and `if-no-files-found: error`, both deliberately: a
+      # failed build's document is stale or absent, and either would let `seam`
+      # certify the frontend's types against nothing at all.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-document
+          path: api/build/openapi.json
+          if-no-files-found: error
+
   prod-boot:
     # The same tests the `api` job already ran, isolated so the checks list
     # carries a distinct "the committed dev and prod configuration actually
@@ -174,6 +189,68 @@ jobs:
       - run: npm test
       # `build` chains check:tokens, which is the only guard on the token bridge.
       - run: npm run build
+
+  seam:
+    name: seam · generated types match the API document
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The one job that reads both trees, which is why it is its own job and not
+    # a step of `web`: `web` would then wait on the whole backend build to learn
+    # that a component does not compile.
+    needs: api
+    # `web/src/lib/api-types.gen.ts` is committed, so `web` typechecks against
+    # the seam without a JVM and a rename shows up in the diff a reviewer reads.
+    # The price of committing generated output is that it can go stale, and this
+    # job is the whole payment: it regenerates from the document THIS commit's
+    # API actually serves and refuses any difference.
+    #
+    # A backend rename therefore lands as two red checks, in this order — `seam`
+    # says the committed types no longer describe the API, and once they are
+    # regenerated `web` says the code still asks for the old field.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Into api/build/ so `npm run generate:api-types` is the same command here
+      # and on a laptop. A generator invoked two different ways is a generator
+      # whose CI result says nothing about what a developer will get.
+      - uses: actions/download-artifact@v4
+        with:
+          name: openapi-document
+          path: api/build
+
+      - run: npm ci
+        working-directory: web
+
+      - run: npm run generate:api-types
+        working-directory: web
+
+      - name: The committed types still describe the API
+        run: |
+          set -euo pipefail
+          types=web/src/lib/api-types.gen.ts
+          # `git diff` is blind to a file git does not track, so without this the
+          # check passes loudest exactly when the types have been deleted.
+          git ls-files --error-unmatch "$types" > /dev/null 2>&1 || {
+            echo "::error::$types is not committed. It has to be, or nothing" \
+                 "typechecks against the API without a JVM — and this check has" \
+                 "nothing to compare."
+            exit 1
+          }
+          git diff --exit-code -- "$types" || {
+            echo "::error::$types is stale. The API document changed and the" \
+                 "committed types did not. Run: cd api && ./gradlew openapi &&" \
+                 "cd ../web && npm run generate:api-types — then commit the" \
+                 "result and fix whatever stops compiling."
+            exit 1
+          }
 
   docker:
     name: docker · image builds, boots and serves

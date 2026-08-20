@@ -73,6 +73,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
  * would paint attacker-supplied text onto the screen; it is deliberately not
  * kept here. Korean copy is chosen from `code`, and an unrecognised `code` is
  * handled as a generic failure of its status.
+ *
+ * THIS IS THE ONE API SHAPE THAT IS STILL WRITTEN BY HAND, and deliberately.
+ * The generated `ProblemDetail` is Spring's own schema and carries no `code`
+ * (`#66`), so the document cannot describe the only member anything branches
+ * on; docs/api-spec.md defines this one instead. It moves to the generated
+ * types the day `code` appears in them — do not reach for them earlier.
  */
 export class ApiError extends Error {
   readonly status: number

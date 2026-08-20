@@ -1,6 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiError, apiFetch } from '../lib/api'
-import type { Session } from '../lib/api-shapes'
+import type { paths } from '../lib/api-types.gen'
+
+// Reached through `paths[...]` rather than through the schema name, so the path
+// and the status code are checked too: a `/auth/me` that moves, or a 200 that
+// stops carrying a body, fails here rather than one screen later.
+//
+// THE `*/*` KEY IS THE DOCUMENT AS SPRINGDOC WRITES IT. No handler declares
+// `produces`, so every response body is keyed by the wildcard even though the
+// server always sends `application/json` (docs/api-spec.md § The generated
+// OpenAPI document). Consume it as written — correcting it is `#66`, and it is
+// a backend change either way.
+
+/** Who is signed in, as the API declares it. */
+export type Session = paths['/auth/me']['get']['responses'][200]['content']['*/*']
 
 /** The one cache entry that answers "am I logged in?". */
 export const sessionQueryKey = ['session'] as const
@@ -24,7 +37,9 @@ async function fetchSession(): Promise<Session | null> {
   if (response.status === 401) return null
   if (!response.ok) throw await apiError(response)
 
-  // The one unchecked cast in the app, and it disappears with #39 — see
-  // lib/api-shapes.ts.
+  // Still a cast, and it always will be: generated types are compile-time only,
+  // so nothing here has checked that the body matches. What #39 changed is what
+  // it is cast TO — a shape the backend emits rather than one copied by hand.
+  // Validating the body at runtime is a separate decision nobody has made.
   return (await response.json()) as Session
 }
