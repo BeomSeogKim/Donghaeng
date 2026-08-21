@@ -9,6 +9,7 @@ import java.time.Instant
 @Service
 internal class GuestService(
     private val guests: GuestRepository,
+    private val headcounts: HeadcountService,
 ) {
     /**
      * Writes one ledger row, in the wedding the resolver already proved is the
@@ -32,6 +33,11 @@ internal class GuestService(
      * No `GuestChange` row. The audit log holds one row per changed FIELD with an old
      * value and a new one, which a creation has none of, and its write path is
      * `#25`'s.
+     *
+     * **The recomputed 인원수 rides back with the row** (`#151`), read inside this
+     * transaction so it already counts the guest just written — 원장과 인원수는 한
+     * 화면이고, a client that had to refetch the number would show the ledger and the
+     * total disagreeing for one round trip.
      */
     @Transactional
     fun create(
@@ -57,7 +63,7 @@ internal class GuestService(
                     updatedAt = now,
                 ),
             )
-        return guest.toGuestMutationResponse()
+        return guest.toGuestMutationResponse(headcounts.of(wedding))
     }
 
     /**
@@ -71,9 +77,9 @@ internal class GuestService(
      * commits `#17` to. **A third filter, or a page, is a change to that record
      * first.**
      *
-     * No aggregate rides along: this is a read, and the headcount is `#17`'s own
-     * endpoint (notes/2026-08-20-decision-mutation-response-envelope.md binds
-     * mutations, not this).
+     * No aggregate rides along: this is a read, and the headcount has its own
+     * endpoint ([HeadcountController.read] — the envelope record binds mutations, not
+     * this). The screen opens both.
      */
     @Transactional(readOnly = true)
     fun list(
