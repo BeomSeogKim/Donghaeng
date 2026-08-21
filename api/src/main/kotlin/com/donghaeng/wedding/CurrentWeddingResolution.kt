@@ -52,7 +52,7 @@ data class WeddingScope(
 )
 
 /**
- * One answer for every way `user → membership → wedding` can fail to resolve: an id
+ * One answer for every way `user → seat → wedding` can fail to resolve: an id
  * that does not exist, a wedding the caller is not a member of, a wedding that has
  * been deleted, and an id that is not a number at all.
  *
@@ -70,12 +70,12 @@ internal class WeddingNotFoundException :
     )
 
 /**
- * `user → membership → wedding`, run before any handler that declares a
+ * `user → seat → wedding`, run before any handler that declares a
  * [WeddingScope] — **the gate**.
  *
  * It lives in `wedding/` rather than beside [com.donghaeng.auth.session.CurrentUser]
  * because `auth/` answers who is asking and this answers which wedding, which is a
- * question about `membership` rows
+ * question about `wedding_party` rows
  * (notes/2026-08-17-decision-first-domain-endpoint-shape.md). It reads them through
  * [WeddingService] and never through the repository: an argument resolver is an
  * inbound edge, and only a service may touch persistence.

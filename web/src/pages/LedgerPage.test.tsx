@@ -31,8 +31,19 @@ const API = 'http://localhost:8080'
 const WEDDING: Wedding = {
   id: 12,
   weddingDate: '2026-10-10',
-  groomName: '김신랑',
-  brideName: '이신부',
+  seats: [
+    { side: 'GROOM', name: '김신랑' },
+    { side: 'BRIDE', name: '이신부' },
+  ],
+}
+
+/** The ordinary state of a new wedding: one seat taken, the other waiting. */
+const HALF_SEATED: Wedding = {
+  ...WEDDING,
+  seats: [
+    { side: 'GROOM', name: '김신랑' },
+    { side: 'BRIDE', name: null },
+  ],
 }
 
 /** A row as the API returns it, typed from the generated document. */
@@ -141,11 +152,31 @@ it('renders the wedding it took from GET /weddings, in 이름 가나다순', asy
   await screen.findAllByTestId('guest-name')
   // 이름 검색 is post-v1, so the order IS how a couple finds a person in v1.
   expect(renderedNames()).toEqual(['김영수', '박지민', '이서연', '한지우'])
-  // The wedding the ledger belongs to, so a person in two weddings can see
-  // which one they are looking at.
+  // Whose ledger this is — both seats taken, so both names.
   expect(screen.getByText('김신랑 · 이신부')).toBeVisible()
   // `[0]` of GET /weddings, which is newest first and is contract.
   expect(calls.lastLedgerRequest().pathname).toBe('/weddings/12/guests')
+})
+
+it('names the empty seat rather than leaving a gap where a name would be', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(() => HttpResponse.json<Wedding[]>([HALF_SEATED])),
+    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  // A wedding one partner made alone is EVERY wedding on its first day, and the
+  // partner's seat is created empty on purpose (docs/api-spec.md
+  // § GET /weddings/{weddingId}). So this is the ordinary state, not a failure —
+  // the header states it and does not dress it up as an error.
+  expect(await screen.findByText('김신랑 · 신부 자리 비어 있음')).toBeVisible()
+  // The two ways an absent name leaks onto a screen: the literal and the blank.
+  expect(document.body.textContent).not.toContain('null')
+  expect(screen.queryByText('김신랑 ·')).not.toBeInTheDocument()
 })
 
 it('sends no filter parameter at all while both sides and both answers are wanted', async () => {

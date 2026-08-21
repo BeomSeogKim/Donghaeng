@@ -23,7 +23,7 @@ internal object ProblemDocuments {
      * the thing that must NOT differ: a cross-tenant refusal answers exactly what an
      * id nobody owns answers, or the pair is a wedding-id oracle
      * (notes/2026-08-10-decision-cross-tenant-status-code.md). The cost of that is a
-     * membership failure and a typo'd id being indistinguishable in a log too, and
+     * seat-resolution failure and a typo'd id being indistinguishable in a log too, and
      * this is what pays it back.
      *
      * **What it marks is "a wedding-scoped request was refused", not "this was an

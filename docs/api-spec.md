@@ -26,7 +26,7 @@ Each endpoint gets one section, in this shape:
 ### `POST /weddings/{weddingId}/guests/{guestId}/attendance`
 
 Status: active (added 2026-08-07)
-Auth: session token, membership in the wedding
+Auth: session token, a seat in the wedding
 
 Request
 ```json
@@ -539,16 +539,17 @@ What it means for `web/`:
 
 ## Being scoped to a wedding
 
-_Added 2026-08-19 (`#5`); amended 2026-08-20 (`#132`). Applies to every endpoint
-whose path contains `{weddingId}` — which is all of them apart from `POST /weddings`
-and `GET /weddings`._
+_Added 2026-08-19 (`#5`); amended 2026-08-20 (`#132`) and 2026-08-22 (`#166`).
+Applies to every endpoint whose path contains `{weddingId}` — which is all of them
+apart from `POST /weddings` and `GET /weddings`._
 
 **Being logged in is not enough to reach a ledger.** Every wedding-scoped request
-resolves `user → membership → wedding` before the endpoint runs, and the endpoint
-runs only if that walk succeeds. The session does not carry a wedding, even though a
-person now belongs to at most one (changed 2026-08-21): a membership can be revoked
-and a wedding deleted, so which wedding is a property of the request rather than a
-fact settled once at login.
+resolves `user → seat → wedding` before the endpoint runs, and the endpoint runs only
+if that walk succeeds. **A wedding is two seats — 신랑 and 신부 — and holding one is
+what membership now means** (changed 2026-08-22, `#166`; nothing about the outcomes
+below changed with it). The session does not carry a wedding, even though a person
+belongs to at most one: a seat can be released and a wedding deleted, so which wedding
+is a property of the request rather than a fact settled once at login.
 
 **The wedding id travels in the path and nowhere else.** Never in a body, never in a
 query parameter — a request that puts it anywhere else is a request that chooses its
@@ -572,7 +573,7 @@ validation error listing the endpoint's fields.
 indistinguishable in every member of the document, not merely in the status:
 
 - the wedding does not exist;
-- it exists and the caller is not a member of it;
+- it exists and the caller holds no seat in it;
 - it existed and was deleted;
 - `{weddingId}` is not a number at all.
 
@@ -584,19 +585,22 @@ you", send the person back to their own starting screen, and never retry the sam
 id.**
 
 **403 never appears.** It would mean the caller is inside the wedding and lacks a
-privilege there, and v1 has no roles.
+privilege there, and v1 has no roles. **Nor does the subscription produce one** — the
+entitlement hangs off the wedding rather than off a person, so two seats never have
+different powers over one ledger, and nothing is gated at all yet
+(`notes/2026-08-22-decision-entitlement-belongs-to-the-wedding.md`).
 
 **How the client gets a `weddingId`:** from `GET /weddings`, the caller's own
 weddings (added 2026-08-20, `#132`), or from the `id` in the `POST /weddings`
 response. **`GET /weddings` is the one to reach for after a page load** — a stored id
-is a guess about a membership that may since have been revoked, while the list is the
-membership, answered fresh.
+is a guess about a seat that may since have been released, while the list is that
+seat, answered fresh.
 
 **`GET /weddings` and `POST /weddings` are the only two endpoints in the product that
 are not scoped to a wedding**, and that is a closed set rather than a pattern to
 copy. Both answer from the session alone because neither has a wedding in mind yet;
 anything that reads or writes a wedding's *contents* puts the id in the path, where
-the membership walk above checks it.
+the seat walk above checks it.
 
 ## Endpoints
 
@@ -605,48 +609,79 @@ every endpoint below._
 
 ### `POST /weddings`
 
-Status: active (added 2026-08-17, `#123`)
+Status: active (added 2026-08-17, `#123`; **request and response shape changed
+2026-08-22, `#166`**)
 Auth: session cookie — **and nothing more.** One of the two endpoints in the product
 that are not scoped to a wedding (changed 2026-08-20: `GET /weddings` is the other).
 
 웨딩 만들기, the screen a couple sees once, between logging in and the ledger
-(`notes/2026-08-07-design-screens-and-flow.md`). It creates the wedding **and the
-caller's membership in it, in one transaction** — every other request resolves
-`user → membership → wedding`, so a wedding created without a membership is a
-ledger nobody can open, and this endpoint is where a person's first membership
-comes from.
+(`notes/2026-08-07-design-screens-and-flow.md`). It creates the wedding, **both of
+its seats and its free subscription term, in one transaction** — every other request
+resolves `user → seat → wedding`, so a wedding created without the caller's seat is a
+ledger nobody can open, and this endpoint is where a person's first seat comes from.
+
+> **Breaking, 2026-08-22 (`#166`) — this reverses what this entry said until today,
+> in as many words.** The request used to be
+> `{ weddingDate, groomName, brideName }` and the response used to carry `groomName`
+> and `brideName`. **Both name members are gone from both shapes.** The request now
+> names the CALLER's own seat — `side` and `name` — and every wedding response
+> carries a `seats` array instead. 신랑 이름과 신부 이름은 사람의 속성이지 웨딩의
+> 속성이 아니고, a required field had to be filled by whoever arrived first, which
+> meant asking one partner to type the other's name
+> (`notes/2026-08-22-decision-the-couples-two-seats.md`). **A client written against
+> an older copy of this spec sends two members that no longer exist and reads two
+> that are no longer there** — the request fails with 400 `MALFORMED_REQUEST_BODY`
+> for the missing `side`, so this breaks loudly rather than quietly.
 
 Request
 ```json
-{ "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+{ "weddingDate": "2026-10-10", "side": "GROOM", "name": "김신랑" }
 ```
 
 All three members are **required**. `weddingDate` is a plain calendar date
-(`YYYY-MM-DD`), no time and no timezone — a wedding date is a date.
+(`YYYY-MM-DD`), no time and no timezone — a wedding date is a date. `side` is
+`GROOM` or `BRIDE`, and `name` is at most 100 characters.
+
+**`side` and `name` describe the caller and never their partner.** There is no way to
+send the partner's name here and that is the point: their seat is created empty and
+`#9`'s invite fills it, so nobody types anybody else's name.
 
 Response 201
 ```json
-{ "id": 12, "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+{
+  "id": 12,
+  "weddingDate": "2026-10-10",
+  "seats": [
+    { "side": "GROOM", "name": "김신랑" },
+    { "side": "BRIDE", "name": null }
+  ]
+}
 ```
 
-`id` is what the client did not have; the rest is echoed back **as stored**, which
-is not always what was sent — see the trimming rule below. There is no `Location`
+`id` is what the client did not have; the name is echoed back **as stored**, which is
+not always what was sent — see the trimming rule below. There is no `Location`
 header (changed 2026-08-19: `GET /weddings/{weddingId}` now exists, but the id in
 the body is what the client uses, so a header repeating it buys nothing). **Keep the
 `id`** — it is the only place a client learns one.
+
+**`seats` always has exactly two entries, 신랑 먼저**, and the caller's is whichever
+one matches the `side` they sent. `name` is `null` on the seat nobody has taken yet —
+that is the ordinary state of a new wedding, not an error, and **what the header
+renders in that slot is the frontend's decision**; the API has no copy for it.
 
 Carries the recomputed aggregate: **no, and here that is not an exception.** A
 wedding is created empty — no guests, no meal types — so there is no headcount to
 carry. The client's next screen is the ledger, which reads it.
 
 Errors
-- 400 `VALIDATION_FAILED` — a name that is blank, whitespace-only, or longer than
+- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than
   100 characters; or a `weddingDate` outside the range the database can store
   (before 4713 BC or after 5874897 AD).
 - 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of the wrong
-  type (an unparseable `weddingDate` among them). **Two codes, one meaning for the
-  user**: the request was wrong. They differ because one failure happens while the
-  body is being read and the other after; do not build different UI for them.
+  type (an unparseable `weddingDate` and **a `side` that is neither `GROOM` nor
+  `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
+  wrong. They differ because one failure happens while the body is being read and the
+  other after; do not build different UI for them.
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused
   **before the body is looked at**, so an anonymous request with an invalid body is
   a 401 and never a 400.
@@ -654,10 +689,11 @@ Errors
   2026-08-21, `#158`). **The recovery is not a retry and not an error screen: call
   `GET /weddings` and open the one that comes back.** Two tabs, or one button
   tapped twice on a slow connection, produce exactly this — one 201 and one 409,
-  never two weddings. **Since 2026-08-21 the database refuses the second row
-  itself**, so "never two weddings" holds no matter how the requests interleave, and
-  the caller who loses a race is told this and not a 500 — it is the same fact about
-  their account either way, with the same recovery.
+  never two weddings. **The database refuses the second row itself**, so "never two
+  weddings" holds no matter how the requests interleave, and the caller who loses a
+  race is told this and not a 500 — it is the same fact about their account either
+  way, with the same recovery. (Unchanged by `#166`: the rule moved from the
+  membership row to the seat and was not re-decided.)
 - 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule, in
   "Every POST, PUT and PATCH must send `Content-Type: application/json`" above.
 
@@ -669,8 +705,19 @@ account** — one they already know, and one `GET /weddings` hands the same sess
 full — so there is nothing to leak, and a 404 would tell `web/` "what you asked for
 is gone" when the truth is "you already have one; go and open it".
 
-Six things are decided here rather than left to the caller to infer.
+Eight things are decided here rather than left to the caller to infer.
 
+- **Both seats are created, not one.** The partner's row exists from the moment the
+  wedding does, carrying a `side` and nothing else, so `#9`'s invite fills an
+  identified row rather than creating one — and so "every wedding has exactly two
+  seats" is true of every wedding rather than of most of them.
+- **The wedding is born holding a free subscription term**, and **nothing about it is
+  published or gated.** There is no plan in any response, no payment endpoint, and no
+  request that is refused for want of one; the entitlement belongs to the wedding
+  rather than to either person, so a paid ledger is never half-open
+  (`notes/2026-08-22-decision-entitlement-belongs-to-the-wedding.md`). Do not build a
+  paywall, an upgrade prompt, or a "free plan" badge against this — there is nothing
+  behind them yet.
 - **보증인원 is not asked, and cannot be sent.** Couples sign up before booking a
   venue, so at this moment the venue's number does not exist; the ledger works
   completely without it and it is set later in 설정. An unknown member such as
@@ -683,15 +730,14 @@ Six things are decided here rather than left to the caller to infer.
   bound is what the column can store, which is not a product rule — if the product
   should refuse a date twenty years out, that is a decision nobody has made yet.
 - **A second wedding by the same person is refused with 409**, and a 201 is
-  therefore proof that they had none (changed 2026-08-21 — this reverses what this
-  entry said until then, in as many words). **A person belongs to exactly one
-  wedding**, created or joined; `web/` guards the route as well (`#148`), and this
-  is the half of that guard a `curl` cannot walk around. The refusal is total —
-  the second request leaves no wedding row behind either.
-- **Names are stored trimmed.** Leading and trailing whitespace is removed before
+  therefore proof that they had none (changed 2026-08-21). **A person belongs to
+  exactly one wedding**, created or joined; `web/` guards the route as well (`#148`),
+  and this is the half of that guard a `curl` cannot walk around. The refusal is
+  total — the second request leaves no wedding, no seat and no term behind either.
+- **The name is stored trimmed.** Leading and trailing whitespace is removed before
   the row is written, which is why the response echoes the stored value. A name
   that is *only* whitespace is a 400, not an empty name.
-- **100 characters is the limit on each name**, and it is measured **on what you
+- **100 characters is the limit on the name**, and it is measured **on what you
   send, before that trim** — so 100 characters plus a trailing space is a 400 even
   though it would have been stored as 100. Trim in the client and the two agree.
   The count is in UTF-16 code units, so a name built from astral-plane characters
@@ -699,11 +745,12 @@ Six things are decided here rather than left to the caller to infer.
 
 ### `GET /weddings`
 
-Status: active (added 2026-08-20, `#132`)
+Status: active (added 2026-08-20, `#132`; **response shape changed 2026-08-22,
+`#166`**)
 Auth: session cookie — **and nothing more.** Together with `POST /weddings` this is
 one of the two endpoints not scoped to a wedding; see "Being scoped to a wedding".
 
-**The weddings the caller is a member of**, which is the question a client has before
+**The weddings the caller holds a seat in**, which is the question a client has before
 it has a `weddingId`. Two screens ask it:
 
 - **로그인 직후** — an empty array means this person has no wedding, so the flow is
@@ -715,12 +762,20 @@ it has a `weddingId`. Two screens ask it:
 Response 200
 ```json
 [
-  { "id": 12, "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+  {
+    "id": 12,
+    "weddingDate": "2026-10-10",
+    "seats": [
+      { "side": "GROOM", "name": "김신랑" },
+      { "side": "BRIDE", "name": null }
+    ]
+  }
 ]
 ```
 
 A bare array, no envelope, and **each entry is the same `WeddingResponse`**
-`POST /weddings` and `GET /weddings/{weddingId}` return — one type for all three.
+`POST /weddings` and `GET /weddings/{weddingId}` return — one type for all three, so
+the 2026-08-22 change to that type reached all three at once.
 
 **An empty array is the ordinary answer for a person with no wedding**, not a 404.
 Do not treat it as an error state; it is the branch 최초 1회 exists for.
@@ -750,32 +805,50 @@ Errors
 
 Two things it does not do:
 
-- **It does not tell you whether a wedding was deleted or a membership revoked.**
+- **It does not tell you whether a wedding was deleted or a seat released.**
   Both simply stop appearing — a wedding the couple soft-deleted, and one a person
   was removed from, are absent for the same reason and look identical.
-- **It is not a membership check to call before other requests.** Every
-  wedding-scoped endpoint resolves membership on its own, on every request.
+- **It is not a check to call before other requests.** Every wedding-scoped endpoint
+  resolves the caller's seat on its own, on every request.
 
 ### `GET /weddings/{weddingId}`
 
-Status: active (added 2026-08-19, `#5`)
-Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+Status: active (added 2026-08-19, `#5`; **response shape changed 2026-08-22, `#166`**)
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above, which is what this endpoint is the first to be governed by.
 
-The wedding itself: the couple's names and the date, as stored. The ledger screen
+The wedding itself: the date, and the couple as a pair of seats. The ledger screen
 reads it to render its header, and it is the call that answers "is this wedding
 still mine?" after an app resume or a shared link.
 
 Response 200
 ```json
-{ "id": 12, "weddingDate": "2026-10-10", "groomName": "김신랑", "brideName": "이신부" }
+{
+  "id": 12,
+  "weddingDate": "2026-10-10",
+  "seats": [
+    { "side": "GROOM", "name": "김신랑" },
+    { "side": "BRIDE", "name": "이신부" }
+  ]
+}
 ```
 
 The same shape `POST /weddings` returns, deliberately — one `WeddingResponse` for
-both, so a client caches one type. **No `guaranteedHeadcount`** here either, and that
-is a statement about this shape rather than about the number: 보증인원 is published
-by `GET /weddings/{weddingId}/headcount`, beside the 식대 인원 it is read against.
-`WeddingResponse` gains it with `#8`, the screen that can set it.
+both, so a client caches one type.
+
+**`seats` is what replaced `groomName` and `brideName`** (changed 2026-08-22, `#166`)
+and it is what the ledger header renders. Always two entries, always 신랑 먼저, and
+`name` is `null` for a seat whose person has not arrived — a wedding created by one
+partner reads exactly like the example above with `"name": null` in the second slot.
+**A seat publishes its `side` and its `name` and nothing else**: there is no
+`userId`, no `joinedAt` and no "is this me", because no screen renders one yet and
+`#9` is what will add whatever the invite flow turns out to need.
+
+**No `guaranteedHeadcount`** here either, and that is a statement about this shape
+rather than about the number: 보증인원 is published by
+`GET /weddings/{weddingId}/headcount`, beside the 식대 인원 it is read against.
+`WeddingResponse` gains it with `#8`, the screen that can set it. **No subscription
+either** — see `POST /weddings`.
 
 Carries the recomputed aggregate: **no** — it is a read, and there is no aggregate
 on this resource. The headcount is its own endpoint,
@@ -791,14 +864,14 @@ Two things this endpoint does **not** do, stated so nobody waits for them:
 
 - **It does not list the couple's weddings.** `GET /weddings` does, added
   2026-08-20 — this one reads a wedding the client already has an id for.
-- **It is not a membership check to call before every other request.** Every
-  wedding-scoped endpoint resolves membership on its own, on every request; calling
-  this first would double the round trips and prove nothing about the next one.
+- **It is not a check to call before every other request.** Every wedding-scoped
+  endpoint resolves the caller's seat on its own, on every request; calling this
+  first would double the round trips and prove nothing about the next one.
 
 ### `POST /weddings/{weddingId}/guests`
 
 Status: active (added 2026-08-20, `#134` — the backend half of `#11`)
-Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
 
 하객 추가, the direct-entry sheet, and the first write that puts a row in the ledger.
@@ -958,7 +1031,7 @@ Two things this endpoint does **not** do:
 ### `GET /weddings/{weddingId}/guests`
 
 Status: active (added 2026-08-20, `#147` — the backend half of `#15`)
-Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
 
 원장, the ledger itself — **the screen every other v1 screen opens on top of**
@@ -1113,7 +1186,7 @@ Three things this endpoint does **not** do:
 ### `GET /weddings/{weddingId}/headcount`
 
 Status: active (added 2026-08-21, `#151` — the backend half of `#17`)
-Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
 
 인원수 — the number pinned to the top of the 원장 screen, and the one the couple

@@ -21,7 +21,7 @@ nothing else. Everything below loads on demand.
 **Read your subtree's file before writing code in it** — and re-read it after a
 `/compact`, which re-injects only this root file.
 
-## Pick up here (last session: 2026-08-19)
+## Pick up here (last session: 2026-08-22)
 
 **LAUNCH IS 2026-08-31 and that date is fixed**
 (`notes/2026-08-19-decision-launch-date-and-google-only.md`). Scope is the
@@ -35,16 +35,19 @@ blocker is Kakao's and Naver's external review queues, not the mappers. `#110`
 and the rest of `#94` went with it, having no trigger without a second
 provider.
 
-**Auth and the first domain endpoint are done.** `POST /weddings` landed
-(`#123`), and the shape fifteen more endpoints copy is in
+**The endpoint shape fifteen more copy** is in
 `notes/2026-08-17-decision-first-domain-endpoint-shape.md` — read it before
-writing the sixteenth. **The whole schema already exists** in `V1`, guests and
-meals included; the ledger needs no new tables.
+writing the sixteenth. **The ledger's tables all exist** in `V1`, guests and
+meals included. The wedding core does not: `V3` (2026-08-22) replaced
+`membership` with `wedding_party` and added `wedding_subscription`.
 
 ⚠️ **DDL applied by hand must be applied as `donghaeng_app`.** Applying it as
 a personal superuser leaves every table owned by that role and the app gets
-`permission denied` — invisible until boot, and `#105` is open on it. After
-any hand-applied migration: `select count(*) from pg_class where
+`permission denied` — invisible until boot (`#105`), and it happened again on
+2026-08-22. **Do it with `psql -c 'set role donghaeng_app' -f <migration>`**:
+the role, not the connection, is what decides the owner, so this needs no
+password and cannot be got wrong by a `-U` that did not take. After any
+hand-applied migration: `select count(*) from pg_class where
 relnamespace='public'::regnamespace and relkind in ('r','S') and
 pg_get_userbyid(relowner) <> 'donghaeng_app';` must be `0`.
 
@@ -136,10 +139,14 @@ bind only while one requirement is built live in that requirement's `notes/`
 record**, loaded when the issue is picked up — the only moment they mean
 anything.
 
-- **The Wedding, not the user, is the top-level unit.** The couple are **two
-  accounts on one ledger**, each editing under their own name, and **a person
-  belongs to exactly one wedding** — created or joined, never both, never two
-  (2026-08-21). The partner arrives by invite link (`#9`).
+- **The Wedding, not the user, is the top-level unit**, and **a wedding is two
+  seats** — 신랑 and 신부, created together, each carrying that person's name and,
+  once they arrive, their account (2026-08-22). A seat with no account is a
+  partner who has not come yet, so the invite (`#9`) **fills a seat rather than
+  making one**. **A person holds at most one seat, ever** (2026-08-21). Parents
+  and planners are 지원자, never seats. Anything a wedding *has* — the
+  entitlement above all — hangs off the Wedding, never off a seat, or two
+  members of one ledger end up with different powers over it.
 - **보증인원 is the venue's number, never ours.** We never recommend it and
   never adjust counts statistically — the headcount sums real responses and the
   couple's own expected values, nothing else. **유아식 does not adjust it

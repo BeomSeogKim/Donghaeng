@@ -23,7 +23,7 @@ internal class HeadcountService(
     /**
      * **Takes the resolved [WeddingScope], never a bare id.** The number is an
      * aggregate over one wedding's whole ledger, so the id it is computed for has to
-     * be one `user → membership → wedding` has already accepted; a `Long` parameter
+     * be one `user → seat → wedding` has already accepted; a `Long` parameter
      * here would make "sum a wedding the caller has no claim on" a compiling
      * mistake.
      *

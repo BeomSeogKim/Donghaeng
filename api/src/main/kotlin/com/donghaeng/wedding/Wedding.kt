@@ -13,7 +13,14 @@ import java.time.LocalDate
 
 /**
  * The top-level unit of the product: a couple's ledger is a wedding, and a person
- * reaches one only through a [Membership].
+ * reaches one only by holding one of its two [WeddingSeat]s.
+ *
+ * **The couple's names are not here** (changed 2026-08-22,
+ * notes/2026-08-22-decision-the-couples-two-seats.md). `groom_name` and `bride_name`
+ * were a person's attribute stored as the wedding's, with nothing joining either to
+ * the account that person logs in with; they moved onto the seats, and were dropped
+ * rather than left in place because a name column nothing reads is a name column
+ * someone writes to.
  *
  * **[createdBy] is a `Long`, not an `AppUser`.** A mapping would make this class
  * depend on `auth/`'s rows, which the architecture forbids; the foreign key still
@@ -31,9 +38,9 @@ import java.time.LocalDate
  * `@DynamicUpdate` is what confines a race to the one column it was about
  * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md). Without it
  * `#8` setting [guaranteedHeadcount] alone emits a full-column UPDATE that
- * blind-writes [groomName], [brideName] and [weddingDate] from the snapshot its
- * transaction loaded — and `wedding` has no `guest_change` trail to recover an
- * overwritten name from, so "last write wins is accepted" never covered it.
+ * blind-writes [weddingDate] from the snapshot its transaction loaded — and `wedding`
+ * has no `guest_change` trail to recover an overwritten value from, so "last write
+ * wins is accepted" never covered it.
  */
 @Entity
 @DynamicUpdate
@@ -42,10 +49,6 @@ import java.time.LocalDate
 internal class Wedding(
     @Column(name = "wedding_date", nullable = false)
     val weddingDate: LocalDate,
-    @Column(name = "groom_name", nullable = false, length = 100)
-    var groomName: String,
-    @Column(name = "bride_name", nullable = false, length = 100)
-    var brideName: String,
     @Column(name = "created_by", nullable = false, updatable = false)
     val createdBy: Long,
     @Column(name = "created_at", nullable = false, updatable = false)

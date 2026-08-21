@@ -8,7 +8,9 @@ import type { paths } from '../lib/api-types.gen'
 // document) — consume it as written; correcting it is `#66`.
 
 /**
- * A wedding as stored: the date and the two names, and nothing else yet.
+ * A wedding as stored: the date and the couple's two seats, and nothing else
+ * yet. `seats` always holds exactly two entries, 신랑 먼저, and a seat's `name`
+ * is `null` until that person arrives (docs/api-spec.md § GET /weddings).
  *
  * THIS IS THE ONLY DECLARATION OF IT. `POST /weddings` returns the same
  * `WeddingResponse` — one type for all three wedding endpoints, and the spec

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
  * key a second login is merged onto
  * (notes/2026-08-11-decision-baseline-schema-calls.md §A). A wrong key here is
  * not a wrong number — it seats a stranger on someone else's `app_user`, with
- * their memberships and therefore the whole ledger, with no token and no expiry.
+ * their seat and therefore the whole ledger, with no token and no expiry.
  *
  * See BaselineSchemaFixture for what "enforces" reaches: the file, not prod.
  */

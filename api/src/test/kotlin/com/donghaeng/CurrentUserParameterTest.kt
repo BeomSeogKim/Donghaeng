@@ -101,7 +101,7 @@ class CurrentUserParameterTest {
          */
         const val CALLER = "com.donghaeng.auth.session.AuthenticatedUser"
 
-        /** Which wedding, resolved from the caller's membership — `#5`'s parameter. */
+        /** Which wedding, resolved from the caller's seat — `#5`'s parameter. */
         const val WEDDING = "com.donghaeng.wedding.WeddingScope"
 
         val RESOLVED = setOf(CALLER, WEDDING)

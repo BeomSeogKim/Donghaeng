@@ -172,7 +172,7 @@ internal class CreateGuestContractTest : GuestFixture() {
         // **The outsider gets a wedding of their own first**, and that line is the
         // test: without it, "not a member of THIS wedding" and "not a member of
         // anything" are the same state, so a resolver that dropped `weddingId` from
-        // its membership query would hand every couple every other couple's ledger
+        // its seat query would hand every couple every other couple's ledger
         // and stay green (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
         val outsider = loginAs("someone-else")
         createWedding(outsider)
@@ -193,7 +193,7 @@ internal class CreateGuestContractTest : GuestFixture() {
         // would pass both.
         //
         // **It is the partner and not a second wedding of the caller's since
-        // 2026-08-21**: `ux_membership_user` made "one caller, two weddings" an
+        // 2026-08-21**: the one-wedding index made "one caller, two weddings" an
         // unrepresentable row, and with a caller holding exactly one wedding a
         // resolver scoped to the caller writes into the same place as one scoped to
         // the path. What stayed observable is the shape this product actually has —
@@ -218,7 +218,7 @@ internal class CreateGuestContractTest : GuestFixture() {
     }
 
     @Test
-    fun `a soft-deleted wedding cannot be written to, though the membership is live`() {
+    fun `a soft-deleted wedding cannot be written to, though the seat is live`() {
         val session = login()
         val weddingId = createWedding(session)
         jdbc.update("update wedding set deleted_at = now() where id = ?", weddingId)

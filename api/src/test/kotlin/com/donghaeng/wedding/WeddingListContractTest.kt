@@ -22,15 +22,15 @@ import java.net.HttpCookie
  * id on a refresh (`notes/2026-08-07-design-screens-and-flow.md`).
  *
  * **Nothing scopes it but the caller**, so the tenancy assertion here is doing the
- * work `CurrentWeddingArgumentResolver` does everywhere else. A membership predicate
+ * work `CurrentWeddingArgumentResolver` does everywhere else. A seat predicate
  * dropped from the query does not 404 anyone — it hands every couple every other
  * couple's ledger in a 200 — so the outsider below owns a wedding of their own, per
  * the rule `#5`'s audit left behind (notes/2026-08-19-decision-wedding-scope-gate.md
  * §2b): a tenancy test whose refused caller is a member of nothing proves nothing.
  *
  * The two exclusions are one test each, because they fail in opposite directions and
- * neither shows up in the other: a soft-deleted wedding still has a live membership
- * pointing at it, and a revoked membership still points at a live wedding
+ * neither shows up in the other: a soft-deleted wedding still has a live seat
+ * pointing at it, and a released seat still points at a live wedding
  * (notes/2026-08-10-decision-soft-delete.md).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -43,7 +43,8 @@ internal class WeddingListContractTest : ApiFixture() {
     @BeforeEach
     @AfterEach
     fun clean() {
-        jdbc.update("delete from membership")
+        jdbc.update("delete from wedding_subscription")
+        jdbc.update("delete from wedding_party")
         jdbc.update("delete from wedding")
     }
 
@@ -97,20 +98,20 @@ internal class WeddingListContractTest : ApiFixture() {
 
         assertThat(entry["id"].asLong()).isEqualTo(id)
         assertThat(entry["weddingDate"].asText()).isEqualTo("2026-10-10")
-        assertThat(entry["groomName"].asText()).isEqualTo("김신랑")
-        assertThat(entry["brideName"].asText()).isEqualTo("이신부")
-        assertThat(entry.fieldNames().asSequence().toList()).containsExactlyInAnyOrder("id", "weddingDate", "groomName", "brideName")
+        assertThat(entry["seats"].map { it["side"].asText() }).containsExactly("GROOM", "BRIDE")
+        assertThat(entry["seats"][0]["name"].asText()).isEqualTo("김신랑")
+        assertThat(entry.fieldNames().asSequence().toList()).containsExactlyInAnyOrder("id", "weddingDate", "seats")
     }
 
     @Test
-    fun `a soft-deleted wedding is not in the list, though the membership is still live`() {
+    fun `a soft-deleted wedding is not in the list, though the seat is still live`() {
         val session = login()
         val deleted = createWedding(session, "김신랑")
 
         // **The control is the same list one line earlier, and it is the test.**
         // The expected answer after the delete is an EMPTY list, which a query that
         // had stopped returning anything would also give; a second live wedding used
-        // to play that part, and `ux_membership_user` has made one impossible
+        // to play that part, and `ux_party_user` has made one impossible
         // (notes/2026-08-21-decision-one-wedding-per-person.md).
         assertThat(listed(session)).containsExactly(deleted)
 
@@ -120,26 +121,26 @@ internal class WeddingListContractTest : ApiFixture() {
     }
 
     @Test
-    fun `a wedding whose membership was revoked is not in the list, though the wedding is live`() {
+    fun `a wedding whose seat was released is not in the list, though the wedding is live`() {
         // A removed partner keeps nothing. The wedding row is untouched here, so
-        // only the membership predicate can exclude it — and the control above is
-        // what says the predicate excluded it rather than the query excluding
-        // everything.
+        // only the seat predicate can exclude it — and the control above is what says
+        // the predicate excluded it rather than the query excluding everything.
         val session = login()
         val left = createWedding(session, "김신랑")
 
         assertThat(listed(session)).containsExactly(left)
 
-        jdbc.update("update membership set deleted_at = now() where wedding_id = ?", left)
+        jdbc.update("update wedding_party set deleted_at = now() where wedding_id = ?", left)
 
         assertThat(listed(session)).isEmpty()
     }
 
     // `two weddings come back newest first` was deleted on 2026-08-21 with
-    // `ux_membership_user`, and this line is here so the deletion is not read as a
-    // gap. The order is not reachable to assert any more: it needs one caller
-    // holding two live memberships, which is the row the index refuses, so the test
-    // could only have been kept by building a state no database of ours can hold.
+    // `ux_membership_user` — now `ux_party_user` — and this line is here so the
+    // deletion is not read as a gap. The order is not reachable to assert any more:
+    // it needs one caller holding two live seats, which is the row the index refuses,
+    // so the test could only have been kept by building a state no database of ours
+    // can hold.
     // `WeddingRepository.findAllLiveForMember` keeps its `order by` — see its KDoc
     // for what that is now worth.
 

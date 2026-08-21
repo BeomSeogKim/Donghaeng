@@ -7,8 +7,8 @@ import java.sql.DriverManager
 import java.sql.SQLException
 
 /**
- * A real Postgres 16 with `V1__baseline_schema.sql` applied by Flyway, for the
- * tests that assert what the baseline schema ENFORCES rather than what it says.
+ * A real Postgres 16 with every migration applied by Flyway, for the tests that
+ * assert what the schema ENFORCES rather than what it says.
  *
  * WHAT THESE TESTS PIN, and it is narrower than it looks: they pin THE FILE.
  * They cannot pin any real database, because no real database is built from
@@ -102,8 +102,8 @@ internal abstract class BaselineSchemaFixture {
 
     protected fun Connection.insertWedding(createdBy: Long): Long =
         insertReturningId(
-            "insert into wedding (wedding_date, groom_name, bride_name, created_by, created_at, updated_at) " +
-                "values (date '2026-10-10', '신랑', '신부', $createdBy, now(), now())",
+            "insert into wedding (wedding_date, created_by, created_at, updated_at) " +
+                "values (date '2026-10-10', $createdBy, now(), now())",
         )
 
     companion object {

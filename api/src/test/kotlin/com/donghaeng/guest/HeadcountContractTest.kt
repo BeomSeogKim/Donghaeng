@@ -93,7 +93,7 @@ internal class HeadcountContractTest : GuestFixture() {
         // (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
         //
         // The second wedding belongs to a stranger rather than to the caller since
-        // 2026-08-21: `ux_membership_user` refuses the caller a second membership,
+        // 2026-08-21: `ux_party_user` refuses the caller a second seat,
         // and a wedding with two people in it is where a caller-scoped sum still
         // goes wrong.
         val session = login()
@@ -196,7 +196,7 @@ internal class HeadcountContractTest : GuestFixture() {
     }
 
     @Test
-    fun `a soft-deleted wedding answers 404, though the membership is live`() {
+    fun `a soft-deleted wedding answers 404, though the seat is live`() {
         val session = login()
         val weddingId = createWedding(session)
         addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""")

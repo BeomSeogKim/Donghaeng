@@ -230,7 +230,7 @@ internal class ListGuestsContractTest : GuestFixture() {
         // Two mutations, one assertion, and neither is covered by the outsider test
         // below. **Scoped to the CALLER**: the partner's 하객 disappears from the
         // couple's own ledger — a wrong answer with a 200 on it, and the shape that
-        // replaced "a member of two weddings" when `ux_membership_user` made that
+        // replaced "a member of two weddings" when the one-wedding index made that
         // state unrepresentable (2026-08-21). **Scoped to nothing**: the stranger's
         // 하객 appears in it.
         assertThat(ids(list(session, wedding, ""))).containsExactly(mine, partners).doesNotContain(strangers)
@@ -310,7 +310,7 @@ internal class ListGuestsContractTest : GuestFixture() {
     }
 
     @Test
-    fun `a soft-deleted wedding answers 404, though the membership is live`() {
+    fun `a soft-deleted wedding answers 404, though the seat is live`() {
         val session = login()
         val weddingId = createWedding(session)
         addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""")

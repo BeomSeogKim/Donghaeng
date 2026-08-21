@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * THE RED GATE OF `#5`: `user → membership → wedding` resolution, observed on the
+ * THE RED GATE OF `#5`: `user → seat → wedding` resolution, observed on the
  * first wedding-scoped endpoint in the product.
  *
  * **The resolver is the gate, and this is what makes that sentence checkable.**
@@ -29,9 +29,9 @@ import org.springframework.test.context.ActiveProfiles
  * 2. **an authenticated non-member → 404, never 403**, and byte-for-byte the answer
  *    a wedding that does not exist gets, or the pair is a wedding-id oracle
  *    (notes/2026-08-10-decision-cross-tenant-status-code.md).
- * 3. **a soft-deleted wedding with a LIVE membership → 404.** The partial indexes
- *    filter `membership.deleted_at`; nothing filtered `wedding.deleted_at`, and a
- *    resolution that walks a live membership onto a dead wedding opens the gate one
+ * 3. **a soft-deleted wedding with a LIVE seat → 404.** The partial indexes filter
+ *    `wedding_party.deleted_at`; nothing filtered `wedding.deleted_at`, and a
+ *    resolution that walks a live seat onto a dead wedding opens the gate one
  *    condition at a time (notes/2026-08-10-decision-soft-delete.md).
  * 4. **an id that is not a number → 404**, because the resolver owns the path
  *    variable: no handler may take it, so no handler's converter can answer first.
@@ -46,7 +46,7 @@ import org.springframework.test.context.ActiveProfiles
 internal class CurrentWeddingContractTest : ApiFixture() {
     @Autowired private lateinit var weddings: WeddingRepository
 
-    @Autowired private lateinit var memberships: MembershipRepository
+    @Autowired private lateinit var seats: WeddingSeatRepository
 
     @Autowired private lateinit var jdbc: JdbcTemplate
 
@@ -60,7 +60,8 @@ internal class CurrentWeddingContractTest : ApiFixture() {
     @BeforeEach
     @AfterEach
     fun clean() {
-        jdbc.update("delete from membership")
+        jdbc.update("delete from wedding_subscription")
+        jdbc.update("delete from wedding_party")
         jdbc.update("delete from wedding")
     }
 
@@ -75,8 +76,11 @@ internal class CurrentWeddingContractTest : ApiFixture() {
         assertThat(response.headers().firstValue("Content-Type")).hasValue("application/json")
         assertThat(response.json()["id"].asLong()).isEqualTo(weddingId)
         assertThat(response.json()["weddingDate"].asText()).isEqualTo("2026-10-10")
-        assertThat(response.json()["groomName"].asText()).isEqualTo("김신랑")
-        assertThat(response.json()["brideName"].asText()).isEqualTo("이신부")
+        // The couple's names live on the seats as of 2026-08-22; the wedding carries
+        // none of its own, and this is the shape the ledger header reads.
+        assertThat(response.json()["seats"].map { it["side"].asText() }).containsExactly("GROOM", "BRIDE")
+        assertThat(response.json()["seats"][0]["name"].asText()).isEqualTo("김신랑")
+        assertThat(response.json()["seats"][1]["name"].isNull).describedAs("the partner has not arrived").isTrue()
     }
 
     @Test
@@ -97,7 +101,7 @@ internal class CurrentWeddingContractTest : ApiFixture() {
         // **The outsider gets a wedding of their own first**, and that line is the
         // test. Without it, "not a member of THIS wedding" and "not a member of
         // anything" are the same state to the whole suite — so the resolver could
-        // drop `weddingId` from its membership query, handing every couple every
+        // drop `weddingId` from its seat query, handing every couple every
         // other couple's ledger, and stay green. Verified by making exactly that
         // mutation and watching this go red.
         val outsider = loginAs("someone-else")
@@ -119,16 +123,16 @@ internal class CurrentWeddingContractTest : ApiFixture() {
     }
 
     @Test
-    fun `a soft-deleted wedding is 404 to a member whose membership is still live`() {
+    fun `a soft-deleted wedding is 404 to a member whose seat is still live`() {
         val session = login()
         val weddingId = createWedding(session)
 
         jdbc.update("update wedding set deleted_at = now() where id = ?", weddingId)
 
-        // The membership is untouched and still resolves on its own — which is
-        // precisely the hole: `user → membership` succeeds, and only a resolver that
-        // also looks at the wedding refuses.
-        assertThat(memberships.findAll().map { it.weddingId }).contains(weddingId)
+        // The seat is untouched and still resolves on its own — which is precisely
+        // the hole: `user → seat` succeeds, and only a resolver that also looks at
+        // the wedding refuses.
+        assertThat(seats.findAll().map { it.weddingId }).contains(weddingId)
 
         val (response, log) = capturingLog { get("/weddings/$weddingId", listOf(session)) }
 
@@ -160,7 +164,7 @@ internal class CurrentWeddingContractTest : ApiFixture() {
 
     @Test
     fun `a refused resolution is distinguishable in the log, though not in the response`() {
-        // The cost of answering 404: a membership failure and a typo'd id look
+        // The cost of answering 404: a seat-resolution failure and a typo'd id look
         // identical from outside, so the server-side signal has to carry what the
         // response deliberately does not
         // (notes/2026-08-10-decision-cross-tenant-status-code.md). This is the input
