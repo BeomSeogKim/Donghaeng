@@ -4,6 +4,7 @@ import { Navigate } from 'react-router'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { GuestRow } from '../components/GuestRow'
+import { Headcount } from '../components/Headcount'
 import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { FilterChip } from '../components/Tag'
@@ -19,8 +20,8 @@ import { createWeddingPath } from '../lib/routes'
  * question "where do I go to see the number", which this product must not have.
  *
  * THE SCREEN'S ORDER IS 숫자 → 도구 → 목록, and it is the couple's own order:
- * see the number, find the person, tap. The number is `#17` and is not built —
- * see the slot below, which is left empty rather than filled with a placeholder.
+ * see the number, find the person, tap. 원장과 인원수는 한 화면 — the number is
+ * `components/Headcount.tsx` and it is read beside the list, never after it.
  *
  * THE WEDDING ID IS NOT IN THE URL. It comes from `GET /weddings`, whose first
  * entry is contract (newest first), so a reload lands on the same ledger. That
@@ -153,6 +154,13 @@ function Ledger({ wedding }: { wedding: Wedding }) {
 
   return (
     <Frame
+      /*
+       * THE NUMBER IS READ BESIDE THE LIST, NOT AFTER IT. Both queries mount in
+       * this same commit, so neither waits on the other's response — and neither
+       * one's failure decides the other's, because they are two reads of two
+       * endpoints (docs/api-spec.md § GET /weddings/{weddingId}/headcount).
+       */
+      headcount={<Headcount weddingId={wedding.id} />}
       tools={
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3 md:px-6">
           {/* A fieldset, and outside a form on purpose: it is the element that
@@ -225,10 +233,12 @@ function Ledger({ wedding }: { wedding: Wedding }) {
  */
 function Frame({
   children,
+  headcount,
   tools,
   wedding,
 }: {
   children: ReactNode
+  headcount: ReactNode
   tools: ReactNode
   wedding: Wedding
 }) {
@@ -252,10 +262,10 @@ function Frame({
           <LogoutButton className="flex flex-col items-end gap-2 text-right" />
         </header>
 
-        {/* 인원수 — `#17` — GOES HERE, above the tools and above the list, and
-            nothing stands in for it in the meantime. A placeholder number on
-            this screen is a wrong number, and a skeleton is a promise that a
-            number is on its way when no endpoint answers it yet. */}
+        {/* 인원수 — above the tools and above the list, and inside the pinned
+            block with them: the couple taps attendance while scrolled into the
+            list and has to see WHICH figure moved. */}
+        {headcount}
 
         {tools}
       </div>
