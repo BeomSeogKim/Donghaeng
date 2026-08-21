@@ -4,10 +4,10 @@ import { Navigate } from 'react-router'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { GuestRow } from '../components/GuestRow'
+import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { FilterChip } from '../components/Tag'
 import { type GuestFilters, useGuests } from '../hooks/useGuests'
-import { useLogout } from '../hooks/useLogout'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
 import { createWeddingPath } from '../lib/routes'
 
@@ -74,17 +74,47 @@ function Ledger({ wedding }: { wedding: Wedding }) {
    *
    * `useState` is the bottom rung and this is the only screen that reads it, so
    * it stays here (notes/2026-08-08-decision-frontend-architecture.md).
+   *
+   * EVERY CHIP UPDATES FUNCTIONALLY. A handler that spreads the `filters` it
+   * closed over spreads the value from the render it was created in, and the
+   * other axis is carried in that same object — so the question of whether two
+   * updates can ever be queued together is one this screen does not have to
+   * answer.
    */
   const [filters, setFilters] = useState<GuestFilters>({})
   const guests = useGuests(wedding.id, filters)
   const narrowed = describe(filters)
 
-  /** The four states the list itself can be in, and they are exclusive. */
+  /** The states the list itself can be in, and they are exclusive. */
   function list() {
     if (guests.isPending) return <Notice title="원장을 불러오는 중입니다" />
     if (guests.isError) return <LedgerFailure onRetry={() => void guests.refetch()} />
 
-    if (guests.data.length === 0 && narrowed !== null) {
+    if (guests.data.length > 0) {
+      return (
+        <ul
+          aria-busy={guests.isFetching}
+          className="divide-y divide-line border-y border-line bg-surface"
+        >
+          {guests.data.map((guest) => (
+            <GuestRow guest={guest} key={guest.id} />
+          ))}
+        </ul>
+      )
+    }
+
+    /*
+     * EMPTY IS ONLY EMPTY ONCE THE SERVER HAS SAID SO ABOUT *THESE* FILTERS.
+     * `keepPreviousData` hands back the previous filter's rows while the new
+     * request is in flight, and both notices below name the filters that are
+     * pressed right now — so without this gate, pressing 신부 straight after a
+     * 신랑 that matched nobody would announce "신부측에 아무도 없다" and then
+     * contradict itself when the twelve rows land. An instrument does not
+     * assert something it has not been told.
+     */
+    if (guests.isPlaceholderData) return <Notice title="원장을 불러오는 중입니다" />
+
+    if (narrowed !== null) {
       // A filter must never be a dead end: the way out is on the screen that
       // has nothing on it.
       return (
@@ -103,34 +133,21 @@ function Ledger({ wedding }: { wedding: Wedding }) {
       )
     }
 
-    if (guests.data.length === 0) {
-      /*
-       * Day one for every couple who just made a wedding, so it is a real state
-       * rather than an edge case. It says what it can honestly say and no more:
-       * 하객 추가 (`#135`), the file import and the vendor-email paste are the
-       * actions that fill a ledger, and none of them exists yet — an empty
-       * screen offering a button that does nothing would be worse than one that
-       * admits it. No illustration and no emoji: a tool has no reason to be
-       * cheerful about being empty.
-       */
-      return (
-        <Notice title="아직 등록된 하객이 없습니다">
-          <p className="text-body leading-body text-ink-muted">
-            하객을 추가하는 화면은 아직 준비 중입니다.
-          </p>
-        </Notice>
-      )
-    }
-
+    /*
+     * Day one for every couple who just made a wedding, so it is a real state
+     * rather than an edge case. It says what it can honestly say and no more:
+     * 하객 추가 (`#135`), the file import and the vendor-email paste are the
+     * actions that fill a ledger, and none of them exists yet — an empty screen
+     * offering a button that does nothing would be worse than one that admits
+     * it. No illustration and no emoji: a tool has no reason to be cheerful
+     * about being empty.
+     */
     return (
-      <ul
-        aria-busy={guests.isFetching}
-        className="divide-y divide-line border-y border-line bg-surface"
-      >
-        {guests.data.map((guest) => (
-          <GuestRow guest={guest} key={guest.id} />
-        ))}
-      </ul>
+      <Notice title="아직 등록된 하객이 없습니다">
+        <p className="text-body leading-body text-ink-muted">
+          하객을 추가하는 화면은 아직 준비 중입니다.
+        </p>
+      </Notice>
     )
   }
 
@@ -143,7 +160,10 @@ function Ledger({ wedding }: { wedding: Wedding }) {
           <fieldset aria-label="측" className="flex gap-2">
             <FilterChip
               onClick={() =>
-                setFilters({ ...filters, side: toggle(filters.side, 'GROOM') })
+                setFilters((current) => ({
+                  ...current,
+                  side: toggle(current.side, 'GROOM'),
+                }))
               }
               pressed={filters.side === 'GROOM'}
             >
@@ -151,7 +171,10 @@ function Ledger({ wedding }: { wedding: Wedding }) {
             </FilterChip>
             <FilterChip
               onClick={() =>
-                setFilters({ ...filters, side: toggle(filters.side, 'BRIDE') })
+                setFilters((current) => ({
+                  ...current,
+                  side: toggle(current.side, 'BRIDE'),
+                }))
               }
               pressed={filters.side === 'BRIDE'}
             >
@@ -163,10 +186,10 @@ function Ledger({ wedding }: { wedding: Wedding }) {
           <fieldset aria-label="참석 여부" className="flex gap-2">
             <FilterChip
               onClick={() =>
-                setFilters({
-                  ...filters,
-                  attendance: toggle(filters.attendance, 'ATTENDING'),
-                })
+                setFilters((current) => ({
+                  ...current,
+                  attendance: toggle(current.attendance, 'ATTENDING'),
+                }))
               }
               pressed={filters.attendance === 'ATTENDING'}
             >
@@ -174,10 +197,10 @@ function Ledger({ wedding }: { wedding: Wedding }) {
             </FilterChip>
             <FilterChip
               onClick={() =>
-                setFilters({
-                  ...filters,
-                  attendance: toggle(filters.attendance, 'NOT_ATTENDING'),
-                })
+                setFilters((current) => ({
+                  ...current,
+                  attendance: toggle(current.attendance, 'NOT_ATTENDING'),
+                }))
               }
               pressed={filters.attendance === 'NOT_ATTENDING'}
             >
@@ -209,8 +232,6 @@ function Frame({
   tools: ReactNode
   wedding: Wedding
 }) {
-  const logout = useLogout()
-
   return (
     <main className="min-h-[100dvh] bg-ground text-ink">
       <div className="sticky top-0 z-10 border-b border-line bg-ground">
@@ -228,14 +249,7 @@ function Frame({
               {wedding.groomName} · {wedding.brideName}
             </p>
           </div>
-          <button
-            className={buttonClassName('secondary')}
-            disabled={logout.isPending}
-            onClick={() => logout.mutate()}
-            type="button"
-          >
-            로그아웃
-          </button>
+          <LogoutButton className="flex flex-col items-end gap-2 text-right" />
         </header>
 
         {/* 인원수 — `#17` — GOES HERE, above the tools and above the list, and
@@ -259,6 +273,10 @@ function Frame({
  * so turning it into "that wedding does not exist" on the screen would invent an
  * existence hint the API refuses to give. There is nothing to explain and only
  * something to try again.
+ *
+ * A 401 NEVER GETS HERE. It is not a connection problem and 다시 시도 would
+ * repeat it forever; the client writes the session to `null` on any 401 and the
+ * login screen replaces this one (`lib/queryClient.ts`).
  */
 function LedgerFailure({ onRetry }: { onRetry: () => void }) {
   return (

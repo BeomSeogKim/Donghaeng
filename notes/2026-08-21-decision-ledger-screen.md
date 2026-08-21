@@ -23,10 +23,34 @@ Two consequences worth stating because they are deletions:
   that used to sit on the home screen. `GET /weddings` returning `[]` is what
   makes 최초 1회 decidable, and it is not an error state.
 
-**There is no way to create a second wedding from the app.** The API allows one
-and a person may belong to several; no screen offers it, and the redirect above
-makes the form reachable only when the list is empty. That is v1's answer, not an
-oversight — v1 also has no way to switch between weddings.
+**Both redirects exist, and each is the other's mirror.** 원장 sends a person with
+an empty list to 웨딩 만들기; **웨딩 만들기 sends a person with a non-empty list
+to 원장.** The second one was written into this record before it was written into
+the code, and the round of review on `#148` is what found the gap — corrected
+2026-08-21, and stated here as a pair because either one alone is a loop or a
+hole.
+
+**There is no way to create a second wedding from the app** — founder's call, and
+the guard above is what enforces it. The API allows one and a person may belong to
+several; v1 has no wedding switcher, no delete, and no route that carries a
+`weddingId`, so a second wedding would take `[0]` and leave the first ledger with
+nothing pointing at it. `create.isPending` does not cover this: it is one
+component's state, and the ways in are a bookmark, a typed URL, and a second tab
+still parked on the form after the first one submitted.
+
+**A failed `GET /weddings` on that screen shows neither the form nor a redirect.**
+Not knowing whether they already have a wedding is exactly the case where offering
+the form is expensive, and the cost is asymmetric — a retry costs a tap, a
+wrongly-offered form costs the ledger.
+
+**로그아웃 lives on both screens**, which is also a consequence of the home screen
+going. A person whose list is empty is sent to 웨딩 만들기 and cannot leave it, and
+an empty list is not only 최초 1회: **it is also what a removed membership looks
+like** (docs/api-spec.md § GET /weddings), so that screen can be where someone
+lives rather than a screen they pass through. The button carries its own failure
+message on both, because `POST /auth/logout` always answers 204 — a non-204 means
+the request never arrived and the session is still live, and a button that
+un-disables itself in silence says the opposite.
 
 ## 이름 가나다순 is the client's order — founder's call
 
@@ -96,6 +120,29 @@ A guest mutation invalidates the **middle** key, so a guest added while the
 nesting under `['weddings']` is deliberate: signing out removes every key whose
 first element is not `session`, and a ledger belongs to a wedding.
 
+**That nesting is asserted, not described.** `#135` has not been written and
+`ledgerQueryKey` therefore has no production caller yet, which would have left the
+load-bearing half of this section as a comment for as long as it took someone to
+write the first mutation. `LedgerPage.test.tsx` invalidates the middle key with a
+filter pressed and asserts that the filtered request goes out again and that the
+unfiltered entry behind it is marked stale — so `#135` inherits a tested contract
+rather than a claim.
+
+## `keepPreviousData` may hold rows, but not speak for them
+
+The list keeps the previous filter's rows while the next request is in flight —
+the list is not the headcount, and blanking it on every chip is the screen
+changing its mind in front of the couple.
+
+**The two empty notices do not get the same licence, and gating them was a
+correction** (`#148` review, 2026-08-21). Both name the filters that are pressed
+*now*, while the rows they are speaking about belong to the filters that were
+pressed a moment ago: press 신랑 with no matches and then 신부 with twelve, and the
+screen announced 신부측에 아무도 없다 and then contradicted itself. The same shape
+on the other branch is worse — a 400-row ledger told it is empty. So both are
+gated on `isPlaceholderData`, and while the query is holding someone else's rows
+the screen says only that it is loading.
+
 ## What was deliberately not built
 
 - **The headcount slot is empty.** `#17` is not built and its number does not
@@ -116,16 +163,21 @@ first element is not `session`, and a ledger belongs to a wedding.
   says the ledger is empty and that the add screen is on its way, rather than
   showing a button that does nothing. It is replaced by `#135`.
 
-## Two readings a reviewer may want to check
+## Two readings that went to review, and how they came back
 
-- **The filter chip is 2rem tall, not the 44px tap floor.** `12-tag.html` sets
-  `.filter { min-height: 2rem }` and a component's visual rules come from the
-  part; `--dh-tap-min`'s "floor for anything tappable" is argued in the flow
-  record about the *attendance* chip, and a 44px toolbar pushes the list down on
-  the device the ledger is mostly read on. If that reading is wrong the fix is one
-  class.
-- **A 401 on the ledger read shows the generic failure**, not the login screen.
-  The read path has no `onError`, and writing the session to `null` from inside a
-  `queryFn` was not worth it for a state that resolves on the next window focus
-  (the session refetches) or on a reload. It is worth revisiting when `#135` adds
-  the first mutation on this screen, which does have an `onError`.
+- **The filter chip is 2rem tall, not the 44px tap floor — upheld.**
+  `12-tag.html` sets `.filter { min-height: 2rem }` and a component's visual rules
+  come from the part; `--dh-tap-min`'s "floor for anything tappable" is argued in
+  the flow record about the *attendance* chip, and nothing states a blanket floor.
+  A 44px toolbar pushes the list down on the device the ledger is mostly read on.
+  (The chip's *rest border* was wrong and was corrected in the same round: the
+  part gives `.filter` a transparent border and brings the hairline in on hover.)
+- **A 401 on the ledger read showed the generic failure — that was wrong.** It
+  blamed the connection for a session state, on the screen the couple live on, and
+  the state had no exit: 다시 시도 would 401 forever, `refetchOnWindowFocus` needs
+  a focus event that someone sitting in the tab never produces, and that branch
+  renders outside the frame so there was no 로그아웃 either. **The answer moved to
+  the client** — a `QueryCache`/`MutationCache` `onError` that writes the session
+  to `null` on any `ApiError` 401 — and `useCreateWedding`'s own 401 handler was
+  deleted with it. One status, one answer, in one place
+  (`2026-08-21-decision-query-defaults-and-mutation-ordering.md`).

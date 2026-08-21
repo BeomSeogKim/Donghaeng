@@ -1,4 +1,10 @@
-import { type DefaultOptions, QueryClient } from '@tanstack/react-query'
+import {
+  type DefaultOptions,
+  MutationCache,
+  QueryCache,
+  QueryClient,
+} from '@tanstack/react-query'
+import { sessionQueryKey } from '../hooks/useSession'
 import { ApiError } from './api'
 
 /*
@@ -66,6 +72,36 @@ export const queryClientDefaults = {
   },
 } satisfies DefaultOptions
 
-export function createQueryClient() {
-  return new QueryClient({ defaultOptions: queryClientDefaults })
+/**
+ * THE APP'S ONE ANSWER TO A 401, and it is here because there is exactly one.
+ *
+ * A 401 from any call means "log in again" — never "something went wrong" and
+ * never "check your connection". Writing the session to `null` puts the login
+ * screen up immediately, which is the only exit that state has: the screen a
+ * 401 lands on has no way back on its own, and a 다시 시도 button would 401
+ * forever while `refetchOnWindowFocus` waits for a focus event that a person
+ * sitting in the tab never produces.
+ *
+ * IT IS WIRED TO BOTH CACHES, which is what makes it one answer rather than
+ * two. A read and a write are the same status with the same meaning, and the
+ * failure this closes is a screen that answers a 401 its own way — the ledger
+ * blamed the network for it until 2026-08-21.
+ *
+ * `GET /auth/me` cannot loop through here: its 401 is the ordinary answer for a
+ * signed-out person and is mapped to `null` inside the query, so it never
+ * throws (docs/api-spec.md § GET /auth/me).
+ */
+export function createQueryClient(): QueryClient {
+  const signedOut = (error: Error) => {
+    if (error instanceof ApiError && error.status === 401)
+      client.setQueryData(sessionQueryKey, null)
+  }
+
+  const client = new QueryClient({
+    defaultOptions: queryClientDefaults,
+    queryCache: new QueryCache({ onError: signedOut }),
+    mutationCache: new MutationCache({ onError: signedOut }),
+  })
+
+  return client
 }

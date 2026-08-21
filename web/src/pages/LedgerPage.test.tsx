@@ -1,9 +1,9 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
-import type { Guest } from '../hooks/useGuests'
+import { type Guest, guestsQueryKey, ledgerQueryKey } from '../hooks/useGuests'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
 import { renderWithProviders } from '../test/render'
@@ -63,11 +63,11 @@ function api() {
       ),
     weddings: (respond: () => Response = () => HttpResponse.json<Wedding[]>([WEDDING])) =>
       http.get(`${API}/weddings`, () => respond()),
-    guests: (respond: (url: URL) => Response) =>
-      http.get(`${API}/weddings/:weddingId/guests`, ({ request }) => {
+    guests: (respond: (url: URL) => Response | Promise<Response>) =>
+      http.get(`${API}/weddings/:weddingId/guests`, async ({ request }) => {
         const url = new URL(request.url)
         ledgerRequests.push(url)
-        return respond(url)
+        return await respond(url)
       }),
   }
 }
@@ -344,4 +344,127 @@ it('sends a person with no wedding to 웨딩 만들기 instead of an empty ledge
   // is the branch 최초 1회 exists for — not an error and not an empty ledger.
   expect(await screen.findByRole('heading', { name: '웨딩 만들기' })).toBeVisible()
   expect(calls.ledgerRequests).toHaveLength(0)
+})
+
+/*
+ * `keepPreviousData` keeps the previous filter's rows on screen while the next
+ * request is in flight, and that is deliberate — the list is not the headcount,
+ * and blanking it on every chip is the screen changing its mind in front of the
+ * couple. What it must not do is let a *notice* speak for rows it is only
+ * holding: both empty notices name the filters that are pressed right now, and
+ * the rows behind them belong to the filters that were pressed a moment ago.
+ */
+
+it('does not say a filter matched nobody before the server has answered it', async () => {
+  const calls = api()
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(async (url) => {
+      // 신부측 has twelve people and is slow; everything else has nobody.
+      if (url.searchParams.get('side') !== 'BRIDE') return HttpResponse.json<Guest[]>([])
+      await held
+      return HttpResponse.json<Guest[]>([guest(1, '윤채원', { side: 'BRIDE' })])
+    }),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findByText('아직 등록된 하객이 없습니다')
+
+  await userEvent.click(screen.getByRole('button', { name: '신랑' }))
+  expect(await screen.findByText('신랑측으로 좁혀져 있습니다.')).toBeVisible()
+
+  await userEvent.click(screen.getByRole('button', { name: '신부' }))
+
+  // The rows underneath are still 신랑's zero rows. Nothing has said anything
+  // about 신부측 yet, so the screen may not either — it said so instantly, and
+  // then contradicted itself when the twelve landed.
+  expect(screen.queryByText('신부측으로 좁혀져 있습니다.')).not.toBeInTheDocument()
+  expect(screen.queryByText('조건에 맞는 하객이 없습니다')).not.toBeInTheDocument()
+  expect(screen.getByText('원장을 불러오는 중입니다')).toBeVisible()
+
+  release()
+  expect(await screen.findByTestId('guest-name')).toHaveTextContent('윤채원')
+})
+
+it('does not call the ledger empty while it is holding a filter\u0027s rows', async () => {
+  const calls = api()
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(async (url) => {
+      if (url.search !== '') return HttpResponse.json<Guest[]>([])
+      // The whole ledger, and it is slow — a reload after a filter that matched
+      // nobody, which is the second half of the same bug: 400 people on file
+      // and the screen announcing there is nobody at all.
+      await held
+      return HttpResponse.json<Guest[]>([guest(1, '김영수')])
+    }),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await userEvent.click(await screen.findByRole('button', { name: '신랑' }))
+  await screen.findByText('조건에 맞는 하객이 없습니다')
+
+  await userEvent.click(screen.getByRole('button', { name: '필터 지우기' }))
+
+  expect(screen.queryByText('아직 등록된 하객이 없습니다')).not.toBeInTheDocument()
+  expect(screen.getByText('원장을 불러오는 중입니다')).toBeVisible()
+
+  release()
+  expect(await screen.findByTestId('guest-name')).toHaveTextContent('김영수')
+})
+
+it('sends a 401 on the ledger read back to log in, not to a connection message', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() => problem(401, 'UNAUTHENTICATED')),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  // A 401 is a session state, not a network one: "연결을 확인하고 다시 시도해
+  // 주세요" blames the connection, and 다시 시도 would 401 forever on the screen
+  // the couple live on. The client answers every 401 the same way and the login
+  // screen is the exit (lib/queryClient.ts).
+  expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeVisible()
+  expect(screen.queryByText('원장을 불러오지 못했습니다')).not.toBeInTheDocument()
+})
+
+it('refetches the filtered ledger when the wedding\u0027s ledger key is invalidated', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
+  )
+
+  const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findByTestId('guest-name')
+  await userEvent.click(screen.getByRole('button', { name: '신랑' }))
+  await waitFor(() => expect(calls.ledgerRequests).toHaveLength(2))
+
+  // WHAT `#135` AND EVERY GUEST MUTATION AFTER IT WILL DO: invalidate the middle
+  // key, not the filter combination that happens to be on screen. Asserted here
+  // rather than left as a comment, so the contract those inherit is a tested one
+  // (notes/2026-08-21-decision-ledger-screen.md § Query keys).
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: ledgerQueryKey(12) })
+  })
+
+  await waitFor(() => expect(calls.ledgerRequests).toHaveLength(3))
+  expect(calls.lastLedgerRequest().searchParams.get('side')).toBe('GROOM')
+  // And the unfiltered list behind it — the one a guest added under a pressed
+  // chip would otherwise leave stale — is marked for refetching too.
+  expect(queryClient.getQueryState(guestsQueryKey(12, {}))?.isInvalidated).toBe(true)
 })

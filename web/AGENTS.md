@@ -171,11 +171,12 @@ what `web/` is required to do with them.
 - **Ledger + headcount on one screen is the first fixed point of the screen
   design** — splitting them turns one action into tap → navigate → check →
   return, which is exactly what a spreadsheet with a SUM already does.
-- **Search belongs on the ledger, beside the side/attendance filters** — and it
-  is not the same control as them. Filters narrow a list; they do not find a
-  person. The real trigger is "김영수 못 온대" and that needs two syllables, not
-  a 400-row scroll — **the second most-used control after the attendance chip.**
-  (Which parts these map to is `design/AGENTS.md`.)
+- **Search is `#16` and is post-v1 — do not build it, and when it lands it goes
+  on the ledger beside the side/attendance filters.** It is not the same control
+  as them: filters narrow a list, they do not find a person, and the real
+  trigger is "김영수 못 온대". Until then **이름 가나다순 is how a couple finds
+  someone in 400 rows**, which is why the sort is not optional. (Which parts
+  these map to is `design/AGENTS.md`.)
 - **유아 인원 must be reachable on mobile.** It renders as its own count beside
   the 식대 인원, via the meal-type breakdown (`#18`) — which this makes **not
   PC-rail-only**, because if 유아 인원 is how a couple reads their contract,

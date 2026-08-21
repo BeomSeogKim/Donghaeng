@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
-import type { Wedding } from '../hooks/useCreateWedding'
 import type { Session } from '../hooks/useSession'
+import type { Wedding } from '../hooks/useWeddings'
 import { renderWithProviders } from '../test/render'
 import { server } from '../test/server'
 
@@ -36,6 +36,12 @@ function recording() {
         return response()
       })
     },
+    logout(response: () => Response) {
+      return http.post(`${API}/auth/logout`, ({ request }) => {
+        seen.push({ request, body: null })
+        return response()
+      })
+    },
     /**
      * Refuses what the API refuses. A state-changing request without
      * `Content-Type: application/json` is answered 415 and never reaches the
@@ -59,29 +65,37 @@ function recording() {
 const signedIn = () => HttpResponse.json<Session>({ id: 12, name: '김테스터' })
 
 /**
- * The two reads 원장 makes the moment the couple land on it. The create writes
- * its wedding into the list cache so the redirect back to 웨딩 만들기 never
- * fires, but the ledger still asks the server, and an unhandled request is an
- * error in this suite.
+ * `GET /weddings` as the server actually behaves: empty until a create succeeds,
+ * and holding the wedding afterwards.
+ *
+ * IT HAS TO BE STATEFUL NOW THAT THE ROUTE IS GUARDED. This screen reads the
+ * list before it renders anything and sends a person who already has a wedding
+ * to 원장, so a double that answered "you have one" would redirect the form away
+ * before a test could fill it in — and one that answered `[]` forever would
+ * bounce the couple straight back here from the ledger they just landed on.
  */
-const ledger = () => [
-  http.get(`${API}/weddings`, () =>
-    HttpResponse.json<Wedding[]>([
-      { id: 12, weddingDate: '2026-10-10', groomName: '김신랑', brideName: '이신부' },
-    ]),
-  ),
-  http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json([])),
-]
+function weddingStore(...stored: Wedding[]) {
+  return {
+    list: () =>
+      http.get(`${API}/weddings`, () => HttpResponse.json<Wedding[]>([...stored])),
+    /**
+     * 201, echoing back what was stored — which is not always what was sent,
+     * since the server trims the names (docs/api-spec.md § POST /weddings).
+     */
+    create: (body: unknown) => {
+      const wedding = { id: 12, ...(body as Omit<Wedding, 'id'>) }
+      stored.unshift(wedding)
+      return HttpResponse.json<Wedding>(wedding, { status: 201 })
+    },
+  }
+}
 
-/**
- * 201, echoing back what was stored — which is not always what was sent, since
- * the server trims the names (docs/api-spec.md § POST /weddings).
- */
-const created = (body: unknown) =>
-  HttpResponse.json<Wedding>(
-    { id: 12, ...(body as Omit<Wedding, 'id'>) },
-    { status: 201 },
-  )
+/** The list of a person who has not made a wedding yet — the form's own case. */
+const noWedding = () => weddingStore().list()
+
+/** 원장's other read. An unhandled request is an error in this suite. */
+const guests = () =>
+  http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json([]))
 
 /**
  * A problem document as the API writes it. `detail` is included and deliberately
@@ -133,9 +147,71 @@ it('sends someone without a session to the login screen, not to the form', async
   expect(screen.queryByLabelText('예식일')).not.toBeInTheDocument()
 })
 
+it('sends a person who already has a wedding to 원장 instead of the form', async () => {
+  const calls = recording()
+  const store = weddingStore({
+    id: 12,
+    weddingDate: '2026-10-10',
+    groomName: '김신랑',
+    brideName: '이신부',
+  })
+  server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
+
+  // A bookmark, a typed URL, or a second tab still parked on the form after the
+  // first one submitted. v1 has no switcher and no delete, so a second wedding
+  // would take `[0]` and leave the first ledger with no route to it at all.
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+
+  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(screen.queryByLabelText('예식일')).not.toBeInTheDocument()
+  expect(calls.created).toHaveLength(0)
+})
+
+it('does not offer the form when it could not find out whether they have a wedding', async () => {
+  const calls = recording()
+  server.use(
+    calls.me(signedIn),
+    http.get(`${API}/weddings`, () =>
+      problem(500, 'INTERNAL_ERROR', 'Internal Server Error'),
+    ),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+
+  // The cost is asymmetric: a retry costs a tap, and a form offered to someone
+  // who already has a wedding costs them the ledger.
+  expect(await screen.findByText('웨딩 정보를 불러오지 못했습니다')).toBeVisible()
+  expect(screen.queryByLabelText('예식일')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '다시 시도' })).toBeVisible()
+})
+
+it('lets a person with no wedding sign out, because this screen is where they are parked', async () => {
+  const calls = recording()
+  let signedOut = false
+  server.use(
+    calls.me(() => (signedOut ? unauthenticated() : signedIn())),
+    calls.logout(() => {
+      signedOut = true
+      return new HttpResponse(null, { status: 204 })
+    }),
+    noWedding(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await screen.findByLabelText('예식일')
+
+  // An empty list is also what a removed membership looks like, so this screen
+  // is not only 최초 1회 — it can be where someone lives, and a screen a
+  // signed-in person cannot leave is not a screen (docs/api-spec.md § GET /weddings).
+  await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
+
+  expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeVisible()
+})
+
 it('creates a wedding from a date and two names, and asks for nothing else', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created), ...ledger())
+  const store = weddingStore()
+  server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   await fillForm()
@@ -163,7 +239,7 @@ it('creates a wedding from a date and two names, and asks for nothing else', asy
 
 it('trims the names it sends, because the server measures length before trimming', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created))
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   await fillForm({ groom: '  김신랑 ', bride: '이신부  ' })
@@ -181,7 +257,7 @@ it('trims the names it sends, because the server measures length before trimming
 
 it('does not spend a round trip on a name that is only whitespace', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created))
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   await fillForm({ groom: '   ' })
@@ -193,7 +269,7 @@ it('does not spend a round trip on a name that is only whitespace', async () => 
 
 it('names the field that is empty rather than failing the whole form at once', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created))
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   await fillForm({ date: '', groom: '김신랑', bride: '' })
@@ -208,7 +284,7 @@ it('names the field that is empty rather than failing the whole form at once', a
 
 it('holds a name to the same 100 characters the server does', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created))
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   await fillForm({ groom: '김'.repeat(101) })
@@ -220,7 +296,7 @@ it('holds a name to the same 100 characters the server does', async () => {
 
 it('accepts a wedding date in the past, exactly as the API does', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created))
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   // A couple building the ledger after the fact is a real case, and there is no
@@ -245,6 +321,7 @@ for (const code of ['VALIDATION_FAILED', 'MALFORMED_REQUEST_BODY']) {
     server.use(
       calls.me(signedIn),
       calls.weddings(() => problem(400, code, 'Bad Request')),
+      noWedding(),
     )
 
     renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
@@ -270,6 +347,7 @@ it('sends an expired session back to log in instead of reporting an error', asyn
       signedOut = true
       return unauthenticated()
     }),
+    noWedding(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
@@ -287,6 +365,7 @@ it('reports a failed create without inventing a reason for it', async () => {
   server.use(
     calls.me(signedIn),
     calls.weddings(() => problem(500, 'INTERNAL_ERROR', 'Internal Server Error')),
+    noWedding(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
@@ -307,13 +386,15 @@ it('creates one wedding when the button is pressed twice', async () => {
   const held = new Promise<void>((resolve) => {
     release = resolve
   })
+  const store = weddingStore()
   server.use(
     calls.me(signedIn),
     calls.weddings(async (body) => {
       await held
-      return created(body)
+      return store.create(body)
     }),
-    ...ledger(),
+    store.list(),
+    guests(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })

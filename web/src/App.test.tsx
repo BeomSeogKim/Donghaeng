@@ -183,6 +183,30 @@ it('opens the ledger for a signed-in person, and lets them sign out', async () =
   expect(logout?.headers.get('Content-Type')).toBe('application/json')
 })
 
+it('says the person is still signed in when the sign-out never reached the API', async () => {
+  const calls = recording()
+  server.use(
+    calls.me(() => signedIn('김테스터')),
+    // `POST /auth/logout` always answers 204 — no cookie, expired, already
+    // revoked, all of them mean "not logged in on this device". So a non-204 is
+    // not a refusal: it is the request never arriving, and the session on the
+    // server is still live (docs/api-spec.md § POST /auth/logout).
+    calls.logout(() => HttpResponse.error()),
+    ...ledger(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
+
+  // The couple share a phone. A button that un-disables itself and says nothing
+  // tells them they signed out when they did not.
+  expect(
+    await screen.findByText('로그아웃하지 못했습니다. 연결을 확인하고 다시 눌러 주세요.'),
+  ).toBeVisible()
+  expect(screen.getByRole('heading', { name: '원장' })).toBeVisible()
+  expect(screen.queryByRole('link', { name: '구글로 로그인' })).not.toBeInTheDocument()
+})
+
 it('refuses a sign-out that omits the JSON content type, exactly as the API does', async () => {
   const calls = recording()
   server.use(calls.logout(() => new HttpResponse(null, { status: 204 })))

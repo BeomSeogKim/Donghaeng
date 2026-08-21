@@ -48,7 +48,7 @@ const CHIP =
 
 const CHIP_STATES = {
   on: 'border-primary bg-primary text-ink-on-accent',
-  off: 'border-line bg-surface-sunken text-ink-muted hover:border-line-strong',
+  off: 'border-transparent bg-surface-sunken text-ink-muted hover:border-line-strong',
 } as const
 
 /**

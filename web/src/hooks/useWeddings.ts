@@ -7,7 +7,15 @@ import type { paths } from '../lib/api-types.gen'
 // no handler declares `produces` (docs/api-spec.md § The generated OpenAPI
 // document) — consume it as written; correcting it is `#66`.
 
-/** A wedding as stored: the date and the two names, and nothing else yet. */
+/**
+ * A wedding as stored: the date and the two names, and nothing else yet.
+ *
+ * THIS IS THE ONLY DECLARATION OF IT. `POST /weddings` returns the same
+ * `WeddingResponse` — one type for all three wedding endpoints, and the spec
+ * says so in as many words (docs/api-spec.md § GET /weddings) — and the create
+ * writes its result straight into this list, so a second alias would be a
+ * `setQueryData` across a seam nothing checks.
+ */
 export type Wedding =
   paths['/weddings']['get']['responses'][200]['content']['*/*'][number]
 
