@@ -30,7 +30,7 @@ Auth: session token, membership in the wedding
 
 Request
 ```json
-{ "attendance": "ATTENDING | NOT_ATTENDING | UNKNOWN" }
+{ "attendance": "ATTENDING | NOT_ATTENDING" }
 ```
 
 Response 200
@@ -743,11 +743,14 @@ Response 200
 ```
 
 The same shape `POST /weddings` returns, deliberately — one `WeddingResponse` for
-both, so a client caches one type. **No `guaranteedHeadcount`** here either: nothing
-sets it yet, and it arrives with `#8`, which is also where 설정 will read it.
+both, so a client caches one type. **No `guaranteedHeadcount`** here either, and that
+is a statement about this shape rather than about the number: 보증인원 is published
+by `GET /weddings/{weddingId}/headcount`, beside the 식대 인원 it is read against.
+`WeddingResponse` gains it with `#8`, the screen that can set it.
 
 Carries the recomputed aggregate: **no** — it is a read, and there is no aggregate
-on this resource. The headcount is its own endpoint (`#17`).
+on this resource. The headcount is its own endpoint,
+`GET /weddings/{weddingId}/headcount`.
 
 Errors
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
@@ -833,21 +836,25 @@ Response 201
     "accessibilityNote": null,
     "expectedAttending": true,
     "expectedPartySize": 1
-  }
+  },
+  "headcount": { "mealHeadcount": 128 }
 }
 ```
 
 The row **as stored**, which is not always what was sent — see the trimming rule
 below. There is no `Location` header and no `GET` for a single guest yet.
 
-Carries the recomputed aggregate: **not yet, and the shape already has room for
-it.** The mutation answers `{ "guest": … }` today and
-`{ "guest": …, "headcount": … }` when `#17` lands — **an added member, never a
-changed shape**, and the member is absent rather than `null` until then
-(`notes/2026-08-20-decision-mutation-response-envelope.md`). `web/` should read
-`response.guest` from the start and must not unwrap it; the same envelope is what
-`#12`'s edit and the attendance toggle return. Until `#17`, a screen that shows a
-number refetches it.
+Carries the recomputed aggregate: **yes — `headcount`** (added 2026-08-21, `#151`).
+It is the same object `GET /weddings/{weddingId}/headcount` returns — including its
+`guaranteedHeadcount`, which is missing from the example above because that couple
+has not set one — computed after this write and inside the same transaction, so it
+already counts the guest that was just added. **Render it; do not refetch the number after a create.** `web/` reads
+`response.guest` and `response.headcount` and must not unwrap the envelope — the
+same shape is what `#12`'s edit and the attendance toggle return.
+
+That member arrived as an **addition** to `{ "guest": … }`, which is why the
+one-member envelope shipped before there was anything to put beside it
+(`notes/2026-08-20-decision-mutation-response-envelope.md`).
 
 Errors
 - 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only or over 100
@@ -874,10 +881,9 @@ Eight things the caller should not have to infer.
   entry is not required forever: the edit endpoint (`#12`, `#8`) changes it. The add
   sheet should therefore make side a two-option control, and may pre-select one, but
   the pre-selection is a frontend affordance and not this endpoint's promise.
-- **The confirmed slots are not written and are not published.** Couple input writes
-  the *expected* slots only; `confirmedAttending` and `confirmedPartySize` stay
-  `null` on the row, and `null` there means **UNKNOWN — never zero and never 불참**.
-  They join `GuestResponse` with the endpoint that can set them (`#12`, `#23`).
+- **The confirmed slots are never written in v1, by this endpoint or any other.**
+  See "참석 여부는 두 상태뿐" under `GET /weddings/{weddingId}/headcount` — that is
+  the whole rule and it is stated once, there.
 - **`expectedPartySize` is the attending headcount including the guest**, not a
   companion count. A couple bringing one guest sends `2`. **A party of zero is not a
   party**: 불참 is `expectedAttending: false`, and a size of `0` is a 400.
@@ -978,8 +984,9 @@ never a 404.
 Carries the recomputed aggregate: **no, and this is not the exception the rule
 warns about.** The `{resource, headcount}` envelope is a *mutation* rule
 (`notes/2026-08-20-decision-mutation-response-envelope.md`); this is a read, and the
-headcount is its own endpoint (`#17`). Until `#17` exists, a screen that shows a
-number refetches it.
+number is its own endpoint — `GET /weddings/{weddingId}/headcount`, below. **원장
+화면 opens both**, in parallel, and after a mutation it takes the number from the
+mutation's own response rather than calling either again.
 
 #### It does not paginate, and it will not for v1
 
@@ -1034,33 +1041,25 @@ does nothing.
 **The confirmed answer when there is one, and the couple's expected value
 otherwise** — per guest, `confirmed`, else `expected`.
 
-**What the headcount will do with attendance is not settled, and this is a
-constraint on it rather than a description of it.** 식대 인원 is a sum of per-guest
-meal counts (`notes/2026-08-05-design-meal-headcount.md` §1); whether and how it
-gates on attendance first is `#17`'s, and the founder has been asked. What already
-binds is that 원장과 인원수는 한 화면 — a guest shown under the 참석 chip may not be
-a guest the number treats as 불참 — so **whatever `#17` reads attendance through has
-to be this same fallback.** If it ends up reading something else, this filter is
-what changes, and this entry with it.
+**The headcount reads attendance through the same expression** (settled 2026-08-21,
+`#151`, `notes/2026-08-21-decision-the-headcount-endpoint.md`): it gates on
+attendance first, per guest, on this same fallback. That is not a coincidence to
+rely on loosely — 원장과 인원수는 한 화면이라 a guest shown under the 참석 chip may
+never be a guest the number treats as 불참, and a test asserts the two agree rather
+than asserting either one's SQL.
 
 For `web/` today the consequence is small and worth stating plainly: every guest has
-an `expectedAttending`, no endpoint writes a confirmed value yet (`#13`), so until
-then this filter selects on `expectedAttending` and the chips are exact.
+an `expectedAttending` and nothing in v1 writes a confirmed value, so this filter
+selects on `expectedAttending` and the chips are exact.
 
-**There is no `UNKNOWN` value, and its absence is deliberate.** `expectedAttending`
-is always present, so the value this filters on is never unknown. 아직 모르는 N명 —
-the guests with no *confirmed* answer — is a **second, overlapping axis** (a 참석
-guest can also be 미확인), so it cannot be a third value of this parameter; if the
-product ever wants that chip it arrives as its own parameter, and `?attendance=UNKNOWN`
-is a 400 today.
+**There is no `UNKNOWN` value, and its absence is deliberate.** 참석 여부는 참석·불참
+둘뿐 — see the headcount entry below. `expectedAttending` is always present, so the
+value this filters on is never unknown, and `?attendance=UNKNOWN` is a 400.
 
-#### The confirmed slots are still not published
+#### The confirmed slots are not published, and are never written
 
 `confirmedAttending` and `confirmedPartySize` are not members of `GuestResponse`,
-here or anywhere — nothing in v1 writes them yet, and they join the shape with the
-endpoint that can (`#13`, `#12`). When they do, **`null` there means UNKNOWN —
-never zero, never 불참**, exactly as `POST /weddings/{weddingId}/guests` already
-says. They will be added members on an existing shape, so nothing breaks.
+here or anywhere. See "참석 여부는 두 상태뿐" in the headcount entry below.
 
 Errors
 - 400 `BAD_REQUEST` — a `side` or `attendance` value outside its set, **or either
@@ -1081,3 +1080,113 @@ Three things this endpoint does **not** do:
   list it already holds.
 - **It does not write.** In particular it writes no `GuestChange` row — the audit
   log records changes, and reading is not one.
+
+### `GET /weddings/{weddingId}/headcount`
+
+Status: active (added 2026-08-21, `#151` — the backend half of `#17`)
+Auth: session cookie **and membership in this wedding** — see "Being scoped to a
+wedding" above.
+
+인원수 — the number pinned to the top of the 원장 screen, and the one the couple
+takes to their venue. **Two numbers, and there is no third.**
+
+원장 and 인원수 are one screen but two responses: `GET .../guests` is a read and
+carries no aggregate, so the screen opens both. **After a mutation, take the number
+from the mutation's own response** (`{ "guest": …, "headcount": … }`) rather than
+calling this again — that is what keeps the row and the total from disagreeing for a
+round trip.
+
+Response 200
+```json
+{ "mealHeadcount": 128, "guaranteedHeadcount": 150 }
+```
+
+| Member | Type | Meaning |
+|---|---|---|
+| `mealHeadcount` | integer, always present | 식대 인원 — how many people we currently expect to eat |
+| `guaranteedHeadcount` | integer, **omitted when not set** | 보증인원, the number the couple contracted with their venue |
+
+**`mealHeadcount` is `0` for a ledger with nobody in it**, and that is a 200 — the
+first screen a newly created wedding shows.
+
+#### 보증인원 is the venue's number, and is absent until they have one
+
+**When the couple has not agreed one, the member is not in the response at all** —
+not `null`, not `0`. `0` would read as a contract for nobody, and a couple signs up
+long before they book a venue. The generated TypeScript types it
+`guaranteedHeadcount?: number | null`; the server never sends `null`, so
+`h.guaranteedHeadcount == null` is the one check to write, and it means **"no number
+yet — render only the 식대 인원"**. `#8` is the screen that will set it.
+
+**We do not send a comparison, and we never will.** No difference, no percentage, no
+recommended number, no "you are 12 over". How far below an estimate a couple should
+commit is a function of their venue's buffer and their own temperament, and we know
+neither — 보증인원 is the venue's number, never ours. **대비 계산은 클라이언트의
+뺄셈이다**: if the screen shows a difference, the client subtracts two numbers this
+response already gave it.
+
+#### 참석 여부는 두 상태뿐 — and the confirmed slots are never written in v1
+
+_The single statement of this; the guest entries above point here._
+
+**참석 · 불참, and nothing else** (founder, 2026-08-21,
+`notes/2026-08-21-decision-attendance-is-two-states.md`). There is no "미확인"
+guest, so:
+
+- **This response has no 미확인 member — absent, not zero, not null.** If you have
+  read `notes/2026-08-05-design-meal-headcount.md` §1, the "아직 모르는 N명" beside
+  the number is **withdrawn**, along with the "미확인 인원" that replaced 응답률 in
+  §4. Do not build a chip, a list or a badge for it.
+- **`confirmedAttending` and `confirmedPartySize` are never written by any v1
+  endpoint**, and are published by none. `expectedAttending` **is** the attendance —
+  it is what `#13`'s 참석 토글 will write, and what this number gates on. The columns
+  still exist and are inert; **do not build anything that expects a value in them.**
+
+If real couples ask "이 숫자 중 몇 명이 확실한 거냐", the second slot comes back — as
+a write path, a screen and a spec change announced here, never as a member that
+quietly appears.
+
+#### What the number counts, exactly
+
+    식대 인원 = Σ over live guests of this wedding, who are 참석, of expectedPartySize
+
+Five things follow, and each one is asserted by a test rather than described:
+
+- **A 불참 guest contributes zero, whatever their party size says.** Attendance is
+  read before party size; the size is kept rather than erased so that flipping back
+  to 참석 restores it (`notes/2026-08-20-decision-guest-entry-side-and-companions.md`
+  §3).
+- **`expectedPartySize` is the whole party including the guest**, so a couple
+  bringing one companion adds 2. A companion has no attendance of their own — they
+  follow the head guest.
+- **A soft-deleted guest contributes zero.** The couple's own deletions leave the
+  number exactly as the ledger shows it.
+- **Another wedding's guests contribute zero.** One person may belong to several
+  weddings; each ledger has its own number.
+- **The guests under `?attendance=ATTENDING` are exactly the guests this number
+  counts.** 원장과 인원수는 한 화면, so the chip and the total may never disagree.
+
+#### 유아 인원 and per-meal-type counts are not here yet
+
+Today the number sums party sizes, because meal types (`#10`) and per-guest meal
+counts (`#14`) are not built. **When they land this endpoint gains members and this
+entry changes** — the rule will be "a guest's per-type counts if they have any, else
+their party size" — and 유아 인원 will stand **beside** the 식대 인원 as its own
+count, **never folded into it**: a venue's child pricing is something we know exactly
+as well as we know its buffer, which is not at all
+(`notes/2026-08-11-decision-deletion-and-infant-meals.md`). Nothing about the
+existing two members changes when that happens.
+
+Errors
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an
+  id that is not a number. One answer for all four.
+
+Two things this endpoint does **not** do:
+
+- **It does not write**, and in particular writes no `GuestChange` row. Reading a
+  number is not a change.
+- **It does not break the number down.** No 측, no 그룹, no per-category subtotals.
+  그룹 is an aggregation axis the couple reads (`notes/2026-08-06-design-ledger-and-import.md`
+  §1) and a breakdown endpoint is not filed; a client that wants one today has the
+  whole ledger from `GET .../guests` and can fold it itself.

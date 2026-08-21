@@ -19,6 +19,7 @@ see that file's `Rules` section for the admission test.
 | Record | What it settles |
 |---|---|
 | `2026-08-21-decision-two-accounts-and-the-v1-recut.md` | 커플은 두 계정이고 한 사람은 웨딩 하나에만 속한다; 초대는 링크; 유아식은 `#9`와 맞바꿔 `post-v1`로 |
+| `2026-08-21-decision-attendance-is-two-states.md` | 참석 여부는 참석·불참 둘뿐 — 두 번째 슬롯과 함께 "아직 모르는 N명"도 내려간다 |
 | `2026-08-19-decision-launch-date-and-google-only.md` | **Launch is 2026-08-31.** v1 ships on Google alone; the "does this block v1?" gate |
 | `2026-08-11-decision-deletion-and-infant-meals.md` | 유아식 does not adjust 보증인원; deletion cannot trigger `GuestChange` retention |
 | `2026-08-11-decision-import-row-rejection.md` | A bad 관계 rejects the row, not the file — supersedes the synonym table |
@@ -45,6 +46,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-21-decision-the-headcount-endpoint.md` | 인원수는 참석을 먼저 읽고 원장 필터와 같은 식을 쓴다; 보증인원은 비었으면 멤버가 없다; 집계는 `guest/`에서 계산한다 |
 | `2026-08-20-decision-the-ledger-read-and-its-filters.md` | 원장 목록은 페이지를 나누지 않는다; 입력 순서가 계약이고, 참석 필터는 인원수가 세는 값을 읽는다 |
 | `2026-08-20-decision-row-concurrency-and-the-audit-trail.md` | 같은 컬럼 경쟁은 마지막 쓰기가 이기되 덮인 값은 `guest_change`에 남는다; `@Version` 없음, 상대적 변경 금지 |
 | `2026-08-20-decision-listing-the-callers-weddings.md` | `GET /weddings` answers 최초 1회 from the session; a scopeless wedding endpoint is named in an allowlist, never inferred from the path |

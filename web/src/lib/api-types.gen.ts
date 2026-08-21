@@ -29,6 +29,10 @@ export interface paths {
     /** Add a guest to the ledger */
     post: operations["createGuest"];
   };
+  "/weddings/{weddingId}/headcount": {
+    /** The wedding's 식대 인원, and its 보증인원 when one is set */
+    get: operations["readHeadcount"];
+  };
 }
 
 export type webhooks = Record<string, never>;
@@ -95,6 +99,7 @@ export interface components {
     };
     readonly GuestMutationResponse: {
       readonly guest: components["schemas"]["GuestResponse"];
+      readonly headcount: components["schemas"]["HeadcountResponse"];
     };
     readonly GuestResponse: {
       readonly accessibilityNote?: string | null;
@@ -110,6 +115,12 @@ export interface components {
       readonly name: string;
       /** @enum {string} */
       readonly side: "GROOM" | "BRIDE";
+    };
+    readonly HeadcountResponse: {
+      /** Format: int32 */
+      readonly guaranteedHeadcount?: number | null;
+      /** Format: int32 */
+      readonly mealHeadcount: number;
     };
     readonly MeResponse: {
       /** Format: int64 */
@@ -313,6 +324,34 @@ export interface operations {
       400: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller is not a member of it, and when it has been deleted. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** The wedding's 식대 인원, and its 보증인원 when one is set */
+  readHeadcount: {
+    parameters: {
+      path: {
+        weddingId: number;
+      };
+    };
+    responses: {
+      /** @description The recomputed number. `mealHeadcount` is 0 for a ledger with nobody in it, and `guaranteedHeadcount` is absent until the couple has agreed one with their venue. */
+      200: {
+        content: {
+          readonly "*/*": components["schemas"]["HeadcountResponse"];
         };
       };
       /** @description No session, or an expired or revoked one. */

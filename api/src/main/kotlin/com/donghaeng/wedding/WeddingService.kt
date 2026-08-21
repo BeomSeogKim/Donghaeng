@@ -103,4 +103,27 @@ internal class WeddingService(
     @Transactional(readOnly = true)
     fun read(weddingId: Long): WeddingResponse =
         weddings.findByIdAndDeletedAtIsNull(weddingId)?.toWeddingResponse() ?: throw WeddingNotFoundException()
+
+    /**
+     * 보증인원, for the one caller outside this package that needs it: the headcount
+     * (`#151`), which is computed in `guest/` and may not read [Wedding] or
+     * [WeddingRepository] itself. **This is that declared read contract**, the cost
+     * notes/2026-08-17-decision-first-domain-endpoint-shape.md said the first
+     * cross-domain read would have to pay, and paying it is what keeps the two
+     * packages' arrow pointing one way
+     * (notes/2026-08-21-decision-the-headcount-endpoint.md §3).
+     *
+     * **Takes the resolved [WeddingScope], never a bare id**, for the reason
+     * `HeadcountService.of` does: this is exported across a package boundary, so a
+     * `Long` parameter would make "read the 보증인원 of a wedding the caller has no
+     * claim on" a mistake that compiles.
+     *
+     * **`null` is "the couple has not agreed a number with their venue"**, and the
+     * caller publishes it by omitting the member rather than by sending a zero. It is
+     * also what a wedding deleted between the resolver and this read returns, which
+     * needs no separate answer: the number beside it is then a headcount of a ledger
+     * nobody can reach, and the next request is a 404 like every other one.
+     */
+    @Transactional(readOnly = true)
+    fun guaranteedHeadcountOf(wedding: WeddingScope): Int? = weddings.findByIdAndDeletedAtIsNull(wedding.id)?.guaranteedHeadcount
 }

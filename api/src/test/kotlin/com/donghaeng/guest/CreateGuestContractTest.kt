@@ -128,18 +128,26 @@ internal class CreateGuestContractTest : GuestFixture() {
     }
 
     @Test
-    fun `the response is the changed row under a guest member, and carries no headcount yet`() {
-        // The shape `#17` fills in rather than the shape it would have to replace:
-        // `web/` generates its types from this, so `{guest}` gaining a `headcount`
-        // is additive where a bare GuestResponse becoming `{guest, headcount}` is a
-        // frontend build break. `docs/api-spec.md` says the same to the frontend.
+    fun `the response is the changed row and the number it moved`() {
+        // The envelope `#151` filled in rather than replaced: `web/` generates its
+        // types from this, so `{guest}` GAINING a `headcount` is additive where a
+        // bare GuestResponse becoming `{guest, headcount}` would have been a
+        // frontend build break (notes/2026-08-20-decision-mutation-response-envelope.md).
+        //
+        // The number is asserted here as well as in HeadcountContractTest, and for a
+        // different reason: it is read inside the write transaction, so a headcount
+        // computed a moment too early would answer 0 for the very guest that was
+        // just added — the ledger and the total disagreeing on one screen.
         val session = login()
         val weddingId = createWedding(session)
 
-        val body = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""").json()
+        val body = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":3}""").json()
 
-        assertThat(body.fieldNames().asSequence().toList()).containsExactly("guest")
-        assertThat(body.has("headcount")).isFalse()
+        assertThat(body.fieldNames().asSequence().toList()).containsExactlyInAnyOrder("guest", "headcount")
+        assertThat(body["headcount"]["mealHeadcount"].asInt()).isEqualTo(3)
+        // 보증인원 is the venue's number and nothing in v1 sets it, so the member is
+        // absent — never a null, and never a zero.
+        assertThat(body["headcount"].has("guaranteedHeadcount")).isFalse()
     }
 
     @Test
