@@ -48,6 +48,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-22-decision-partial-update-shape.md` | 생략은 안 건드림, `null`은 지움; 보증인원은 다시 비울 수 있다; 집계를 싣는 뮤테이션은 `guest/`에서 조립된다; `WeddingResponse`는 보증인원을 싣지 않는다 |
 | `2026-08-21-decision-one-wedding-per-person.md` | 두 번째 웨딩은 409 `ALREADY_IN_A_WEDDING`; 동시 요청은 자문 잠금이 막는다(유니크 인덱스는 대표의 DDL); `GET /weddings`는 배열로 남되 원소는 많아야 하나 |
 | `2026-08-21-decision-the-headcount-endpoint.md` | 인원수는 참석을 먼저 읽고 원장 필터와 같은 식을 쓴다; 보증인원은 비었으면 멤버가 없다; 집계는 `guest/`에서 계산한다 |
 | `2026-08-20-decision-the-ledger-read-and-its-filters.md` | 원장 목록은 페이지를 나누지 않는다; 입력 순서가 계약이고, 참석 필터는 인원수가 세는 값을 읽는다 |

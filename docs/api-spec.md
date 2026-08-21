@@ -602,6 +602,50 @@ copy. Both answer from the session alone because neither has a wedding in mind y
 anything that reads or writes a wedding's *contents* puts the id in the path, where
 the seat walk above checks it.
 
+## Partial updates
+
+_Added 2026-08-22 (`#173`). Applies to every `PATCH` in this file — there is one
+today, and `#12`, `#13` and `#175` are written to the same rule._
+
+**A `PATCH` body carries only what is changing.** Every member is optional, and a
+member that is not in the body is **not written** — not rewritten with the value it
+already had, not touched at all. That is what lets one partner edit 예식일 while the
+other is editing something else on the same row without either of them blind-writing
+the other's field.
+
+**Omitting a member and sending it as `null` are different requests.**
+
+| What the client sends | What it means |
+|---|---|
+| the member is not in the body | leave what is stored alone |
+| `"member": null` | **clear it** — go back to having no value |
+| `"member": <value>` | store this |
+
+This is the one place the API contradicts itself deliberately, and it is worth
+reading twice: on a **create**, `POST /weddings/{weddingId}/guests` says an omitted
+member and a `null` mean exactly the same thing, because both take the column's
+default. On an **update** they cannot, because there is a stored value for them to
+disagree about.
+
+**`null` is the only spelling of "clear".** An empty string, a blank string and an
+empty array are **not** ways to empty a member — each is a **400
+`MALFORMED_REQUEST_BODY`**, because the caller sent a value and the value could not be
+read. This matters to a form: a number input the couple has blanked serialises to
+`""` under `JSON.stringify`, and that request is refused rather than silently
+clearing 보증인원. **Send `null`, or leave the member out.**
+
+**Not every member can be cleared.** A member backed by a value the resource always
+has — 예식일, a 하객's 이름 — answers `null` with **400 `VALIDATION_FAILED`**. Each
+endpoint's entry says which of its members are clearable; the rule is never "try it
+and see".
+
+**An empty body `{}` is legal**: it changes nothing, answers 200 with the current
+state, and does not mark the row as updated. `web/` need not special-case a form
+submitted with nothing edited.
+
+**A `PATCH` is a mutation**, so it sends `Content-Type: application/json` like every
+other one, and its response carries the recomputed aggregate.
+
 ## Endpoints
 
 _The error contract and the authentication section above are live and binding for
@@ -720,7 +764,8 @@ Eight things are decided here rather than left to the caller to infer.
   behind them yet.
 - **보증인원 is not asked, and cannot be sent.** Couples sign up before booking a
   venue, so at this moment the venue's number does not exist; the ledger works
-  completely without it and it is set later in 설정. An unknown member such as
+  completely without it and it is set later in 설정, by
+  `PATCH /weddings/{weddingId}`. An unknown member such as
   `guaranteedHeadcount` is **ignored**, not refused — sending it sets nothing.
 - **Meal types are not asked either.** The default is a single type, and the moment
   a couple first meets meal types is when a guest needs 유아식.
@@ -847,8 +892,12 @@ partner reads exactly like the example above with `"name": null` in the second s
 **No `guaranteedHeadcount`** here either, and that is a statement about this shape
 rather than about the number: 보증인원 is published by
 `GET /weddings/{weddingId}/headcount`, beside the 식대 인원 it is read against.
-`WeddingResponse` gains it with `#8`, the screen that can set it. **No subscription
-either** — see `POST /weddings`.
+**Changed 2026-08-22 (`#173`): this file used to say `WeddingResponse` would gain the
+member with `#8`. It does not.** `PATCH /weddings/{weddingId}` writes 보증인원 and
+answers with it inside `headcount`, so putting it here as well would be one number
+spelled two ways in one response — `headcount.guaranteedHeadcount` is the only
+spelling, and the 설정 screen prefills its field from the headcount endpoint. **No
+subscription either** — see `POST /weddings`.
 
 Carries the recomputed aggregate: **no** — it is a read, and there is no aggregate
 on this resource. The headcount is its own endpoint,
@@ -867,6 +916,101 @@ Two things this endpoint does **not** do, stated so nobody waits for them:
 - **It is not a check to call before every other request.** Every wedding-scoped
   endpoint resolves the caller's seat on its own, on every request; calling this
   first would double the round trips and prove nothing about the next one.
+
+### `PATCH /weddings/{weddingId}`
+
+Status: active (added 2026-08-22, `#173` — the backend half of `#8`)
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
+wedding" above.
+
+설정 · 웨딩 정보 수정, and **the only way 보증인원 ever gets into the product.** Until
+this endpoint existed the column was NULL for every couple, so the comparison the
+인원수 screen is built around could not render for anybody — `POST /weddings` does not
+accept one, because a couple signs up before they book a venue.
+
+**Read "Partial updates" above before writing a call to this**: every member is
+optional, an omitted member is not written, and `null` means *clear*.
+
+Request
+```json
+{ "weddingDate": "2027-03-14", "guaranteedHeadcount": 150 }
+```
+
+| Member | Type | Omitted | `null` |
+|---|---|---|---|
+| `weddingDate` | `YYYY-MM-DD` | left alone | **400** — a wedding always has a date |
+| `guaranteedHeadcount` | integer ≥ 1 | left alone | **clears it** — back to not having one |
+
+**보증인원 can be set, changed and cleared — and `null` is how you clear it**, never
+`0` and never `""`. 미설정 is a real state and a couple can
+arrive back at it: a contract that fell through, a venue changed, a number typed into
+the wrong box. Cleared and never-set are the same state and read the same way — the
+`headcount` below simply has no `guaranteedHeadcount` member.
+
+**We store the number we are given.** No rounding, no buffer, no recommendation, no
+adjustment for 유아 — 보증인원 is the venue's number, never ours.
+
+**The couple's names are not editable here.** A name belongs to a seat and not to the
+wedding (changed 2026-08-22, `#166`); editing one is `#175` and is not this endpoint.
+
+Response 200
+```json
+{
+  "wedding": {
+    "id": 12,
+    "weddingDate": "2027-03-14",
+    "seats": [
+      { "side": "GROOM", "name": "김신랑" },
+      { "side": "BRIDE", "name": "이신부" }
+    ]
+  },
+  "headcount": { "mealHeadcount": 128, "guaranteedHeadcount": 150 }
+}
+```
+
+And with 보증인원 cleared — **the member is gone, not `null` and not `0`**:
+
+```json
+{
+  "wedding": { "id": 12, "weddingDate": "2027-03-14", "seats": [ … ] },
+  "headcount": { "mealHeadcount": 128 }
+}
+```
+
+**`wedding` is the same `WeddingResponse` the two GETs return**, and it deliberately
+does **not** carry `guaranteedHeadcount`: one response may not spell one number two
+ways. `headcount.guaranteedHeadcount` is the spelling, here and in
+`GET /weddings/{weddingId}/headcount` alike. (This reverses what this file said
+before today — see the note under `GET /weddings/{weddingId}`.)
+
+Carries the recomputed aggregate: **yes** — `headcount`, the same object
+`GET /weddings/{weddingId}/headcount` returns, computed after the write and inside
+the same transaction. **Do not call the headcount endpoint after a successful PATCH**;
+this response already holds the number, including the 보증인원 just written.
+
+Errors
+- 400 `VALIDATION_FAILED` — a `guaranteedHeadcount` below 1, a `weddingDate` outside
+  the range the database can store (before 4713 BC or after 5874897 AD), or a
+  `weddingDate` sent as `null`. Nothing in the body is applied when any member is
+  refused.
+- 400 `MALFORMED_REQUEST_BODY` — a member of the wrong type, an unparseable
+  `weddingDate`, a body that is not JSON, or **a member sent as `""`, `"  "` or `[]`**
+  — see "Partial updates" above: those are not ways to clear a member, and
+  `{"guaranteedHeadcount":""}` is refused rather than emptying the venue's number.
+  **Two codes, one meaning for the user**: the request was wrong.
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
+  the body is looked at**, so an anonymous request with an invalid body is a 401.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an
+  id that is not a number. One answer for all four, and **never 403**; do not confirm
+  existence.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
+
+Two things this endpoint does not do:
+
+- **It does not record who changed what.** `guest_change` is the ledger's audit log;
+  the `wedding` row has none, so "누가 보증인원을 바꿨어?" is not answerable today. If
+  the couple ever needs it, that is a new table and a decision, not a quiet addition.
+- **It does not delete a wedding**, and no endpoint does yet.
 
 ### `POST /weddings/{weddingId}/guests`
 
@@ -980,7 +1124,7 @@ Eight things the caller should not have to infer.
   "not stated" the way `OTHER` does for the group — so any default would be a claim
   the couple never made, on one of the ledger's two filters and an aggregation axis
   (`notes/2026-08-20-decision-guest-entry-side-and-companions.md` §1). Required at
-  entry is not required forever: the edit endpoint (`#12`, `#8`) changes it. The add
+  entry is not required forever: the 하객 edit endpoint (`#12`) changes it. The add
   sheet should therefore make side a two-option control, and may pre-select one, but
   the pre-selection is a frontend affordance and not this endpoint's promise.
 - **The confirmed slots are never written in v1, by this endpoint or any other.**
@@ -1218,7 +1362,8 @@ not `null`, not `0`. `0` would read as a contract for nobody, and a couple signs
 long before they book a venue. The generated TypeScript types it
 `guaranteedHeadcount?: number | null`; the server never sends `null`, so
 `h.guaranteedHeadcount == null` is the one check to write, and it means **"no number
-yet — render only the 식대 인원"**. `#8` is the screen that will set it.
+yet — render only the 식대 인원"**. `PATCH /weddings/{weddingId}` is what sets it,
+and what clears it back to this state (added 2026-08-22, `#173`).
 
 **We do not send a comparison, and we never will.** No difference, no percentage, no
 recommended number, no "you are 12 over". How far below an estimate a couple should

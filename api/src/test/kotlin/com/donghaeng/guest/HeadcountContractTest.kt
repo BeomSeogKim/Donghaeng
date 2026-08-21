@@ -138,7 +138,9 @@ internal class HeadcountContractTest : GuestFixture() {
 
         assertThat(headcount(session, weddingId).json().has("guaranteedHeadcount")).isFalse()
 
-        // `#8` is what will write this; today only the database can.
+        // Written through JDBC although `PATCH /weddings/{weddingId}` can now do it
+        // (`#173`): this test is about what the READ publishes, and going through the
+        // write path would make it fail for two reasons instead of one.
         jdbc.update("update wedding set guaranteed_headcount = 150 where id = ?", weddingId)
 
         val set = headcount(session, weddingId).json()

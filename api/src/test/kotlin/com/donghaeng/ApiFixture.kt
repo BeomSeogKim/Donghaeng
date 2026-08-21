@@ -104,6 +104,26 @@ internal abstract class ApiFixture {
         )
 
     /**
+     * The same rules as [post] — a partial update is a state-changing request, so it
+     * sends `application/json` and would not match the mapping without it.
+     *
+     * `HttpRequest.Builder` has no `PATCH` of its own; the JDK client sends whatever
+     * method name it is handed.
+     */
+    protected fun patch(
+        path: String,
+        cookies: List<HttpCookie> = emptyList(),
+        body: String? = null,
+    ): HttpResponse<String> =
+        send(
+            HttpRequest
+                .newBuilder(uri(path))
+                .method("PATCH", body?.let(HttpRequest.BodyPublishers::ofString) ?: HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/json"),
+            cookies,
+        )
+
+    /**
      * A whole login, from no cookie to the session cookie the server issued. The
      * decomposed version, for tests that need to interfere with a step, is in
      * `GoogleLoginFixture`.

@@ -1,5 +1,6 @@
 package com.donghaeng.wedding
 
+import com.donghaeng.json.Patch
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
@@ -219,6 +220,79 @@ internal class WeddingService(
     @Transactional(readOnly = true)
     fun read(weddingId: Long): WeddingResponse =
         weddings.findByIdAndDeletedAtIsNull(weddingId)?.toWeddingResponse(seatsOf(weddingId)) ?: throw WeddingNotFoundException()
+
+    /**
+     * 웨딩 정보 수정 (`#173`, the backend half of `#8`) — 예식일 and 보증인원, the two
+     * things the wedding row holds that a couple can change. **The names are not
+     * here**: after 2026-08-22 a name belongs to a seat, and `#175` edits one.
+     *
+     * **A member the caller did not send is not written**, which is the whole of
+     * [UpdateWeddingRequest]'s [Patch] and is what makes this an edit rather than a
+     * replacement (notes/2026-08-22-decision-partial-update-shape.md). Two partners
+     * with the same screen open therefore collide only on a field they both typed
+     * into — and `@DynamicUpdate` is what carries that all the way down to the UPDATE
+     * statement, since `wedding` has no `guest_change` trail to recover an
+     * overwritten value from
+     * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md).
+     *
+     * **`updatedAt` moves only if a value actually changed.** The clock is the
+     * service's, as everywhere here, and a row reported as touched when it was not is
+     * a lie an audit read would believe — which is as true of a form resubmitted
+     * unedited as it is of an empty body, so both are compared rather than assumed.
+     *
+     * It re-reads the row rather than trusting the resolver's, for the reason [read]
+     * does: the two are separate transactions and the wedding can be deleted between
+     * them, which answers 404 exactly as the resolver would have a moment later.
+     *
+     * **This returns the wedding alone, not the mutation envelope.** The recomputed
+     * 인원수 that response also carries is a fold over the ledger, which lives on the
+     * far side of an arrow this package may not point back along; `guest/`'s
+     * `WeddingUpdateService` is the one transaction both happen in
+     * (notes/2026-08-21-decision-the-headcount-endpoint.md §3).
+     */
+    @Transactional
+    fun update(
+        wedding: WeddingScope,
+        request: UpdateWeddingRequest,
+    ): WeddingResponse {
+        val row = weddings.findByIdAndDeletedAtIsNull(wedding.id) ?: throw WeddingNotFoundException()
+        var written = false
+
+        when (val date = request.weddingDate) {
+            // Compared, not just assigned: a member resent unchanged is a member
+            // nothing happened to, and `updatedAt` below is the only thing that would
+            // record otherwise (Hibernate's own dirty checking is by value too, so an
+            // equal assignment emits no UPDATE of its own).
+            is Patch.Set ->
+                if (row.weddingDate != date.value) {
+                    row.weddingDate = date.value
+                    written = true
+                }
+            // Absent leaves it alone. Cleared cannot arrive — `@NotCleared` refuses
+            // it with a 400, because a wedding always has a date, and
+            // `PatchMemberSweepTest` is what keeps that annotation from being forgotten.
+            Patch.Absent, Patch.Cleared -> Unit
+        }
+        when (val guaranteed = request.guaranteedHeadcount) {
+            is Patch.Set ->
+                if (row.guaranteedHeadcount != guaranteed.value) {
+                    row.guaranteedHeadcount = guaranteed.value
+                    written = true
+                }
+            // 계약이 바뀐 커플은 미설정으로 돌아간다: the venue's number is theirs to
+            // withdraw, and we never hold a stale one in the gap. Clearing a column
+            // that is already NULL is not a change either.
+            Patch.Cleared ->
+                if (row.guaranteedHeadcount != null) {
+                    row.guaranteedHeadcount = null
+                    written = true
+                }
+            Patch.Absent -> Unit
+        }
+
+        if (written) row.updatedAt = Instant.now()
+        return row.toWeddingResponse(seatsOf(wedding.id))
+    }
 
     private fun seatsOf(weddingId: Long): List<WeddingSeat> = seats.findAllByWeddingIdAndDeletedAtIsNull(weddingId)
 

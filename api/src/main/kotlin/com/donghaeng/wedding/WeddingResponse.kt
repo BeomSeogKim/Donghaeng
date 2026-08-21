@@ -16,10 +16,12 @@ import java.time.LocalDate
  * it exists, so a client may index the array — but reading `side` is what makes that
  * correct rather than lucky, and it is one field either way.
  *
- * **No `guaranteedHeadcount`**, for the reason `MeResponse` has no `email`: nothing
- * sets it here and no screen reads it from this response, and a published field
- * nothing consumes is a seam commitment with no requirement behind it. `#8` adds it
- * with the endpoint that can set it. **No `createdBy`** either — who created a
+ * **No `guaranteedHeadcount`**, and `#173` decided it stays that way rather than
+ * adding one (notes/2026-08-22-decision-partial-update-shape.md §4): the PATCH that
+ * writes 보증인원 answers `{wedding, headcount}`, so carrying it here too would put
+ * one number in one response twice, and the two would be equal until the day one of
+ * them was not. `headcount.guaranteedHeadcount` is the spelling.
+ * **No `createdBy`** either — who created a
  * wedding is an audit fact, not something a screen renders — and **no subscription**,
  * since nothing pays and nothing is refused yet
  * (`notes/2026-08-22-decision-entitlement-belongs-to-the-wedding.md` §6).
