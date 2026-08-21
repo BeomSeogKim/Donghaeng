@@ -18,6 +18,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-21-decision-two-accounts-and-the-v1-recut.md` | 커플은 두 계정이고 한 사람은 웨딩 하나에만 속한다; 초대는 링크; 유아식은 `#9`와 맞바꿔 `post-v1`로 |
 | `2026-08-19-decision-launch-date-and-google-only.md` | **Launch is 2026-08-31.** v1 ships on Google alone; the "does this block v1?" gate |
 | `2026-08-11-decision-deletion-and-infant-meals.md` | 유아식 does not adjust 보증인원; deletion cannot trigger `GuestChange` retention |
 | `2026-08-11-decision-import-row-rejection.md` | A bad 관계 rejects the row, not the file — supersedes the synonym table |
