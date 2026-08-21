@@ -1,5 +1,10 @@
 # Decision — the QueryClient's defaults, and out-of-order responses are prevented rather than detected (2026-08-21)
 
+> **Amended 2026-08-22 (`#135` review).** The scope below **delays** a second
+> mutation and never refuses one. That is stated as a cost here and was read as a
+> guard — see "Serialising is not de-duplicating" at the end. `#13`'s attendance
+> tap inherits it.
+
 `#44`. `#2` wired `QueryClientProvider` with a bare client and deliberately left it
 untuned, because tuning needs real queries. `#148` (the ledger read) and `#135` (the
 add-guest sheet) are next, so the queries exist now.
@@ -90,7 +95,9 @@ may pass a narrower scope; the default is the floor.
 Costs, stated plainly so a later reader can weigh them:
 
 - Two quick taps make the second number lag by two round trips instead of one. The
-  standing rule permits lag and forbids backwards.
+  standing rule permits lag and forbids backwards. **The second tap is delayed, not
+  dropped** — see the amendment at the end, which is where that stops being a cost
+  and starts being a thing a call site has to handle.
 - A *hung* request holds the queue until it fails. A *failed* one does not —
   query-core releases the next mutation in a `finally`.
 - It does not order this client against the partner's device, and nothing
@@ -160,3 +167,36 @@ have had no answer to a 401 at all while every screen test stayed green.
 - **A second, non-couple client** writing to the same ledger — the RSVP links. From
   that day the ordering is genuinely distributed and the backstop read is the only
   guarantee, which is the argument for a server marker coming back.
+
+## Amended 2026-08-22 — serialising is not de-duplicating, and only the call site can refuse
+
+Found while writing `#135`'s tests, and worth a banner because the mistake was made
+*by reading this record*: the first double-press test **passed with every guard
+removed**, and looked like proof that the scope prevents a duplicate. It does not.
+
+The scope **queues**. `mutationCache.js:60-78` pauses a later mutation sharing the
+id and resumes it when the queue releases; it is never refused and never deduped.
+So two presses of 추가 while the first request is in flight are two writes — the
+second simply leaves later. And since a create is deliberately not idempotent (a
+second guest with the same name succeeds and is a second row), that is two people
+in the ledger and a headcount honestly computed from a wrong list.
+
+**Only a guard at the call site refuses the second press**, and what makes one
+possible is `mutation.js:88-89`: `pending` is dispatched with `isPaused` *before*
+the queue releases the mutation, so `isPending` is already true for the queued one.
+A `disabled` button and an early return on `isPending` are therefore sufficient,
+and they are what `#135` ships.
+
+Two consequences for the hooks that inherit this:
+
+- **A test that counts requests must count after the queue has drained.** Counting
+  while the first mutation is in flight passes with no guard at all, because the
+  extra presses are sitting in the queue rather than being absent. Wait for
+  `isMutating()` to reach 0; do not wait on a timer.
+- **`#13`'s attendance tap is where this bites hardest** — it is the highest
+  tap-rate mutation in the product, on a chip in a 400-row list, and the one a
+  couple is most likely to double-tap. `#12` and `#175` inherit it too.
+
+**This does not weaken the ordering claim.** Serialisation is about *order*, and it
+still delivers it; what it never claimed, and what this record failed to say out
+loud, is *uniqueness*.

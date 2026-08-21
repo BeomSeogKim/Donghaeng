@@ -97,8 +97,17 @@ async function fetchHeadcount(weddingId: number): Promise<Headcount> {
  * when that fetch STARTED — the stale number. It applies it synchronously,
  * inside the call: `retryer.cancel()` rejects and then invokes `onCancel`,
  * which is what calls `setState(revertState)`. So the revert happens first and
- * the write below overwrites it. Reverse these lines — or await the returned
- * promise and write in the `then` — and the stale value is what survives.
+ * the write below overwrites it. **Reverse these two lines and the stale value
+ * is what survives.** `revert: false` is worse than either order: a
+ * `CancelledError` that is neither silent nor reverting falls through to the
+ * query's error dispatch, and the screen drops the number entirely.
+ *
+ * Awaiting the returned promise and writing in the `then` is *not* broken —
+ * corrected 2026-08-22, having been claimed here as a third way to break it.
+ * The revert is already applied by the time that promise settles, and it
+ * restores the value that was on screen anyway, so the write still lands last
+ * and correct. It is a microtask of deferral that buys nothing, which is why
+ * this does not do it — not a trap.
  *
  * The cancelled fetch cannot write afterwards either: its promise rejects with
  * a `CancelledError` carrying `revert`, and that branch returns the current

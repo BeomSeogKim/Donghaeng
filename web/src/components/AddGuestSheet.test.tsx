@@ -369,7 +369,7 @@ it('writes one guest for a double press, not two people with one name', async ()
     }),
   )
 
-  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
   const sheet = await openSheet()
   await form(sheet).name('김영수')
   await form(sheet).side('신랑측')
@@ -389,17 +389,20 @@ it('writes one guest for a double press, not two people with one name', async ()
 
   /*
    * COUNTED AFTER THE QUEUE HAS DRAINED, WHICH IS THE ONLY MOMENT THAT PROVES
-   * ANYTHING. Mutations share one scope and run one at a time, so a press made
-   * while the first is in flight does not reach the network yet — asserting
-   * here would pass with no guard at all, because the extra presses would be
-   * sitting in the queue rather than absent. They fire the moment the first one
-   * settles, so the count has to be read after that.
+   * ANYTHING. The scope QUEUES a second mutation, it does not refuse one
+   * (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md
+   * § Amended 2026-08-22), so a press made while the first is in flight has not
+   * reached the network yet and asserting here passes with no guard at all.
+   * That is not hypothetical — it is what the first version of this test did.
+   *
+   * THE DRAIN IS WAITED ON, NOT TIMED. `isMutating()` counts the queued ones
+   * too, because `pending` is dispatched with `isPaused` before the queue
+   * releases them. A timer long enough today is the same shape as the trap
+   * above: it fails open.
    */
   release()
   expect(await within(sheet).findByText(/김영수님을 추가했습니다/)).toBeVisible()
-  await act(async () => {
-    await new Promise((settle) => setTimeout(settle, 20))
-  })
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0))
   expect(api.created).toHaveLength(1)
 })
 

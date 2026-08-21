@@ -69,8 +69,18 @@ caller must not be able to write this number by hand. Its two lines are ordered,
 and not for the obvious reason: `cancelQueries` defaults to `revert: true`, which
 restores the state captured when the cancelled fetch *started* — the stale
 number — and applies it **synchronously**, inside the call. So the revert lands
-first and the write overwrites it. Await the cancel and write in the `then`, or
-put the two lines the other way round, and the stale value is what survives.
+first and the write overwrites it. **Put the two lines the other way round and
+the stale value is what survives**, and `revert: false` is worse than either
+order, because a `CancelledError` that is neither silent nor reverting reaches
+the query's error dispatch and the screen drops the number altogether.
+
+Awaiting the cancel and writing in the `then` is **not** a third way to break it,
+and this record said it was until the second review pass. The revert is applied
+before that promise settles and it restores the value already on screen, so the
+write still lands last and correct. It is a microtask of deferral that buys
+nothing. The correction matters because this passage exists to stop a maintainer
+breaking the guard, and a false prohibition inside it spends the reader's trust
+in the two that are real.
 
 ## What the client sends, and what it refuses to send
 
@@ -158,6 +168,9 @@ many.
   that has no `inert` either. It arrives with 하객 상세 (`#12`), which is the
   second sheet and therefore the moment the chrome earns its own component.
 
+- **Per-meal-type counts.** They hang off meal types only the couple can create
+  (`#10`), so a guest is added first and their meals set after (`#14`).
+
 ## Open, and not to be pre-empted
 
 **Whether the 측 should carry over at all** is with the founder as of 2026-08-22.
@@ -167,5 +180,3 @@ every guest after — and a guest filed on the wrong 측 cannot be fixed in v1,
 because `#12` does not exist and there is no delete. The behaviour above stands
 until that is answered, and the code is not being reshaped to make either answer
 cheaper.
-- **Per-meal-type counts.** They hang off meal types only the couple can create
-  (`#10`), so a guest is added first and their meals set after (`#14`).
