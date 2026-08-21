@@ -20,6 +20,7 @@ see that file's `Rules` section for the admission test.
 |---|---|
 | `2026-08-22-decision-the-couples-two-seats.md` | 웨딩엔 자리가 둘 — `membership`과 이름 두 컬럼은 한 개념이었다; 초대는 빈 자리를 채운다; 부모·플래너는 지원자지 주체가 아니다 |
 | `2026-08-22-decision-entitlement-belongs-to-the-wedding.md` | 권리는 웨딩에, 결제 주체만 사람에; 구독 행은 상태가 아니라 텀이다; 웨딩당 활성 1건은 인덱스가 지킨다 |
+| `2026-08-22-decision-the-invite-link.md` | 초대 링크는 하루 살고 재발급된다; 토큰은 URL 프래그먼트로만 다니고 서버 로그에 남지 않는다; `sessionStorage`가 OAuth 왕복을 건너므로 `returnTo`를 만들지 않는다 |
 | `2026-08-21-decision-two-accounts-and-the-v1-recut.md` | 커플은 두 계정이고 한 사람은 웨딩 하나에만 속한다; 초대는 링크; 유아식은 `#9`와 맞바꿔 `post-v1`로 |
 | `2026-08-21-decision-attendance-is-two-states.md` | 참석 여부는 참석·불참 둘뿐 — 두 번째 슬롯과 함께 "아직 모르는 N명"도 내려간다 |
 | `2026-08-19-decision-launch-date-and-google-only.md` | **Launch is 2026-08-31.** v1 ships on Google alone; the "does this block v1?" gate |
