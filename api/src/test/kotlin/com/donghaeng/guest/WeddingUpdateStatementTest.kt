@@ -26,13 +26,30 @@ import java.util.concurrent.CopyOnWriteArrayList
  * `wedding` has no `guest_change` trail to recover it from
  * (notes/2026-08-22-decision-partial-update-shape.md §1).
  *
- * Two mutations were run against this file and each turned it red, which is the
- * only reason it is worth anything: dropping `@DynamicUpdate` from
- * [com.donghaeng.wedding.Wedding] (two of the four below fail), and assigning both
- * columns unconditionally — the blind full-replacement shape a PUT would have — in
- * `WeddingService.update` (one fails). The contract test saw the second mutation
- * too, through `updated_at`, and saw neither of them where it claims to: its "a
- * member that is not sent is left alone" case passed under both.
+ * **What each mutation actually shows, measured rather than assumed** — the first
+ * version of this comment claimed more than the runs support, and a test file that
+ * overstates what it holds is worse than one that holds less.
+ *
+ * **Dropping `@DynamicUpdate`** from [com.donghaeng.wedding.Wedding]: two of the four
+ * cases below go red. **This is the load-bearing half** — it is what makes "a request
+ * that named one column does not carry the other one into the UPDATE" a fact about
+ * the statement rather than about the two columns happening to be equal.
+ *
+ * **Assigning both columns unconditionally** in `WeddingService.update`: exactly one
+ * case goes red, `a body that changes nothing issues no UPDATE at all`, with
+ * `update wedding set updated_at=? where id=?`. **Nothing was blind-written** — with
+ * `@DynamicUpdate` on, Hibernate dirty-checks by VALUE against the loaded snapshot,
+ * so assigning a value equal to the stored one never reaches the statement at all. So
+ * that mutation demonstrates the `updated_at` honesty rule, and it cannot demonstrate
+ * the partial-update property. `UpdateWeddingContractTest` is 16/16 green under it:
+ * no case there resends an identical value.
+ *
+ * **The blind full-replacement shape a PUT would have is not expressible here**, which
+ * is why no mutation produces it: [com.donghaeng.json.Patch.Absent] carries no value
+ * to write, so there is nothing for an omitted member to be overwritten WITH. What
+ * remains is a client that sends a member it did not mean to change, and that is a
+ * client contract — stated in `docs/api-spec.md` under "Partial updates" — not
+ * something a server test can hold.
  *
  * The inspector is installed by property rather than by bean because Hibernate
  * builds it itself, which is also why the capture is static.

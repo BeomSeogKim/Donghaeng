@@ -64,7 +64,13 @@ class PatchMemberSweepTest {
 
     private fun patchMembers(): List<JavaField> = classes.flatMap { it.fields }.filter { it.rawType.name == Patch::class.java.name }
 
-    private fun nameOf(field: JavaField): String = "${field.owner.simpleName}.${field.name}"
+    /**
+     * `$`-qualified, not the simple name: a member on a NESTED DTO would otherwise
+     * read as `Inner.x` with nothing saying whose, and two nested classes sharing a
+     * simple name would collide in [CLEARABLE] — an allowlist entry silently
+     * exempting a member nobody wrote it for.
+     */
+    private fun nameOf(field: JavaField): String = "${field.owner.name.substringAfterLast('.')}.${field.name}"
 
     private companion object {
         /**

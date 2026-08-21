@@ -73,9 +73,10 @@ internal class UpdateWeddingContractTest : GuestFixture() {
     @Test
     fun `a member that is not sent is left alone`() {
         // **What this case does NOT hold**: two PATCHes are two transactions, so the
-        // second reloads a row already holding 150 and a blind full-column write
-        // would pass here identically. That the request does not CARRY the member it
-        // never mentioned is `WeddingUpdateStatementTest`'s, against the issued SQL.
+        // second reloads a row already holding 150 and writes 150 back — a handler
+        // that assigned every column would pass here identically. That the UPDATE does
+        // not NAME the member the request never mentioned is
+        // `WeddingUpdateStatementTest`'s, against the issued SQL.
         val session = login()
         val weddingId = createWedding(session)
         patch("/weddings/$weddingId", listOf(session), """{"guaranteedHeadcount":150}""")

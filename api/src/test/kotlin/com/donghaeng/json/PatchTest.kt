@@ -53,12 +53,16 @@ class PatchTest {
 
     @Test
     fun `an input that coerces to null is refused rather than read as a value of null`() {
-        // **Three spellings, not one.** Jackson coerces an empty string, a blank
-        // string AND an empty array to null for these types, so a fix aimed at `""`
-        // alone would leave two ways in. Each would build a `Patch.Set` carrying
-        // null — a state this hierarchy does not have, and one every validator
-        // downstream reads as "not sent". Both member types are asserted because the
-        // coercion is per-type: one passing would say nothing about the other.
+        // **Three spellings, not one**, and the coercion is per-type — which is why
+        // both member types are listed rather than one standing in for the other.
+        // Measured against this build's jars with the refusal removed: five of the six
+        // are real coercions to null (`""` and a blank string for both types, `[]` for
+        // the date), each of which would build a `Patch.Set` carrying null — a state
+        // this hierarchy does not have, and one every validator downstream reads as
+        // "not sent". **The sixth is not doing work here**: `[]` into an integer is
+        // refused by Jackson itself, with or without the refusal below. It stays
+        // because it is true of the endpoint and costs a line, not because it holds
+        // anything.
         val coerced =
             listOf(
                 """{"date":""}""",

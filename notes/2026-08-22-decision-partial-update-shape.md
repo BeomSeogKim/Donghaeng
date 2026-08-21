@@ -40,9 +40,22 @@ them actually typed into.
 **What holds this is `WeddingUpdateStatementTest`, against the SQL that is issued** —
 and until review nothing did. The contract test that reads "a member that is not sent
 is left alone" makes two PATCHes in two transactions, so the second reloads a row
-already holding the value and writes it back: **a blind full-column PUT passes it
-identically**, as does deleting `@DynamicUpdate`. The property is about one statement,
-so it is asserted on one statement. Both mutations were run and both go red.
+already holding the value and writes it back; a handler that assigned every column
+passes it identically, as does deleting `@DynamicUpdate`. The property is about one
+statement, so it is asserted on one statement, and dropping `@DynamicUpdate` turns it
+red.
+
+**And one thing this design makes unnecessary to defend, stated because the first
+version of this record over-claimed it.** The blind full-column write a PUT would do
+**is not expressible in this service**: `Patch.Absent` carries no value, so an omitted
+member has nothing to be overwritten with, and Hibernate dirty-checks by value anyway
+— assigning a column the value it already holds never reaches the UPDATE. Measured:
+reverting the per-member comparison turns exactly one case red, and the statement it
+produces is `update wedding set updated_at=? where id=?`, which is the `updated_at`
+rule below and not this one. **So what a test can hold here is "the UPDATE does not
+NAME the untouched column"**, which is held; the remaining risk is a client sending a
+member it did not mean to change, and that is a client contract published in
+`docs/api-spec.md`, not something the server can check.
 
 Jackson does not hand this over for free — a nullable property is `null` for both
 cases — so it is a mechanism: `com.donghaeng.json.Patch`, three cases (`Absent`,
@@ -100,16 +113,27 @@ deleting the annotation: the sweep names the member and goes red.
 **A constraint on a `Patch` member is written against `Patch`, not against the
 payload — and that is forced, not chosen.** The tidy alternative is Hibernate
 Validator's `ValueExtractor`, which would make `Patch<@Min(1) Int>` work and delete
-both hand-rolled validators. **It cannot be written in Kotlin**, tried and measured
-rather than assumed: `ValueExtractor<Patch<@ExtractedValue *>>` is a Kotlin syntax
-error (a star projection cannot be annotated), the concrete-type spelling compiles and
-is refused by HV at startup (`HV000203: fails to declare the extracted type parameter
-using @ExtractedValue`), and — decisively — `javap` shows Kotlin emits `@Min` on a type
-argument **only into `@Metadata`, never as a JVM `RuntimeVisibleTypeAnnotations`
-attribute**, which is the only place Hibernate Validator looks. So even a Java-source
-extractor would not make the constraint visible. `#12`'s five constraints therefore
-arrive as `Patch`-typed validators, and that is the cost of the wrapper rather than an
-oversight to be cleaned up.
+both hand-rolled validators. **It cannot be written in Kotlin as this module is
+built** — tried and measured, not assumed. `ValueExtractor<Patch<@ExtractedValue *>>`
+is a Kotlin syntax error (a star projection cannot be annotated), and the concrete-type
+spelling compiles but is refused by Hibernate Validator at startup (`HV000203: fails to
+declare the extracted type parameter using @ExtractedValue`), because under this
+build's compiler arguments `javap` shows `@Min` on a type argument landing **only in
+`@Metadata`, never as a JVM `RuntimeVisibleTypeAnnotations` attribute** — the only
+place Hibernate Validator looks.
+
+**"Impossible" would be one word too strong, so it is not the word.** Adding the
+experimental `-Xemit-jvm-type-annotations` to `freeCompilerArgs` does make Kotlin
+2.2.21 emit it (`RuntimeVisibleTypeAnnotations … TYPE_ARGUMENT(0)`, verified), which
+would leave only a Java source file for the extractor itself. **It is expensive, not
+impossible, and the answer is still no**: an experimental `-X` flag changes how every
+class in `api/` is compiled, and a Java source file in a Kotlin-only tree is a second
+toolchain, both bought to delete two small validators.
+
+**So `#12` should budget five `Patch`-typed validators as a standing cost of the
+wrapper** — `@NotBlank`, three `@Size` and `@Min(1)` on `CreateGuestRequest` do not
+carry across, and this is the paragraph that exists so nobody re-litigates it there
+and reaches for the flag.
 
 **An empty body `{}` is a legal no-op**: 200, nothing written, and `updated_at` does
 not move — and neither does a member **resent unchanged**, which is compared rather
@@ -182,8 +206,9 @@ against.
   open (`2026-08-17-decision-first-domain-endpoint-shape.md`). The PATCH refuses
   exactly what the column cannot store and nothing else.
 - **An audit trail for `wedding`.** There is none: `guest_change` is the ledger's, so
-  "누가 보증인원을 바꿨어?" is currently unanswerable. That is a gap this record names
-  and does not close — it needs an issue, not a table invented here.
+  "누가 보증인원을 바꿨어?" is currently unanswerable. Named here and closed nowhere —
+  it is `#179`, whose milestone is deliberately blank until the founder calls it v1 or
+  post-v1. A table is not invented in this record.
 - **Whether an unknown JSON member is refused.** Unchanged and still API-wide: a
   member this DTO does not declare is ignored. That is a different question from a
   **declared** member whose payload cannot be read, which §1 answers:
