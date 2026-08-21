@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
+import type { CreateWeddingRequest } from '../hooks/useCreateWedding'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
 import { renderWithProviders } from '../test/render'
@@ -80,10 +81,25 @@ function weddingStore(...stored: Wedding[]) {
       http.get(`${API}/weddings`, () => HttpResponse.json<Wedding[]>([...stored])),
     /**
      * 201, echoing back what was stored — which is not always what was sent,
-     * since the server trims the names (docs/api-spec.md § POST /weddings).
+     * since the server trims the name (docs/api-spec.md § POST /weddings).
+     *
+     * IT CREATES BOTH SEATS, because the server does. The caller's seat gets the
+     * name they sent; the partner's gets a side and nothing else, and that is the
+     * ordinary state of a new wedding rather than a half-built one. A double that
+     * returned one seat would let a header which cannot render the empty half
+     * stay green.
      */
     create: (body: unknown) => {
-      const wedding = { id: 12, ...(body as Omit<Wedding, 'id'>) }
+      const { name, side, weddingDate } = body as CreateWeddingRequest
+      const wedding: Wedding = {
+        id: 12,
+        weddingDate,
+        // 신랑 먼저, always — the array's order is contract.
+        seats: [
+          { side: 'GROOM', name: side === 'GROOM' ? name : null },
+          { side: 'BRIDE', name: side === 'BRIDE' ? name : null },
+        ],
+      }
       stored.unshift(wedding)
       return HttpResponse.json<Wedding>(wedding, { status: 201 })
     },
@@ -115,22 +131,28 @@ const problem = (status: number, code: string, title: string) =>
     { status, headers: { 'Content-Type': 'application/problem+json' } },
   )
 
-/** Fill the whole form. Every field is required, so every test needs all three. */
+/**
+ * Fill the whole form. All three answers are required, so every test needs them.
+ *
+ * `side` is a CLICK, not a typed value, and passing `''` leaves it as the screen
+ * opens: neither side chosen. There is no default to fall back on, deliberately.
+ */
 async function fillForm({
   date = '2026-10-10',
-  groom = '김신랑',
-  bride = '이신부',
+  side = '신랑',
+  name = '김신랑',
 }: {
   date?: string
-  groom?: string
-  bride?: string
+  side?: '신랑' | '신부' | ''
+  name?: string
 } = {}) {
   // Awaited unconditionally: the session resolves before any screen renders, so
   // a test that leaves a field empty still has to wait for the form to exist.
   const dateField = await screen.findByLabelText('예식일')
   if (date !== '') await userEvent.type(dateField, date)
-  if (groom !== '') await userEvent.type(screen.getByLabelText('신랑 이름'), groom)
-  if (bride !== '') await userEvent.type(screen.getByLabelText('신부 이름'), bride)
+  if (side !== '')
+    await userEvent.click(screen.getByRole('radio', { name: `${side}입니다` }))
+  if (name !== '') await userEvent.type(screen.getByLabelText('내 이름'), name)
 }
 
 const submit = async () =>
@@ -152,8 +174,10 @@ it('sends a person who already has a wedding to 원장 instead of the form', asy
   const store = weddingStore({
     id: 12,
     weddingDate: '2026-10-10',
-    groomName: '김신랑',
-    brideName: '이신부',
+    seats: [
+      { side: 'GROOM', name: '김신랑' },
+      { side: 'BRIDE', name: '이신부' },
+    ],
   })
   server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
 
@@ -208,7 +232,7 @@ it('lets a person with no wedding sign out, because this screen is where they ar
   expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeVisible()
 })
 
-it('creates a wedding from a date and two names, and asks for nothing else', async () => {
+it("creates a wedding from a date, a side and the caller's own name", async () => {
   const calls = recording()
   const store = weddingStore()
   server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
@@ -224,8 +248,8 @@ it('creates a wedding from a date and two names, and asks for nothing else', asy
   // (docs/api-spec.md § POST /weddings).
   expect(calls.created[0]?.body).toEqual({
     weddingDate: '2026-10-10',
-    groomName: '김신랑',
-    brideName: '이신부',
+    side: 'GROOM',
+    name: '김신랑',
   })
   // Without it the API answers 415 and nothing is created.
   expect(calls.created[0]?.request.headers.get('Content-Type')).toBe('application/json')
@@ -237,22 +261,19 @@ it('creates a wedding from a date and two names, and asks for nothing else', asy
   expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
 })
 
-it('trims the names it sends, because the server measures length before trimming', async () => {
+it('trims the name it sends, because the server measures length before trimming', async () => {
   const calls = recording()
   server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
-  await fillForm({ groom: '  김신랑 ', bride: '이신부  ' })
+  await fillForm({ name: '  김신랑 ' })
   await submit()
 
   // 100 characters is measured on what is sent, before the server's own trim,
   // so a value that only passes after trimming is a 400. Trimming here is what
   // makes the two agree (docs/api-spec.md § POST /weddings).
   await waitFor(() => expect(calls.created).toHaveLength(1))
-  expect(calls.created[0]?.body).toMatchObject({
-    groomName: '김신랑',
-    brideName: '이신부',
-  })
+  expect(calls.created[0]?.body).toMatchObject({ name: '김신랑' })
 })
 
 it('does not spend a round trip on a name that is only whitespace', async () => {
@@ -260,11 +281,54 @@ it('does not spend a round trip on a name that is only whitespace', async () => 
   server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
-  await fillForm({ groom: '   ' })
+  await fillForm({ name: '   ' })
   await submit()
 
-  expect(await screen.findByText('신랑 이름을 입력해 주세요.')).toBeVisible()
+  expect(await screen.findByText('이름을 입력해 주세요.')).toBeVisible()
   expect(calls.created).toHaveLength(0)
+})
+
+it('starts with neither side chosen, and will not guess one', async () => {
+  const calls = recording()
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await screen.findByLabelText('예식일')
+
+  // 신랑인지 신부인지는 이 사람이 우리에게 처음 말해 주는 사실이고, 기본값으로
+  // 쓸 만한 쪽이 없다. A preselected side is a wrong answer half the time, and a
+  // wrong one here writes the wrong name onto the wrong seat of a ledger.
+  for (const label of ['신랑입니다', '신부입니다'])
+    expect(screen.getByRole('radio', { name: label })).not.toBeChecked()
+
+  await fillForm({ side: '' })
+  await submit()
+
+  expect(await screen.findByText('신랑인지 신부인지 골라 주세요.')).toBeVisible()
+  expect(calls.created).toHaveLength(0)
+})
+
+it("sends the seat the caller chose, and never their partner's", async () => {
+  const calls = recording()
+  const store = weddingStore()
+  server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm({ side: '신부', name: '이신부' })
+  await submit()
+
+  // There is no way to send a partner's name from this screen, and that is the
+  // point: their seat is created empty and an invite fills it (`#9`), so nobody
+  // types anybody else's name (docs/api-spec.md § POST /weddings).
+  await waitFor(() => expect(calls.created).toHaveLength(1))
+  expect(calls.created[0]?.body).toEqual({
+    weddingDate: '2026-10-10',
+    side: 'BRIDE',
+    name: '이신부',
+  })
+
+  // And the ledger they land on says so, in as many words.
+  expect(await screen.findByText('신랑 자리 비어 있음 · 이신부')).toBeVisible()
 })
 
 it('names the field that is empty rather than failing the whole form at once', async () => {
@@ -272,13 +336,13 @@ it('names the field that is empty rather than failing the whole form at once', a
   server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
-  await fillForm({ date: '', groom: '김신랑', bride: '' })
+  await fillForm({ date: '', side: '신랑', name: '' })
   await submit()
 
   expect(await screen.findByText('예식일을 입력해 주세요.')).toBeVisible()
-  expect(screen.getByText('신부 이름을 입력해 주세요.')).toBeVisible()
-  expect(screen.queryByText('신랑 이름을 입력해 주세요.')).not.toBeInTheDocument()
-  expect(screen.getByLabelText('신부 이름')).toHaveAttribute('aria-invalid', 'true')
+  expect(screen.getByText('이름을 입력해 주세요.')).toBeVisible()
+  expect(screen.queryByText('신랑인지 신부인지 골라 주세요.')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('내 이름')).toHaveAttribute('aria-invalid', 'true')
   expect(calls.created).toHaveLength(0)
 })
 
@@ -287,7 +351,7 @@ it('holds a name to the same 100 characters the server does', async () => {
   server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
-  await fillForm({ groom: '김'.repeat(101) })
+  await fillForm({ name: '김'.repeat(101) })
   await submit()
 
   expect(await screen.findByText('이름은 100자까지 쓸 수 있습니다.')).toBeVisible()
@@ -334,7 +398,8 @@ for (const code of ['VALIDATION_FAILED', 'MALFORMED_REQUEST_BODY']) {
     expect(document.body.textContent).not.toContain('Rejected value')
     // What they typed is still there — retyping it is the couple's work, not
     // ours to throw away.
-    expect(screen.getByLabelText('신랑 이름')).toHaveValue('김신랑')
+    expect(screen.getByLabelText('내 이름')).toHaveValue('김신랑')
+    expect(screen.getByRole('radio', { name: '신랑입니다' })).toBeChecked()
   })
 }
 
@@ -402,10 +467,10 @@ it('creates one wedding when the button is pressed twice', async () => {
   await submit()
   await submit()
 
-  // A mutation here is not idempotent and is never retried; a second POST would
-  // put a second wedding in the ledger list nobody asked for. The API accepts a
-  // second wedding by the same person on purpose, so nothing on the server side
-  // would refuse this one.
+  // A mutation here is not idempotent and is never retried. The server does
+  // refuse the second one — 409 ALREADY_IN_A_WEDDING, since `#158` — but the
+  // client has no path for that answer yet (`#164`), so this guard is what keeps
+  // a double press from becoming an error the couple has to read.
   expect(calls.created).toHaveLength(1)
   release()
   expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()

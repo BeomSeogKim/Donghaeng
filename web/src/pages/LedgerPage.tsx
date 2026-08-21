@@ -252,11 +252,11 @@ function Frame({
             <h1 className="font-display text-title leading-tight tracking-display">
               원장
             </h1>
-            {/* Which ledger this is. One person may belong to several weddings,
-                and v1 has no way to switch between them, so saying which one is
-                open is the whole of what this screen can honestly do about it. */}
+            {/* WHOSE LEDGER THIS IS. A person belongs to exactly one wedding
+                (docs/api-spec.md § GET /weddings), so this is not a switcher and
+                never was — it is the couple, read off the two seats. */}
             <p className="truncate text-meta text-ink-muted">
-              {wedding.groomName} · {wedding.brideName}
+              {wedding.seats.map(seatLabel).join(' · ')}
             </p>
           </div>
           <LogoutButton className="flex flex-col items-end gap-2 text-right" />
@@ -273,6 +273,27 @@ function Frame({
       {children}
     </main>
   )
+}
+
+const SEAT_SIDE = { GROOM: '신랑', BRIDE: '신부' } as const
+
+/**
+ * What the header calls one seat.
+ *
+ * SHOW WHAT YOU HAVE. A seat whose person has not arrived is the ordinary state
+ * of a wedding on its first day — both seats are created with the wedding and
+ * the partner's carries a side and nothing else (docs/api-spec.md
+ * § POST /weddings). So the empty half is stated as the fact it is, in the same
+ * neutral line as the names, rather than rendered as a gap, a dash, or an error.
+ *
+ * ONE `??` COVERS BOTH ABSENCES, and that is not defensiveness about the API.
+ * The document types `name` as optional AND nullable because springdoc leaves a
+ * nullable Kotlin property out of `required`; the API always sends the key, with
+ * `null` in it. The written contract is the narrower of the two, and this reads
+ * the same on either.
+ */
+function seatLabel(seat: Wedding['seats'][number]): string {
+  return seat.name ?? `${SEAT_SIDE[seat.side]} 자리 비어 있음`
 }
 
 /**

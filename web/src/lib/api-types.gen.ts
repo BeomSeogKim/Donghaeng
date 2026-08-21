@@ -14,13 +14,13 @@ export interface paths {
     get: operations["me"];
   };
   "/weddings": {
-    /** The weddings the caller is a member of, newest first */
+    /** The weddings the caller holds a seat in, newest first */
     get: operations["list"];
-    /** Create a wedding and the creator's membership in it */
+    /** Create a wedding, both of its seats and its free subscription term */
     post: operations["create"];
   };
   "/weddings/{weddingId}": {
-    /** The wedding, for a caller who is a member of it */
+    /** The wedding and its two seats, for a caller who holds one of them */
     get: operations["read"];
   };
   "/weddings/{weddingId}/guests": {
@@ -81,15 +81,15 @@ export interface components {
     };
     readonly CreateWeddingRequest: {
       /**
-       * @description The bride's name
-       * @example 이신부
-       */
-      readonly brideName: string;
-      /**
-       * @description The groom's name
+       * @description The caller's own name, as it should read on the ledger
        * @example 김신랑
        */
-      readonly groomName: string;
+      readonly name: string;
+      /**
+       * @description Which seat the caller is taking — 신랑 or 신부. Never their partner's
+       * @enum {string}
+       */
+      readonly side: "GROOM" | "BRIDE";
       /**
        * Format: date
        * @description The wedding date
@@ -141,12 +141,16 @@ export interface components {
       readonly type?: string;
     };
     readonly WeddingResponse: {
-      readonly brideName: string;
-      readonly groomName: string;
       /** Format: int64 */
       readonly id: number;
+      readonly seats: readonly components["schemas"]["WeddingSeatResponse"][];
       /** Format: date */
       readonly weddingDate: string;
+    };
+    readonly WeddingSeatResponse: {
+      readonly name?: string | null;
+      /** @enum {string} */
+      readonly side: "GROOM" | "BRIDE";
     };
   };
   responses: never;
@@ -188,7 +192,7 @@ export interface operations {
       };
     };
   };
-  /** The weddings the caller is a member of, newest first */
+  /** The weddings the caller holds a seat in, newest first */
   list: {
     responses: {
       /** @description The caller's weddings — an empty array when they have none. */
@@ -205,7 +209,7 @@ export interface operations {
       };
     };
   };
-  /** Create a wedding and the creator's membership in it */
+  /** Create a wedding, both of its seats and its free subscription term */
   create: {
     readonly requestBody: {
       readonly content: {
@@ -213,7 +217,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description The wedding and the caller's membership were created. */
+      /** @description The wedding, the caller's seat, their partner's empty seat and a FREE term were created. */
       201: {
         content: {
           readonly "*/*": components["schemas"]["WeddingResponse"];
@@ -239,7 +243,7 @@ export interface operations {
       };
     };
   };
-  /** The wedding, for a caller who is a member of it */
+  /** The wedding and its two seats, for a caller who holds one of them */
   read: {
     parameters: {
       path: {
@@ -247,7 +251,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description The caller is a member of this wedding. */
+      /** @description The caller holds a seat in this wedding. */
       200: {
         content: {
           readonly "*/*": components["schemas"]["WeddingResponse"];
@@ -259,7 +263,7 @@ export interface operations {
           readonly "*/*": components["schemas"]["ProblemDetail"];
         };
       };
-      /** @description No such wedding — which is also the answer when it exists and the caller is not a member of it, and when it has been deleted. */
+      /** @description No such wedding — which is also the answer when it exists and the caller holds no seat in it, and when it has been deleted. */
       404: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];

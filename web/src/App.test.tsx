@@ -70,7 +70,14 @@ function recording() {
 const ledger = () => [
   http.get(`${API}/weddings`, () =>
     HttpResponse.json<Wedding[]>([
-      { id: 12, weddingDate: '2026-10-10', groomName: '김신랑', brideName: '이신부' },
+      {
+        id: 12,
+        weddingDate: '2026-10-10',
+        seats: [
+          { side: 'GROOM', name: '김신랑' },
+          { side: 'BRIDE', name: '이신부' },
+        ],
+      },
     ]),
   ),
   http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json<Guest[]>([])),

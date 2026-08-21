@@ -11,7 +11,14 @@ import { ApiError } from '../lib/api'
 import { ledgerPath } from '../lib/routes'
 
 /*
- * 웨딩 만들기 — 최초 1회. 날짜와 두 사람 이름, 그 이상은 묻지 않는다.
+ * 웨딩 만들기 — 최초 1회. 예식일과 내가 누구인지, 그 이상은 묻지 않는다.
+ *
+ * NOBODY TYPES THEIR PARTNER'S NAME HERE (changed 2026-08-22,
+ * notes/2026-08-22-decision-the-couples-two-seats.md). 신랑 이름과 신부 이름은
+ * 사람의 속성이지 웨딩의 속성이 아니다 — and a required field had to be filled
+ * by whoever arrived first, which meant asking one partner to guess, abbreviate
+ * or invent the other's name on a screen they see once. The wedding is created
+ * with both of its seats; the caller fills theirs and the other waits.
  *
  * 보증인원 IS NOT ASKED HERE, AND THAT IS THE SCREEN'S MAIN DECISION
  * (notes/2026-08-07-design-screens-and-flow.md). Couples sign up before booking
@@ -83,10 +90,10 @@ export function CreateWeddingPage() {
 function CreateWeddingForm() {
   const navigate = useNavigate()
   const create = useCreateWedding()
-  const [values, setValues] = useState<CreateWeddingRequest>({
+  const [values, setValues] = useState<FormValues>({
     weddingDate: '',
-    groomName: '',
-    brideName: '',
+    side: null,
+    name: '',
   })
 
   /*
@@ -96,8 +103,8 @@ function CreateWeddingForm() {
    * telling someone their name is blank while they are still typing it.
    */
   const [submitted, setSubmitted] = useState(false)
-  const request = trimmed(values)
-  const errors = submitted ? validate(request) : {}
+  const sending = trimmed(values)
+  const errors = submitted ? validate(sending) : {}
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     // A submit is a user action, so it is handled here — never in an Effect
@@ -105,15 +112,20 @@ function CreateWeddingForm() {
     event.preventDefault()
     setSubmitted(true)
 
-    // Nothing on the server refuses a second wedding by the same person: one
-    // person may belong to several, by design. So the only thing standing
-    // between a double press and a duplicate ledger is this.
+    // The server does refuse a second wedding by the same person — 409
+    // ALREADY_IN_A_WEDDING, since `#158` — but the client has no path for that
+    // answer yet (`#164`), so this is what keeps a double press from becoming an
+    // error the couple has to read.
     if (create.isPending) return
-    if (Object.keys(validate(request)).length > 0) return
 
-    create.mutate(request, {
-      onSuccess: () => navigate(ledgerPath, { replace: true }),
-    })
+    // `side === null` is one of the errors below; naming it again is what
+    // narrows the type, because a compiler cannot read a message off a map.
+    if (Object.keys(validate(sending)).length > 0 || sending.side === null) return
+
+    create.mutate(
+      { weddingDate: sending.weddingDate, side: sending.side, name: sending.name },
+      { onSuccess: () => navigate(ledgerPath, { replace: true }) },
+    )
   }
 
   const failure = create.isError ? failureMessage(create.error) : null
@@ -123,7 +135,7 @@ function CreateWeddingForm() {
       <div className="flex w-full flex-col gap-3">
         <h1 className="font-display text-title tracking-display">웨딩 만들기</h1>
         <p className="text-body leading-body text-ink-muted">
-          예식일과 두 분의 이름만 있으면 시작할 수 있습니다.
+          예식일과 본인 이름만 있으면 시작할 수 있습니다. 상대방 이름은 적지 않습니다.
         </p>
       </div>
 
@@ -136,21 +148,18 @@ function CreateWeddingForm() {
           type="date"
           value={values.weddingDate}
         />
-        <Field
-          error={errors.groomName}
-          id="groom-name"
-          label="신랑 이름"
-          onChange={(event) => setValues({ ...values, groomName: event.target.value })}
-          type="text"
-          value={values.groomName}
+        <SideChoice
+          error={errors.side}
+          onChange={(side) => setValues({ ...values, side })}
+          value={values.side}
         />
         <Field
-          error={errors.brideName}
-          id="bride-name"
-          label="신부 이름"
-          onChange={(event) => setValues({ ...values, brideName: event.target.value })}
+          error={errors.name}
+          id="my-name"
+          label="내 이름"
+          onChange={(event) => setValues({ ...values, name: event.target.value })}
           type="text"
-          value={values.brideName}
+          value={values.name}
         />
 
         {failure !== null && (
@@ -182,10 +191,24 @@ function CreateWeddingForm() {
   )
 }
 
+type Side = CreateWeddingRequest['side']
+
+/**
+ * The form, which is not the request: `side` starts as "not answered yet", and
+ * `CreateWeddingRequest` has no way to say that. Keeping the two types apart is
+ * what keeps "neither side chosen" a state the screen can hold rather than a
+ * default it has to invent.
+ */
+type FormValues = {
+  weddingDate: string
+  side: Side | null
+  name: string
+}
+
 /**
  * What is sent, which is not quite what was typed.
  *
- * THE NAMES ARE TRIMMED HERE BECAUSE THE SERVER MEASURES BEFORE ITS OWN TRIM:
+ * THE NAME IS TRIMMED HERE BECAUSE THE SERVER MEASURES BEFORE ITS OWN TRIM:
  * 100 characters plus a trailing space is a 400 even though it would have been
  * stored as 100 (docs/api-spec.md § POST /weddings). Trimming in the client is
  * what makes the two agree — and it is a normalisation of what the person typed,
@@ -193,15 +216,11 @@ function CreateWeddingForm() {
  *
  * The date is passed through untouched. It is already `YYYY-MM-DD`.
  */
-function trimmed(values: CreateWeddingRequest): CreateWeddingRequest {
-  return {
-    weddingDate: values.weddingDate,
-    groomName: values.groomName.trim(),
-    brideName: values.brideName.trim(),
-  }
+function trimmed(values: FormValues): FormValues {
+  return { ...values, name: values.name.trim() }
 }
 
-type FieldErrors = Partial<Record<keyof CreateWeddingRequest, string>>
+type FieldErrors = Partial<Record<keyof FormValues, string>>
 
 /**
  * The three things the client can know are wrong without asking. Every one of
@@ -212,22 +231,117 @@ type FieldErrors = Partial<Record<keyof CreateWeddingRequest, string>>
  * inventing a product decision nobody has made. A past date is accepted by the
  * API on purpose: building the ledger after the fact is a real case.
  */
-function validate(request: CreateWeddingRequest): FieldErrors {
+function validate(values: FormValues): FieldErrors {
   const errors: FieldErrors = {}
-  if (request.weddingDate === '') errors.weddingDate = '예식일을 입력해 주세요.'
-  const names = [
-    ['groomName', request.groomName, '신랑'],
-    ['brideName', request.brideName, '신부'],
-  ] as const
-  for (const [key, name, who] of names) {
-    // Measured on the trimmed value, in UTF-16 code units — the same unit and
-    // the same value the server will count.
-    if (name === '') errors[key] = `${who} 이름을 입력해 주세요.`
-    else if (name.length > NAME_MAX)
-      errors[key] = `이름은 ${NAME_MAX}자까지 쓸 수 있습니다.`
-  }
+  if (values.weddingDate === '') errors.weddingDate = '예식일을 입력해 주세요.'
+  if (values.side === null) errors.side = '신랑인지 신부인지 골라 주세요.'
+  // Measured on the trimmed value, in UTF-16 code units — the same unit and the
+  // same value the server will count.
+  if (values.name === '') errors.name = '이름을 입력해 주세요.'
+  else if (values.name.length > NAME_MAX)
+    errors.name = `이름은 ${NAME_MAX}자까지 쓸 수 있습니다.`
   return errors
 }
+
+/** 신랑 먼저, the order every `seats` array uses. */
+const SIDES: readonly (readonly [Side, string])[] = [
+  ['GROOM', '신랑입니다'],
+  ['BRIDE', '신부입니다'],
+]
+
+/**
+ * 나는 신랑입니다 / 신부입니다.
+ *
+ * NEITHER IS PRESELECTED, AND THAT IS THE DECISION IN THIS FILE. This is the
+ * first thing a person tells us about themselves and there is no side that is
+ * safe to assume — a default would be wrong for half of everyone, and wrong here
+ * writes their name onto their partner's seat of a ledger they will keep for
+ * months. An unchosen radio group is not an unfinished form; it is the honest
+ * state of a question nobody has answered.
+ *
+ * NATIVE RADIOS PAINTED AS A SEGMENTED CONTROL, the shape the design system
+ * already has (design/components/parts/13-attendance-control.html). Two
+ * half-width cells at the 44px tap floor is what makes it hard to get wrong with
+ * a thumb, which is this screen's primary device — and the platform control is
+ * what supplies arrow-key movement, the group's label and "which one is chosen"
+ * to a screen reader, none of which a pair of styled buttons would have.
+ */
+function SideChoice({
+  error,
+  onChange,
+  value,
+}: {
+  error?: string
+  onChange: (side: Side) => void
+  value: Side | null
+}) {
+  const invalid = error !== undefined
+
+  return (
+    /* A div with `role="radiogroup"` rather than a fieldset: the group is what
+       carries `aria-invalid` and points at the error, and `aria-invalid` is a
+       supported state of `radiogroup` while `group` — a fieldset's implicit
+       role — does not list it. The label is joined by id for the same reason. */
+    <div
+      aria-describedby={invalid ? SIDE_ERROR_ID : undefined}
+      aria-invalid={invalid ? true : undefined}
+      aria-labelledby={SIDE_LABEL_ID}
+      className="flex flex-col gap-2"
+      role="radiogroup"
+    >
+      <span className="text-meta font-semibold text-ink" id={SIDE_LABEL_ID}>
+        나는
+      </span>
+      <div
+        className={`grid grid-cols-2 overflow-hidden rounded-control border ${
+          invalid ? 'border-danger' : 'border-line-strong'
+        }`}
+      >
+        {SIDES.map(([side, label], index) => (
+          <label
+            className={`${SIDE_CELL} ${index > 0 ? 'border-l border-line' : ''}`}
+            key={side}
+          >
+            <input
+              checked={value === side}
+              className="sr-only"
+              name="side"
+              onChange={() => onChange(side)}
+              type="radio"
+              value={side}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+      {invalid && (
+        <p className="text-meta leading-snug text-danger" id={SIDE_ERROR_ID}>
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+const SIDE_LABEL_ID = 'side-label'
+const SIDE_ERROR_ID = 'side-error'
+
+/*
+ * The chosen side is filled with 자적 — the same fill the pressed filter chip
+ * uses, and one of the few places this product fills colour at all. It has to be
+ * readable at a glance mid-form, because it is the one answer here that has no
+ * text to fall back on.
+ *
+ * The focus ring is offset INWARD: the cells sit inside a clipped rounded
+ * border, so an outline drawn outside the cell is an outline nobody sees.
+ */
+const SIDE_CELL =
+  'flex min-h-[var(--dh-tap-min)] cursor-pointer items-center justify-center ' +
+  'bg-surface px-3 text-body font-semibold text-ink-muted transition-colors ' +
+  'duration-(--dh-dur-fast) ease-standard ' +
+  'has-[:checked]:bg-primary has-[:checked]:text-ink-on-accent ' +
+  'has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 ' +
+  'has-[:focus-visible]:outline-focus'
 
 /** The column's limit, and the API's (docs/api-spec.md § POST /weddings). */
 const NAME_MAX = 100

@@ -8,7 +8,11 @@ import { type Wedding, weddingsQueryKey } from './useWeddings'
 // no handler declares `produces` (docs/api-spec.md § The generated OpenAPI
 // document) — consume it as written; correcting it is `#66`.
 
-/** 날짜와 두 사람 이름. There is no fourth member and there cannot be one. */
+/**
+ * 예식일과, 내가 어느 자리인지와, 내 이름. There is no fourth member and there
+ * cannot be one — and the third is the CALLER's name, never their partner's
+ * (changed 2026-08-22, docs/api-spec.md § POST /weddings).
+ */
 export type CreateWeddingRequest =
   paths['/weddings']['post']['requestBody']['content']['application/json']
 
@@ -20,8 +24,9 @@ export type CreateWeddingRequest =
 // nothing checks, so `useWeddings` owns the type and this file imports it.
 
 /**
- * `POST /weddings` — the wedding and the caller's membership in it, in one
- * transaction. The one endpoint in the product that is not scoped to a wedding.
+ * `POST /weddings` — the wedding, both of its seats and its free subscription
+ * term, in one transaction. One of the two endpoints in the product that are not
+ * scoped to a wedding.
  *
  * NO AGGREGATE IS WRITTEN, and that is not an oversight of the "a mutation's
  * onSuccess writes the response into the cache" rule: a wedding is created
