@@ -85,13 +85,13 @@ internal class HeadcountContractTest : GuestFixture() {
 
     @Test
     fun `another wedding's guests contribute zero`() {
-        // One person may belong to several weddings, so a query scoped to "the
-        // caller's guests" passes every other test in this class and adds two
-        // ledgers together here
-        // (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
+        // A query scoped to "the caller's guests" passes every other test in this
+        // class and adds two ledgers together here
+        // (notes/2026-08-19-decision-wedding-scope-gate.md §2b). The second wedding is
+        // inserted because the API refuses to make one — see [insertSecondWedding].
         val session = login()
         val here = createWedding(session)
-        val there = createWedding(session, groomName = "박신랑")
+        val there = insertSecondWedding(session, groomName = "박신랑")
         addGuest(session, here, """{"name":"김영수","side":"GROOM","expectedPartySize":2}""")
         addGuest(session, there, """{"name":"이영희","side":"BRIDE","expectedPartySize":7}""")
 

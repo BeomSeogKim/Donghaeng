@@ -54,8 +54,10 @@ create type wedding_side as enum ('GROOM', 'BRIDE');
 
 
 -- ---------------------------------------------------------------------------
--- Identity. Outside every wedding — a person belongs to themselves, and may
--- belong to several weddings (the session never knows the wedding).
+-- Identity. Outside every wedding — a person belongs to themselves, and belongs
+-- to at most one wedding (narrowed 2026-08-21; the session still never knows
+-- which, because a membership can be revoked and a wedding deleted). NOTHING IN
+-- THIS FILE ENFORCES THAT — see the membership indexes below.
 -- ---------------------------------------------------------------------------
 
 create table app_user (
@@ -238,6 +240,16 @@ create unique index ux_membership_wedding_user
 
 -- The hot path of the whole product: every request resolves
 -- user -> membership -> wedding.
+--
+-- NOT UNIQUE, and that is the open half of "한 사람은 웨딩 하나" (2026-08-21).
+-- ux_membership_wedding_user above does not constrain it either, being keyed
+-- (wedding_id, user_id): two memberships in two different weddings never
+-- collide there. So the rule that a person holds at most one live membership is
+-- enforced in the application — WeddingService.claimSoleMembership, which takes
+-- an advisory lock on the user id — and a second live row remains representable
+-- here. Making this index unique would close that, and it is DDL against a live
+-- database, which is the founder's to apply
+-- (notes/2026-08-09-decision-schema-ownership.md).
 create index ix_membership_user
     on membership (user_id)
     where deleted_at is null;

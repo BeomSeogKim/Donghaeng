@@ -33,6 +33,10 @@ class WeddingController internal constructor(
      * `ScopelessWeddingEndpointTest`, and a third is a design change rather than a
      * line in that list.
      *
+     * **It is also where 한 사람은 웨딩 하나 is enforced** (`#158`): a caller who already
+     * belongs to a wedding is refused with 409, not handed a second ledger that would
+     * make their first one unreachable.
+     *
      * [AuthenticatedUser] is the first parameter so that an anonymous request is
      * refused before its body is read — one answer, rather than one that tells the
      * caller which fields exist. `CurrentUserParameterTest` sweeps that rule.
@@ -48,6 +52,11 @@ class WeddingController internal constructor(
         ApiResponse(
             responseCode = "401",
             description = "No session, or an expired or revoked one.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "409",
+            description = "The caller already belongs to a wedding; a person belongs to exactly one.",
             content = [Content(schema = Schema(implementation = ProblemDetail::class))],
         ),
     )

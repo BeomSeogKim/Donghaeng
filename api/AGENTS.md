@@ -256,8 +256,8 @@ how `api/` is required to implement them.
   not an `ALTER TYPE`. The guest-group list changed twice in one day; assume it
   changes again. (`guest.lifecycle` is not in v1 at all — decided 2026-08-11,
   returns with the RSVP links; the varchar rule binds it whenever it does.)
-- **The session never knows the wedding.** Each request resolves
-  user → membership → wedding; one person may belong to several.
+- **The session never knows the wedding, and a person is in at most one** — every
+  path that creates a `membership` calls `WeddingService.claimSoleMembership`.
 - **Every mutation writes `GuestChange` in the same transaction** (`#25`, in v1
   as of 2026-08-20): one row per changed **field** — old, new, who, when, source
   (`MANUAL` / `VENDOR_EMAIL` / `IMPORT` + nullable FK to the ingest or import).

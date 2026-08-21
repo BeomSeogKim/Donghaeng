@@ -199,7 +199,7 @@ internal class CreateGuestContractTest : GuestFixture() {
         // no error, no log line, a row in the wrong wedding.
         val session = login()
         val first = createWedding(session)
-        val second = createWedding(session)
+        val second = insertSecondWedding(session)
 
         val response = addGuest(session, second, """{"name":"김영수","side":"GROOM"}""")
 

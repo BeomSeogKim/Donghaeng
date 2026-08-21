@@ -46,6 +46,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-21-decision-one-wedding-per-person.md` | 두 번째 웨딩은 409 `ALREADY_IN_A_WEDDING`; 동시 요청은 자문 잠금이 막는다(유니크 인덱스는 대표의 DDL); `GET /weddings`는 배열로 남되 원소는 많아야 하나 |
 | `2026-08-21-decision-the-headcount-endpoint.md` | 인원수는 참석을 먼저 읽고 원장 필터와 같은 식을 쓴다; 보증인원은 비었으면 멤버가 없다; 집계는 `guest/`에서 계산한다 |
 | `2026-08-20-decision-the-ledger-read-and-its-filters.md` | 원장 목록은 페이지를 나누지 않는다; 입력 순서가 계약이고, 참석 필터는 인원수가 세는 값을 읽는다 |
 | `2026-08-20-decision-row-concurrency-and-the-audit-trail.md` | 같은 컬럼 경쟁은 마지막 쓰기가 이기되 덮인 값은 `guest_change`에 남는다; `@Version` 없음, 상대적 변경 금지 |

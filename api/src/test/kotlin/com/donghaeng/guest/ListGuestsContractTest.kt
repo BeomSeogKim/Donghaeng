@@ -219,7 +219,7 @@ internal class ListGuestsContractTest : GuestFixture() {
     fun `the list is this wedding's guests and nobody else's`() {
         val session = login()
         val first = createWedding(session)
-        val second = createWedding(session)
+        val second = insertSecondWedding(session)
         val here = addGuest(session, first, """{"name":"김영수","side":"GROOM"}""")
         val there = addGuest(session, second, """{"name":"이영희","side":"BRIDE"}""")
 

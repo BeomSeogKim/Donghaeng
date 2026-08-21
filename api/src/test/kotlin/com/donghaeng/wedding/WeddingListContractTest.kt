@@ -105,7 +105,7 @@ internal class WeddingListContractTest : ApiFixture() {
     fun `a soft-deleted wedding is not in the list, though the membership is still live`() {
         val session = login()
         val deleted = createWedding(session, "김신랑")
-        val kept = createWedding(session, "박신랑")
+        val kept = insertSecondWedding(session, "박신랑")
 
         jdbc.update("update wedding set deleted_at = now() where id = ?", deleted)
 
@@ -118,7 +118,7 @@ internal class WeddingListContractTest : ApiFixture() {
         // only the membership predicate can exclude it.
         val session = login()
         val left = createWedding(session, "김신랑")
-        val kept = createWedding(session, "박신랑")
+        val kept = insertSecondWedding(session, "박신랑")
 
         jdbc.update("update membership set deleted_at = now() where wedding_id = ?", left)
 
@@ -126,14 +126,22 @@ internal class WeddingListContractTest : ApiFixture() {
     }
 
     @Test
-    fun `several weddings come back newest first`() {
-        // Order is contract, not incidental: `web/` reads the first entry to decide
-        // which ledger to open, and an unordered list would open a different one on
-        // a refresh (docs/api-spec.md, `GET /weddings`).
+    fun `two weddings come back newest first`() {
+        // **The list holds at most one entry now** (`#158`), so this order is no
+        // longer reachable through the API — and it is still contract, for one
+        // account: whoever acquired a second wedding before the refusal existed.
+        // `web/` opens `[0]`, and a database-chosen order would open a different
+        // ledger of theirs on every refresh (docs/api-spec.md, `GET /weddings`).
         val session = login()
-        val first = createWedding(session, "김신랑")
-        val second = createWedding(session, "박신랑")
+        val older = createWedding(session, "김신랑")
+        val newer = insertSecondWedding(session, "박신랑")
 
-        assertThat(get("/weddings", listOf(session)).json().map { it["id"].asLong() }).containsExactly(second, first)
+        // Stamped rather than assumed: the two rows are written by two different
+        // clocks — the JVM's and the container's — and the order under test must not
+        // depend on which of them is ahead.
+        jdbc.update("update wedding set created_at = timestamptz '2026-01-01 00:00+09' where id = ?", older)
+        jdbc.update("update wedding set created_at = timestamptz '2026-01-02 00:00+09' where id = ?", newer)
+
+        assertThat(get("/weddings", listOf(session)).json().map { it["id"].asLong() }).containsExactly(newer, older)
     }
 }

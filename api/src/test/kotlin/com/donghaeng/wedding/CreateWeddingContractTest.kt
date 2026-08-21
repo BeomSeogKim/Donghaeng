@@ -13,6 +13,9 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.net.HttpCookie
 import java.net.http.HttpResponse
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * THE RED GATE OF `#123`: a logged-in person creates a wedding, and comes away with
@@ -51,8 +54,11 @@ internal class CreateWeddingContractTest : ApiFixture() {
     @BeforeEach
     @AfterEach
     fun clean() {
-        memberships.deleteAll()
-        weddings.deleteAll()
+        // SQL, not `deleteAll()`: both entities carry `@SQLRestriction`, so a
+        // repository delete cannot see the soft-deleted rows these tests make — and
+        // a membership left behind fails the `wedding` delete on its foreign key.
+        jdbc.update("delete from membership")
+        jdbc.update("delete from wedding")
     }
 
     @Test
@@ -187,23 +193,75 @@ internal class CreateWeddingContractTest : ApiFixture() {
     }
 
     @Test
-    fun `a second wedding by the same person succeeds`() {
-        // v1 decided one person may belong to several weddings; the screen guides
-        // them to make one, the API does not refuse the second
-        // (root AGENTS.md, Standing product facts).
+    fun `a second wedding by the same person is refused`() {
+        // REVERSES what this test asserted until 2026-08-21, when the founder
+        // settled that a person belongs to exactly one wedding — created or joined,
+        // never both, never two (root AGENTS.md, Standing product facts).
+        //
+        // The screen already refuses it (`#148`), and a screen is bypassed by one
+        // `curl`. What follows a second wedding is not a tidy extra row: `web/`
+        // reads the caller's FIRST wedding as "the ledger", and there is no switcher
+        // and no delete — so the second one makes the first one's 하객 unreachable.
         val session = login()
-        val userId = callerId(session)
 
         val first = create(session, body())
         val second = create(session, body(date = "2027-03-03"))
 
         assertThat(first.statusCode()).isEqualTo(201)
+        assertThat(second.statusCode()).isEqualTo(409)
+        assertThat(second.headers().firstValue("Content-Type")).hasValue("application/problem+json")
+        assertThat(second.json()["code"].asText()).isEqualTo("ALREADY_IN_A_WEDDING")
+
+        // The refusal is total: the second request leaves no wedding behind either,
+        // which is what a check placed after the insert would get wrong.
+        assertThat(weddings.findAll().map { it.id }).containsExactly(first.json()["id"].asLong())
+        assertThat(memberships.findAll()).hasSize(1)
+    }
+
+    @Test
+    fun `a person whose only membership was soft-deleted creates again`() {
+        // The case a bare `exists` query gets wrong. Every membership is soft-deleted
+        // (notes/2026-08-10-decision-soft-delete.md), so a person removed from the
+        // wedding they were in still has a row — and if that row counted, they could
+        // never have a ledger again.
+        val session = login()
+        val abandoned = create(session, body()).json()["id"].asLong()
+        jdbc.update("update membership set deleted_at = now() where wedding_id = ?", abandoned)
+
+        val second = create(session, body(date = "2027-03-03"))
+
         assertThat(second.statusCode()).isEqualTo(201)
-        assertThat(first.json()["id"].asLong()).isNotEqualTo(second.json()["id"].asLong())
-        assertThat(weddings.findAll()).hasSize(2)
-        assertThat(memberships.findAll().map { it.userId }).containsExactly(userId, userId)
-        assertThat(memberships.findAll().map { it.weddingId })
-            .containsExactlyInAnyOrder(first.json()["id"].asLong(), second.json()["id"].asLong())
+        assertThat(second.json()["id"].asLong()).isNotEqualTo(abandoned)
+    }
+
+    @Test
+    fun `simultaneous creates leave exactly one wedding`() {
+        // Two tabs, or one button double-tapped on a slow connection. A read-then-
+        // insert inside the service is a race with a real window: every request
+        // finds no membership, and every request creates one — after which the
+        // person's ledger is whichever wedding `GET /weddings` happens to sort
+        // first. Driven over HTTP because the window is between transactions.
+        val session = login()
+        val ready = CyclicBarrier(SIMULTANEOUS)
+        val pool = Executors.newFixedThreadPool(SIMULTANEOUS)
+
+        val statuses =
+            try {
+                (1..SIMULTANEOUS)
+                    .map { attempt ->
+                        pool.submit<Int> {
+                            ready.await(10, TimeUnit.SECONDS)
+                            create(session, body(groom = "김신랑$attempt")).statusCode()
+                        }
+                    }.map { it.get(30, TimeUnit.SECONDS) }
+            } finally {
+                pool.shutdownNow()
+            }
+
+        assertThat(statuses.count { it == 201 }).describedAs("%s", statuses).isEqualTo(1)
+        assertThat(statuses.count { it == 409 }).describedAs("%s", statuses).isEqualTo(SIMULTANEOUS - 1)
+        assertThat(weddings.findAll()).hasSize(1)
+        assertThat(memberships.findAll()).hasSize(1)
     }
 
     @Test
@@ -247,4 +305,9 @@ internal class CreateWeddingContractTest : ApiFixture() {
 
     private fun headcountOf(weddingId: Long): Int? =
         jdbc.queryForObject("select guaranteed_headcount from wedding where id = ?", Int::class.javaObjectType, weddingId)
+
+    private companion object {
+        /** Kept under Hikari's default pool size: each attempt holds a connection while it waits. */
+        private const val SIMULTANEOUS = 6
+    }
 }

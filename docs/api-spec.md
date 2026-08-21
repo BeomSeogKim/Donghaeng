@@ -164,6 +164,7 @@ endpoint raises:
 | `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. **Only reachable where no frontend origin is configured** — otherwise the callback redirects; see `GET /login/oauth2/code/google`. |
 | `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
 | `WEDDING_NOT_FOUND` | 404 | The wedding this request is scoped to could not be resolved for this caller. **One code for four situations on purpose** — no such wedding, a wedding the caller is not a member of, a deleted wedding, and a `{weddingId}` that is not a number. See "Being scoped to a wedding" below. |
+| `ALREADY_IN_A_WEDDING` | 409 | The caller already belongs to a wedding, and **a person belongs to exactly one** — created or joined, never both, never two. Raised by `POST /weddings` today and by the invite accept (`#9`) when it lands, from one check, so the two can never disagree. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A `POST`/`PUT`/`PATCH` sent a `Content-Type` the endpoint does not accept, **or sent none at all**. Not an edge case — it is how the CSRF gate refuses a request; see "Every POST, PUT and PATCH must send `Content-Type: application/json`". |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND` | as named | A framework-level error with no more specific code. |
@@ -544,9 +545,10 @@ and `GET /weddings`._
 
 **Being logged in is not enough to reach a ledger.** Every wedding-scoped request
 resolves `user → membership → wedding` before the endpoint runs, and the endpoint
-runs only if that walk succeeds. The session does not carry a wedding: a person may
-belong to several, and a couple share one, so which wedding is a property of the
-request and not of the login.
+runs only if that walk succeeds. The session does not carry a wedding, even though a
+person now belongs to at most one (changed 2026-08-21): a membership can be revoked
+and a wedding deleted, so which wedding is a property of the request rather than a
+fact settled once at login.
 
 **The wedding id travels in the path and nowhere else.** Never in a body, never in a
 query parameter — a request that puts it anywhere else is a request that chooses its
@@ -648,8 +650,21 @@ Errors
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused
   **before the body is looked at**, so an anonymous request with an invalid body is
   a 401 and never a 400.
+- 409 `ALREADY_IN_A_WEDDING` — the caller already belongs to a wedding (added
+  2026-08-21, `#158`). **The recovery is not a retry and not an error screen: call
+  `GET /weddings` and open the one that comes back.** Two tabs, or one button
+  tapped twice on a slow connection, produce exactly this — one 201 and one 409,
+  never two weddings.
 - 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule, in
   "Every POST, PUT and PATCH must send `Content-Type: application/json`" above.
+
+**Why 409 and not the 404 every cross-tenant refusal answers.** That 404 exists to
+deny a wedding-id oracle: an id the caller may not have must answer exactly what a
+nonexistent id answers (`notes/2026-08-10-decision-cross-tenant-status-code.md`).
+This refusal names no wedding at all. It is a fact about **the caller's own
+account** — one they already know, and one `GET /weddings` hands the same session in
+full — so there is nothing to leak, and a 404 would tell `web/` "what you asked for
+is gone" when the truth is "you already have one; go and open it".
 
 Six things are decided here rather than left to the caller to infer.
 
@@ -664,9 +679,12 @@ Six things are decided here rather than left to the caller to infer.
   "must be in the future" rule; it would refuse people the server accepts. The only
   bound is what the column can store, which is not a product rule — if the product
   should refuse a date twenty years out, that is a decision nobody has made yet.
-- **A second wedding by the same person succeeds.** One person may belong to
-  several weddings, so the API does not refuse the second — the screen is what
-  guides a couple to create one. Do not treat a 201 here as proof they had none.
+- **A second wedding by the same person is refused with 409**, and a 201 is
+  therefore proof that they had none (changed 2026-08-21 — this reverses what this
+  entry said until then, in as many words). **A person belongs to exactly one
+  wedding**, created or joined; `web/` guards the route as well (`#148`), and this
+  is the half of that guard a `curl` cannot walk around. The refusal is total —
+  the second request leaves no wedding row behind either.
 - **Names are stored trimmed.** Leading and trailing whitespace is removed before
   the row is written, which is why the response echoes the stored value. A name
   that is *only* whitespace is a 400, not an empty name.
@@ -704,14 +722,20 @@ A bare array, no envelope, and **each entry is the same `WeddingResponse`**
 **An empty array is the ordinary answer for a person with no wedding**, not a 404.
 Do not treat it as an error state; it is the branch 최초 1회 exists for.
 
-**Ordered newest first** (most recently created), and the order is contract — a
-client that takes `[0]` gets the same wedding on every reload. It is *not* a claim
-about which wedding is "current": v1 has no way to switch weddings and no notion of
-a last-viewed one, so a person with several is out of scope until that is designed.
+**At most one entry** (changed 2026-08-21, `#158`): a person belongs to exactly one
+wedding, and `POST /weddings` refuses a second. **That sentence is what makes reading
+`[0]` correct rather than lucky** — before it, taking the first entry was a guess
+about which of several ledgers the person meant.
 
-**A list, even though v1 guides a couple to make exactly one.** One person may belong
-to several weddings, and the API may not claim otherwise — an endpoint that answered
-a single object would have to change shape the first time that matters.
+**Still an array, and it stays one.** The shape is on the seam — `web/` generates its
+types from it — so narrowing it to a single object would break every call site and
+buy nothing. Read it as "zero or one", not as "a list that happens to be short".
+
+**Ordered newest first** (most recently created), and the order remains contract for
+the one account it can still matter to: whoever acquired a second wedding before the
+refusal existed. It is *not* a claim about which wedding is "current" — there is no
+switcher and no last-viewed wedding, and if either is ever built it needs a real
+answer rather than an ordering that was convenient.
 
 Errors
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. **An anonymous
@@ -1161,8 +1185,9 @@ Five things follow, and each one is asserted by a test rather than described:
   follow the head guest.
 - **A soft-deleted guest contributes zero.** The couple's own deletions leave the
   number exactly as the ledger shows it.
-- **Another wedding's guests contribute zero.** One person may belong to several
-  weddings; each ledger has its own number.
+- **Another wedding's guests contribute zero.** Each ledger has its own number, and
+  the number is scoped to the wedding in the path — never to the caller, whose one
+  wedding this may or may not be.
 - **The guests under `?attendance=ATTENDING` are exactly the guests this number
   counts.** 원장과 인원수는 한 화면, so the chip and the total may never disagree.
 

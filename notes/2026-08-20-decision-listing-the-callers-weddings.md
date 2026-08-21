@@ -1,5 +1,12 @@
 # Decision — listing the caller's weddings, and how a scopeless wedding endpoint is declared (2026-08-20)
 
+> **§1's premise narrowed 2026-08-21** — a person belongs to exactly one wedding,
+> so this endpoint answers **at most one entry** and `POST /weddings` refuses the
+> second. The array and the "newest first" order both survive, on the seam argument
+> rather than on "a person may belong to several": see
+> [2026-08-21-decision-one-wedding-per-person.md](2026-08-21-decision-one-wedding-per-person.md)
+> §4.
+
 `#132`. Until now the only way to learn a `weddingId` was the 201 from
 `POST /weddings`, which meant the client could not decide the "최초 1회" branch in
 `로그인 → [웨딩 만들기 · 최초 1회] → 원장` (`2026-08-07-design-screens-and-flow.md`)

@@ -6,7 +6,9 @@ import com.donghaeng.auth.session.SessionTokens
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.BeforeEach
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import java.net.HttpCookie
@@ -43,6 +45,10 @@ internal const val STUB_AUTHORIZATION_CODE = "stub-authorization-code"
 internal abstract class ApiFixture {
     @LocalServerPort
     protected var port: Int = 0
+
+    /** Private, and named apart from the `jdbc` its subclasses declare: only [insertSecondWedding] uses it. */
+    @Autowired
+    private lateinit var fixtureJdbc: JdbcTemplate
 
     protected val mapper = ObjectMapper()
 
@@ -137,12 +143,52 @@ internal abstract class ApiFixture {
             .asLong()
 
     /**
+     * A second wedding for a person who already has one — **a state `POST /weddings`
+     * no longer mints** (`#158`), so it is inserted rather than requested.
+     *
+     * It exists to keep the tenancy tests worth what they were written for. Each of
+     * them kills the same mutation: a query scoped to the CALLER instead of to the
+     * WEDDING, which passes every other test in its class
+     * (notes/2026-08-19-decision-wedding-scope-gate.md §2b). That mutation is
+     * unobservable if no caller can hold two memberships — so with 한 사람은 웨딩 하나
+     * enforced, those tests would silently stop testing anything. **Two invariants
+     * that hold each other up fail together**, and wedding-scoping is not allowed to
+     * rest on a rule enforced one layer away.
+     *
+     * No `deleted_at`, so both memberships are live and both weddings resolve.
+     */
+    protected fun insertSecondWedding(
+        session: HttpCookie,
+        groomName: String = "박신랑",
+    ): Long {
+        val userId = callerId(session)
+        val weddingId =
+            fixtureJdbc.queryForObject(
+                """
+                insert into wedding (wedding_date, groom_name, bride_name, created_by, created_at, updated_at)
+                values (date '2026-10-10', ?, '이신부', ?, now(), now())
+                returning id
+                """.trimIndent(),
+                Long::class.java,
+                groomName,
+                userId,
+            )!!
+        fixtureJdbc.update(
+            "insert into membership (wedding_id, user_id, created_at) values (?, ?, now())",
+            weddingId,
+            userId,
+        )
+        return weddingId
+    }
+
+    /**
      * A second person, with their own `app_user` row and their own session.
      *
-     * The standing fact this exists for: a person may belong to several weddings and
-     * a wedding to several people, so "the caller's wedding" is never a property of
-     * the session — it is a walk that can fail, and a tenancy test needs someone for
-     * it to fail for (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
+     * The standing fact this exists for: a wedding may have two people in it — the
+     * couple are two accounts (2026-08-21) — so "the caller's wedding" is never a
+     * property of the session; it is a walk that can fail, and a tenancy test needs
+     * someone for it to fail for (notes/2026-08-19-decision-wedding-scope-gate.md
+     * §2b).
      */
     protected fun loginAs(subject: String): HttpCookie {
         STUB_PROVIDER.subject = subject
