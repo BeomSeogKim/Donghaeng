@@ -52,9 +52,22 @@ export type GuestMutation = AddGuest['responses'][201]['content']['*/*']
  * while the 신랑측 chip is pressed does not leave the unfiltered list stale
  * behind it (notes/2026-08-21-decision-ledger-screen.md § Query keys).
  *
- * IT IS NOT AWAITED. Returning the promise from `onSuccess` makes query-core
- * wait for the refetch before releasing the next mutation, which is exactly the
- * serialisation this product's tap rate must not pay for.
+ * IT IS `onSettled`, NOT `onSuccess`, AND THAT IS THE BACKSTOP RATHER THAN A
+ * PLACEMENT DETAIL — this hook is the first one the ordering record asks for it
+ * in (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md § The
+ * backstop). A POST can commit on the server and lose its response: a dropped
+ * connection, a timeout. Mutations are `retry: 0`, so there is no second
+ * attempt and `onSuccess` never runs — and because the sheet stays open with
+ * the couple's text still in the fields, a failure they can see is a failure
+ * they will answer by pressing 추가 again. In `onSuccess` the ledger behind the
+ * sheet would still be one guest short while the row exists, so the second
+ * press writes 김영수 twice and the number is honestly computed from a wrong
+ * ledger. In `onSettled` the list refetches on the failure too, and the row is
+ * there to be seen.
+ *
+ * IT IS NOT AWAITED. query-core waits for whatever `onSettled` returns before
+ * releasing the next mutation, so returning the invalidation promise would put
+ * a full ledger refetch between two taps.
  */
 export function useAddGuest(weddingId: number) {
   const queryClient = useQueryClient()
@@ -73,6 +86,8 @@ export function useAddGuest(weddingId: number) {
     },
     onSuccess: (created) => {
       setHeadcount(queryClient, weddingId, created.headcount)
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ledgerQueryKey(weddingId) })
     },
   })

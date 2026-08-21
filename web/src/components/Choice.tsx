@@ -9,6 +9,12 @@
  * floor because this is filled with a thumb, on the screen a couple types their
  * entire ledger into.
  *
+ * IT IS 웨딩 만들기's OWN CONTROL, GENERALISED. That screen's `SideChoice` was
+ * this, for one question; 하객 추가 needed the same shape twice more (측, 참석
+ * 여부) and the duplicate was folded back in here rather than left to drift.
+ * Two components painting 측 is two that can disagree about the one answer on
+ * either screen that has no text to fall back on.
+ *
  * THE PRESSED FILL IS PER OPTION, NOT PER CONTROL, and that is the whole reason
  * `tone` exists. 측 fills with 자적, 참석 fills with 초록, and **불참 fills with
  * the neutral** — never red. A guest who cannot come is a fact, not an error,

@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
+import { Choice, type ChoiceOption } from '../components/Choice'
 import { Field } from '../components/Field'
 import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
@@ -148,9 +149,13 @@ function CreateWeddingForm() {
           type="date"
           value={values.weddingDate}
         />
-        <SideChoice
+        <Choice
           error={errors.side}
+          id="side"
+          label="나는"
+          name="side"
           onChange={(side) => setValues({ ...values, side })}
+          options={SIDES}
           value={values.side}
         />
         <Field
@@ -243,105 +248,25 @@ function validate(values: FormValues): FieldErrors {
   return errors
 }
 
-/** 신랑 먼저, the order every `seats` array uses. */
-const SIDES: readonly (readonly [Side, string])[] = [
-  ['GROOM', '신랑입니다'],
-  ['BRIDE', '신부입니다'],
-]
-
 /**
- * 나는 신랑입니다 / 신부입니다.
+ * 나는 신랑입니다 / 신부입니다 — 신랑 먼저, the order every `seats` array uses.
  *
  * NEITHER IS PRESELECTED, AND THAT IS THE DECISION IN THIS FILE. This is the
  * first thing a person tells us about themselves and there is no side that is
- * safe to assume — a default would be wrong for half of everyone, and wrong here
- * writes their name onto their partner's seat of a ledger they will keep for
- * months. An unchosen radio group is not an unfinished form; it is the honest
- * state of a question nobody has answered.
+ * safe to assume — a default would be wrong for half of everyone, and wrong
+ * here writes their name onto their partner's seat of a ledger they will keep
+ * for months. An unchosen radio group is not an unfinished form; it is the
+ * honest state of a question nobody has answered.
  *
- * NATIVE RADIOS PAINTED AS A SEGMENTED CONTROL, the shape the design system
- * already has (design/components/parts/13-attendance-control.html). Two
- * half-width cells at the 44px tap floor is what makes it hard to get wrong with
- * a thumb, which is this screen's primary device — and the platform control is
- * what supplies arrow-key movement, the group's label and "which one is chosen"
- * to a screen reader, none of which a pair of styled buttons would have.
- */
-function SideChoice({
-  error,
-  onChange,
-  value,
-}: {
-  error?: string
-  onChange: (side: Side) => void
-  value: Side | null
-}) {
-  const invalid = error !== undefined
-
-  return (
-    /* A div with `role="radiogroup"` rather than a fieldset: the group is what
-       carries `aria-invalid` and points at the error, and `aria-invalid` is a
-       supported state of `radiogroup` while `group` — a fieldset's implicit
-       role — does not list it. The label is joined by id for the same reason. */
-    <div
-      aria-describedby={invalid ? SIDE_ERROR_ID : undefined}
-      aria-invalid={invalid ? true : undefined}
-      aria-labelledby={SIDE_LABEL_ID}
-      className="flex flex-col gap-2"
-      role="radiogroup"
-    >
-      <span className="text-meta font-semibold text-ink" id={SIDE_LABEL_ID}>
-        나는
-      </span>
-      <div
-        className={`grid grid-cols-2 overflow-hidden rounded-control border ${
-          invalid ? 'border-danger' : 'border-line-strong'
-        }`}
-      >
-        {SIDES.map(([side, label], index) => (
-          <label
-            className={`${SIDE_CELL} ${index > 0 ? 'border-l border-line' : ''}`}
-            key={side}
-          >
-            <input
-              checked={value === side}
-              className="sr-only"
-              name="side"
-              onChange={() => onChange(side)}
-              type="radio"
-              value={side}
-            />
-            {label}
-          </label>
-        ))}
-      </div>
-      {invalid && (
-        <p className="text-meta leading-snug text-danger" id={SIDE_ERROR_ID}>
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
-
-const SIDE_LABEL_ID = 'side-label'
-const SIDE_ERROR_ID = 'side-error'
-
-/*
- * The chosen side is filled with 자적 — the same fill the pressed filter chip
- * uses, and one of the few places this product fills colour at all. It has to be
- * readable at a glance mid-form, because it is the one answer here that has no
+ * The control is `components/Choice.tsx`, which this screen's own segmented
+ * control became when 하객 추가 needed the same thing twice (`#135`). Two
+ * components painting 측 is two that can drift, on the one answer here with no
  * text to fall back on.
- *
- * The focus ring is offset INWARD: the cells sit inside a clipped rounded
- * border, so an outline drawn outside the cell is an outline nobody sees.
  */
-const SIDE_CELL =
-  'flex min-h-[var(--dh-tap-min)] cursor-pointer items-center justify-center ' +
-  'bg-surface px-3 text-body font-semibold text-ink-muted transition-colors ' +
-  'duration-(--dh-dur-fast) ease-standard ' +
-  'has-[:checked]:bg-primary has-[:checked]:text-ink-on-accent ' +
-  'has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 ' +
-  'has-[:focus-visible]:outline-focus'
+const SIDES: readonly ChoiceOption<Side>[] = [
+  { value: 'GROOM', label: '신랑입니다', tone: 'primary' },
+  { value: 'BRIDE', label: '신부입니다', tone: 'primary' },
+]
 
 /** The column's limit, and the API's (docs/api-spec.md § POST /weddings). */
 const NAME_MAX = 100

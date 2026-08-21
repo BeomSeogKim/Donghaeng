@@ -1,10 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
 import type { Guest } from '../hooks/useGuests'
-import type { Headcount } from '../hooks/useHeadcount'
+import { type Headcount, headcountQueryKey } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
 import type { paths } from '../lib/api-types.gen'
@@ -293,6 +293,173 @@ it('moves the number from the response the create carried, and never asks again'
    * (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md).
    */
   expect(api.headcountRequests).toHaveLength(1)
+})
+
+it('never lets a read already in flight overwrite the number the create returned', async () => {
+  const api = ledger(guest(1, '박지민'))
+  let releaseStale = () => {}
+  const stale = new Promise<void>((resolve) => {
+    releaseStale = resolve
+  })
+  let reads = 0
+  server.use(
+    api.me(),
+    api.weddings(),
+    api.list(),
+    /*
+     * The second read is the one a couple tabbing back from KakaoTalk starts —
+     * `staleTime: 0` and `refetchOnWindowFocus` are both deliberate — and it
+     * was computed BEFORE the guest was added, so it answers the old number.
+     */
+    http.get(`${API}/weddings/:weddingId/headcount`, async () => {
+      reads += 1
+      if (reads > 1) await stale
+      return HttpResponse.json<Headcount>({ mealHeadcount: 1 })
+    }),
+    api.create(),
+  )
+
+  const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
+  const headcount = await screen.findByRole('region', { name: '인원수' })
+  expect(await within(headcount).findByText('1')).toBeVisible()
+
+  void queryClient.refetchQueries({ queryKey: headcountQueryKey(12) })
+  await waitFor(() => expect(reads).toBe(2))
+
+  const sheet = await openSheet()
+  await form(sheet).name('김영수')
+  await form(sheet).side('신랑측')
+  await form(sheet).submit()
+  expect(await within(headcount).findByText('2')).toBeVisible()
+
+  // The older answer lands now. query-core's fetch resolution writes whatever
+  // it was given, with no comparison of when the two numbers were computed, so
+  // without the cancel in `setHeadcount` this is where 2 becomes 1 again.
+  releaseStale()
+  await act(async () => {
+    await new Promise((settle) => setTimeout(settle, 20))
+  })
+
+  // A number lagging a tap by 100ms is fine; a number moving backwards is not.
+  expect(queryClient.getQueryData(headcountQueryKey(12))).toEqual({ mealHeadcount: 2 })
+  expect(within(headcount).getByText('2')).toBeVisible()
+})
+
+it('writes one guest for a double press, not two people with one name', async () => {
+  const api = ledger()
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  server.use(
+    api.me(),
+    api.weddings(),
+    api.list(),
+    api.headcount(),
+    http.post(`${API}/weddings/:weddingId/guests`, async ({ request }) => {
+      api.created.push({ request, body: (await request.clone().json()) as never })
+      await held
+      return HttpResponse.json<GuestMutation>(
+        {
+          guest: guest(101, '김영수'),
+          headcount: { mealHeadcount: 1 },
+        },
+        { status: 201 },
+      )
+    }),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const sheet = await openSheet()
+  await form(sheet).name('김영수')
+  await form(sheet).side('신랑측')
+  await form(sheet).submit()
+  await waitFor(() => expect(api.created).toHaveLength(1))
+
+  /*
+   * A create is not idempotent: a second guest with the same name succeeds and
+   * is a second row, deliberately, because 동명이인 is real and direct entry
+   * needs no matching (docs/api-spec.md). So a double press is two people in
+   * the ledger and a meal headcount honestly computed from a wrong list — and
+   * the sheet staying open, with the name still in the field, is exactly the
+   * shape that invites the second press.
+   */
+  await form(sheet).submit()
+  await form(sheet).submit()
+
+  /*
+   * COUNTED AFTER THE QUEUE HAS DRAINED, WHICH IS THE ONLY MOMENT THAT PROVES
+   * ANYTHING. Mutations share one scope and run one at a time, so a press made
+   * while the first is in flight does not reach the network yet — asserting
+   * here would pass with no guard at all, because the extra presses would be
+   * sitting in the queue rather than absent. They fire the moment the first one
+   * settles, so the count has to be read after that.
+   */
+  release()
+  expect(await within(sheet).findByText(/김영수님을 추가했습니다/)).toBeVisible()
+  await act(async () => {
+    await new Promise((settle) => setTimeout(settle, 20))
+  })
+  expect(api.created).toHaveLength(1)
+})
+
+it('does not leave the last guest\u0027s number standing over the next one', async () => {
+  const api = ledger()
+  server.use(
+    api.me(),
+    api.weddings(),
+    api.list(),
+    api.headcount(),
+    api.create(),
+    // The second add fails, after the first one succeeded.
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const sheet = await openSheet()
+  await form(sheet).name('김영수')
+  await form(sheet).side('신랑측')
+  await form(sheet).submit()
+  expect(await within(sheet).findByText(/김영수님을 추가했습니다/)).toBeVisible()
+
+  server.use(api.create(() => problem(500, 'INTERNAL_ERROR')))
+  await form(sheet).name('이서연')
+  await form(sheet).submit()
+
+  /*
+   * THE CONFIRMATION IS ABOUT ONE WRITE AND MAY NOT OUTLIVE IT. It carries a
+   * number, and a number standing on the screen after a later add failed is the
+   * one thing this product may not show — a 식대 인원 that was true a guest ago,
+   * rendered as though it were true now.
+   */
+  expect(await within(sheet).findByRole('alert')).toBeVisible()
+  expect(within(sheet).queryByText(/김영수님을 추가했습니다/)).not.toBeInTheDocument()
+})
+
+it('offers a failure it cannot explain again, rather than explaining it away', async () => {
+  const api = ledger()
+  server.use(
+    api.me(),
+    api.weddings(),
+    api.list(),
+    api.headcount(),
+    api.create(() => problem(500, 'INTERNAL_ERROR')),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const sheet = await openSheet()
+  await form(sheet).name('김영수')
+  await form(sheet).side('신랑측')
+  await form(sheet).submit()
+
+  // A 5xx says nothing about what went wrong, by design, so there is nothing to
+  // explain and only something to try again — and this is the failure a couple
+  // on a phone in a wedding hall actually meets.
+  expect(
+    await within(sheet).findByText(
+      '하객을 추가하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    ),
+  ).toBeVisible()
+  expect(within(sheet).getByLabelText('이름')).toHaveValue('김영수')
 })
 
 it('puts the new row in the ledger even while a filter is pressed', async () => {

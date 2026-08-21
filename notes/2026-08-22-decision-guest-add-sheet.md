@@ -53,6 +53,25 @@ own response carried**, not a second read: the same value written into the query
 cache in the same `onSuccess`, so there is one number in two places and never two
 numbers.
 
+**That last sentence is only true because `setHeadcount` cancels first** — found
+in review, 2026-08-22, and it was not true as first written. 인원수 runs
+`staleTime: 0` with `refetchOnWindowFocus`, both deliberate, so the ordinary
+sequence is: the couple tabs back from KakaoTalk, a read starts that will answer
+128, they tap 추가, the write answers 129, and then the older read lands.
+query-core resolves a fetch by calling `setData` unconditionally — no comparison
+of when the two numbers were computed — and `setQueryData` cancels nothing on its
+own, so the pinned figure would have dropped back to 128 beside a sheet saying
+129. **A number lagging a tap is fine; a number moving backwards is the one
+thing this product may not do.**
+
+The guard is inside `setHeadcount`, by that function's own principle that a
+caller must not be able to write this number by hand. Its two lines are ordered,
+and not for the obvious reason: `cancelQueries` defaults to `revert: true`, which
+restores the state captured when the cancelled fetch *started* — the stale
+number — and applies it **synchronously**, inside the call. So the revert lands
+first and the write overwrites it. Await the cancel and write in the `then`, or
+put the two lines the other way round, and the stale value is what survives.
+
 ## What the client sends, and what it refuses to send
 
 - **Every member is sent, including the ones sitting at their default.** An
@@ -73,18 +92,32 @@ numbers.
 
 ## The number and the list come from two different mechanisms, on purpose
 
-`onSuccess` does two things and they are not symmetric:
+The two are written by different callbacks, and that asymmetry is the ordering
+record's (`2026-08-21-decision-query-defaults-and-mutation-ordering.md` § The
+backstop), not a choice made here — that record names `#135` as the hook that
+writes the first `onSettled` invalidation, and this change is where it lands.
 
-- **The headcount is written from the response** (`setHeadcount`). Fetching it
-  beside the mutation lands outside the window mutations are serialised in and
-  puts the out-of-order race straight back
-  (`2026-08-21-decision-query-defaults-and-mutation-ordering.md`).
-- **The ledger is invalidated, not written into** — `ledgerQueryKey`, the whole
-  ledger rather than the filter combination on screen. Which filter combinations
-  a new row belongs in is the *server's* answer, and reproducing it in the client
-  would be a second implementation of 원장's filtering: the same class of mistake
-  as computing the headcount here. The invalidation is **not awaited**, because
-  query-core waits on a returned promise before releasing the next mutation.
+- **The headcount is written from the response, in `onSuccess`** (`setHeadcount`).
+  Fetching it beside the mutation lands outside the window mutations are
+  serialised in and puts the out-of-order race straight back.
+- **The ledger is invalidated in `onSettled`, not written into** —
+  `ledgerQueryKey`, the whole ledger rather than the filter combination on
+  screen. Which filter combinations a new row belongs in is the *server's*
+  answer, and reproducing it in the client would be a second implementation of
+  원장's filtering: the same class of mistake as computing the headcount here.
+  The invalidation is **not awaited**, because query-core waits on a returned
+  promise before releasing the next mutation.
+
+**`onSettled` rather than `onSuccess` is what makes the sheet safe to leave
+open** — corrected in review, 2026-08-22, after it was written on `onSuccess`. A
+POST can commit on the server and lose its response to a dropped connection or a
+timeout; mutations are `retry: 0`, so there is no second attempt and `onSuccess`
+never runs. The couple sees the failure copy with their text still in the fields
+and presses 추가 again — which is the behaviour the section above deliberately
+invites. On `onSuccess` the ledger behind the sheet would still be one guest
+short while the row existed, so the second press writes 김영수 twice and the
+number is honestly computed from a wrong ledger. On `onSettled` the list
+refetches on the failure too, and the row is there to be seen.
 
 The contract was asserted in `LedgerPage.test.tsx` before this screen existed,
 by a hand-written mutation standing in for it. **That scaffold is deleted in this
@@ -105,11 +138,13 @@ many.
 - **`--dh-scrim` is a new token, in both themes.** The dim behind a sheet is a
   colour and nothing hardcodes a colour; it could not be an alpha on
   `--dh-ink`, because ink inverts between the themes and a scrim does not.
-- **The segmented control became `components/Choice.tsx`** — two call sites in
-  this one screen (측, 참석 여부) justify it, and the pressed fill is **per
-  option**: 측 fills 자적, 참석 fills 초록, and **불참 fills the neutral, never
-  red.** 웨딩 만들기's own `SideChoice` was left alone rather than folded in; that
-  is a follow-up, not this change.
+- **The segmented control became `components/Choice.tsx`**, and the pressed fill
+  is **per option**: 측 fills 자적, 참석 fills 초록, and **불참 fills the
+  neutral, never red.** 웨딩 만들기's own `SideChoice` is **folded into it and
+  deleted** — 95 lines, its suite green throughout. It was going to be left as a
+  follow-up, and review corrected that: this change is what created the second
+  component painting 측, so removing it is cleaning up after this diff rather
+  than refactoring next to it.
 - **A `<div role="dialog">`, not a native `<dialog>`.** jsdom 30 does not
   implement `showModal()` — verified, not assumed — so building on it would have
   meant a screen no test could open.
@@ -122,5 +157,15 @@ many.
   close the sheet; a hand-rolled trap is code with no test behind it in a jsdom
   that has no `inert` either. It arrives with 하객 상세 (`#12`), which is the
   second sheet and therefore the moment the chrome earns its own component.
+
+## Open, and not to be pre-empted
+
+**Whether the 측 should carry over at all** is with the founder as of 2026-08-22.
+The review's argument: this sheet refuses a default for the first guest because
+"a default would be a claim the couple never made", and then pre-selects one for
+every guest after — and a guest filed on the wrong 측 cannot be fixed in v1,
+because `#12` does not exist and there is no delete. The behaviour above stands
+until that is answered, and the code is not being reshaped to make either answer
+cheaper.
 - **Per-meal-type counts.** They hang off meal types only the couple can create
   (`#10`), so a guest is added first and their meals set after (`#14`).
