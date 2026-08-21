@@ -141,7 +141,6 @@ export function AddGuestSheet({
               error={errors.name}
               id="guest-name"
               label="이름"
-              maxLength={NAME_MAX}
               onChange={(event) => change({ name: event.target.value })}
               ref={nameField}
               type="text"
@@ -208,7 +207,6 @@ export function AddGuestSheet({
               error={errors.groupLabel}
               id="guest-group-label"
               label="그룹 라벨"
-              maxLength={GROUP_LABEL_MAX}
               onChange={(event) => change({ groupLabel: event.target.value })}
               placeholder="예: 대학교 동아리"
               type="text"
@@ -221,7 +219,6 @@ export function AddGuestSheet({
               id="guest-contact"
               inputMode="tel"
               label="연락처"
-              maxLength={CONTACT_MAX}
               onChange={(event) => change({ contact: event.target.value })}
               type="tel"
               value={values.contact}
@@ -232,7 +229,6 @@ export function AddGuestSheet({
               error={errors.accessibilityNote}
               id="guest-accessibility-note"
               label="배려사항"
-              maxLength={NOTE_MAX}
               onChange={(event) => change({ accessibilityNote: event.target.value })}
               placeholder="예: 휠체어 좌석"
               type="text"
@@ -382,7 +378,15 @@ function validate(values: FormValues): FieldErrors {
   return errors
 }
 
-/** The API's bounds (docs/api-spec.md § POST /weddings/{weddingId}/guests). */
+/**
+ * The API's bounds (docs/api-spec.md § POST /weddings/{weddingId}/guests).
+ *
+ * THEY ARE CHECKED, NOT ENFORCED BY `maxLength`. A `maxLength` truncates a
+ * paste without saying so, and a 배려사항 silently cut at 500 characters is the
+ * couple's own words thrown away by a control that then reports success. Being
+ * told which field is too long is the honest answer, and it is the one 웨딩
+ * 만들기 already gives.
+ */
 const NAME_MAX = 100
 const GROUP_LABEL_MAX = 100
 const CONTACT_MAX = 30

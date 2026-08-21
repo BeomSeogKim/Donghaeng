@@ -405,6 +405,28 @@ it('keeps the party size on a guest who cannot come, rather than erasing it', as
   expect(await within(headcount).findByText('0')).toBeVisible()
 })
 
+it('holds every field to the same bound the server does, and names the one that broke', async () => {
+  const api = ledger()
+  server.use(api.me(), api.weddings(), api.list(), api.headcount(), api.create())
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const sheet = await openSheet()
+  await form(sheet).name('김'.repeat(101))
+  await form(sheet).side('신랑측')
+  await userEvent.type(within(sheet).getByLabelText('연락처'), '0'.repeat(31))
+  await form(sheet).submit()
+
+  /*
+   * NOTHING IS TRUNCATED ON THE WAY IN. A `maxLength` would cut a pasted
+   * 배려사항 at 500 characters without saying so, and report success on the
+   * couple's own words thrown away — so the bound is checked and the field that
+   * broke it is named, which is what the 400 itself does not do (`#63`).
+   */
+  expect(await within(sheet).findByText('이름은 100자까지 쓸 수 있습니다.')).toBeVisible()
+  expect(within(sheet).getByText('연락처는 30자까지 쓸 수 있습니다.')).toBeVisible()
+  expect(api.created).toHaveLength(0)
+})
+
 it('offers the seven groups the API has, and no eighth', async () => {
   const api = ledger()
   server.use(api.me(), api.weddings(), api.list(), api.headcount(), api.create())
