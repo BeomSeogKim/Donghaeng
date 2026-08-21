@@ -1,7 +1,9 @@
 package com.donghaeng.json
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
 import java.time.LocalDate
@@ -47,6 +49,44 @@ class PatchTest {
 
         assertThat(body.date).isEqualTo(Patch.Set(LocalDate.of(2026, 10, 10)))
         assertThat(body.count).isEqualTo(Patch.Set(150))
+    }
+
+    @Test
+    fun `an input that coerces to null is refused rather than read as a value of null`() {
+        // **Three spellings, not one.** Jackson coerces an empty string, a blank
+        // string AND an empty array to null for these types, so a fix aimed at `""`
+        // alone would leave two ways in. Each would build a `Patch.Set` carrying
+        // null — a state this hierarchy does not have, and one every validator
+        // downstream reads as "not sent". Both member types are asserted because the
+        // coercion is per-type: one passing would say nothing about the other.
+        val coerced =
+            listOf(
+                """{"date":""}""",
+                """{"count":""}""",
+                """{"date":"  "}""",
+                """{"count":" "}""",
+                """{"date":[]}""",
+                """{"count":[]}""",
+            )
+        coerced.forEach { body ->
+            assertThatThrownBy { mapper.readValue(body, Body::class.java) }
+                .describedAs("%s", body)
+                .isInstanceOf(MismatchedInputException::class.java)
+        }
+    }
+
+    @Test
+    fun `no reachable input builds a Set carrying null`() {
+        // The property the case above is one instance of, stated once so that a
+        // future member type does not have to be remembered: whatever comes back, a
+        // `Set` holds a value.
+        listOf("""{}""", """{"date":null}""", """{"date":"2026-10-10"}""", """{"count":0}""").forEach { body ->
+            val body1 = mapper.readValue(body, Body::class.java)
+
+            listOf(body1.date, body1.count).forEach { member ->
+                if (member is Patch.Set) assertThat(member.value).describedAs("%s", body).isNotNull()
+            }
+        }
     }
 
     @Test

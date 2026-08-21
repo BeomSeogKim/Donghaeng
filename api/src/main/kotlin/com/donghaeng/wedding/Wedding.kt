@@ -39,10 +39,11 @@ import java.time.LocalDate
  *
  * `@DynamicUpdate` is what confines a race to the one column it was about
  * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md). Without it
- * `#8` setting [guaranteedHeadcount] alone emits a full-column UPDATE that
+ * `#173` setting [guaranteedHeadcount] alone would emit a full-column UPDATE that
  * blind-writes [weddingDate] from the snapshot its transaction loaded — and `wedding`
  * has no `guest_change` trail to recover an overwritten value from, so "last write
- * wins is accepted" never covered it.
+ * wins is accepted" never covered it. `WeddingUpdateStatementTest` holds it against
+ * the issued SQL; nothing did until 2026-08-22.
  */
 @Entity
 @DynamicUpdate

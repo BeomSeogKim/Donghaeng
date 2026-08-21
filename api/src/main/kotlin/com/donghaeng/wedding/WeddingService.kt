@@ -235,9 +235,10 @@ internal class WeddingService(
      * overwritten value from
      * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md).
      *
-     * **`updatedAt` moves only if something was written.** The clock is the
-     * service's, as everywhere here, and an empty body changed nothing — a row
-     * reported as touched when it was not is a lie an audit read would believe.
+     * **`updatedAt` moves only if a value actually changed.** The clock is the
+     * service's, as everywhere here, and a row reported as touched when it was not is
+     * a lie an audit read would believe — which is as true of a form resubmitted
+     * unedited as it is of an empty body, so both are compared rather than assumed.
      *
      * It re-reads the row rather than trusting the resolver's, for the reason [read]
      * does: the two are separate transactions and the wedding can be deleted between
@@ -258,25 +259,34 @@ internal class WeddingService(
         var written = false
 
         when (val date = request.weddingDate) {
-            is Patch.Set -> {
-                row.weddingDate = date.value
-                written = true
-            }
+            // Compared, not just assigned: a member resent unchanged is a member
+            // nothing happened to, and `updatedAt` below is the only thing that would
+            // record otherwise (Hibernate's own dirty checking is by value too, so an
+            // equal assignment emits no UPDATE of its own).
+            is Patch.Set ->
+                if (row.weddingDate != date.value) {
+                    row.weddingDate = date.value
+                    written = true
+                }
             // Absent leaves it alone. Cleared cannot arrive — `@NotCleared` refuses
-            // it with a 400, because a wedding always has a date.
+            // it with a 400, because a wedding always has a date, and
+            // `PatchMemberSweepTest` is what keeps that annotation from being forgotten.
             Patch.Absent, Patch.Cleared -> Unit
         }
         when (val guaranteed = request.guaranteedHeadcount) {
-            is Patch.Set -> {
-                row.guaranteedHeadcount = guaranteed.value
-                written = true
-            }
+            is Patch.Set ->
+                if (row.guaranteedHeadcount != guaranteed.value) {
+                    row.guaranteedHeadcount = guaranteed.value
+                    written = true
+                }
             // 계약이 바뀐 커플은 미설정으로 돌아간다: the venue's number is theirs to
-            // withdraw, and we never hold a stale one in the gap.
-            Patch.Cleared -> {
-                row.guaranteedHeadcount = null
-                written = true
-            }
+            // withdraw, and we never hold a stale one in the gap. Clearing a column
+            // that is already NULL is not a change either.
+            Patch.Cleared ->
+                if (row.guaranteedHeadcount != null) {
+                    row.guaranteedHeadcount = null
+                    written = true
+                }
             Patch.Absent -> Unit
         }
 

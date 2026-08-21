@@ -37,6 +37,13 @@ accepted" was written about columns that do have one. The couple are two account
 with the same screen open; a partial update confines a collision to a field both of
 them actually typed into.
 
+**What holds this is `WeddingUpdateStatementTest`, against the SQL that is issued** —
+and until review nothing did. The contract test that reads "a member that is not sent
+is left alone" makes two PATCHes in two transactions, so the second reloads a row
+already holding the value and writes it back: **a blind full-column PUT passes it
+identically**, as does deleting `@DynamicUpdate`. The property is about one statement,
+so it is asserted on one statement. Both mutations were run and both go red.
+
 Jackson does not hand this over for free — a nullable property is `null` for both
 cases — so it is a mechanism: `com.donghaeng.json.Patch`, three cases (`Absent`,
 `Cleared`, `Set`) filled by a deserializer whose `getNullValue` is what makes an
@@ -44,6 +51,35 @@ explicit `null` observable at all. A sealed hierarchy rather than a nullable pay
 so that every reader is an exhaustive `when` and "the caller sent null" has a name.
 It lives in a package **underneath** the domains, listed in `ArchitectureTest`'s
 `SUBSTRATE`, because `wedding/` and `guest/` will both read bodies with it.
+
+### Wrapping a payload in `Patch` removes a protection every other DTO has
+
+The most load-bearing fact about this type, found in review and stated here because
+nobody would otherwise know it. `jackson-module-kotlin` null-checks the **constructor
+parameter**, and that parameter is `Patch<LocalDate>` — non-null, and satisfied by a
+`Patch`. **The type argument is erased**, so nothing checks the payload:
+
+```
+Plain(weddingDate: LocalDate)  {"weddingDate":""} -> KotlinInvalidNullException -> 400
+Body(date: Patch<LocalDate>)   {"date":""}        -> Patch.Set(value = null)    -> 500
+```
+
+Jackson returns `null` from `deserialize` — not only from `getNullValue` — for an
+empty string, a blank string **and an empty array**, three spellings and not one, and
+neither Boot nor `Jackson2ObjectMapperBuilder` changes that coercion. `Patch.Set`'s
+payload is `T` with upper bound `Any?`, so Kotlin emits no check either. Observed
+before the fix: `{"guaranteedHeadcount":""}` answered **200 and erased the 보증인원**
+the couple had agreed with their venue, because every validator downstream reads
+`(value as? Patch.Set)?.value ?: return true` — which says "absent or cleared" and
+silently also says "a `Set` carrying null".
+
+**So `PatchDeserializer` refuses it: a `Patch` payload that cannot be read is
+`MALFORMED_REQUEST_BODY` — never `Cleared`, and never `Set(null)`.** Not mapped to
+`Cleared`, because that would make `""` a second spelling of "clear 보증인원", an
+intent nobody expressed and a clear nobody asked for; `Patch`'s whole thesis is named
+states and no unnamed conventions. `PatchTest` holds all three coercions against the
+Boot-configured mapper, for both a date member and an integer member — the coercion
+is per-type, so one passing says nothing about the other.
 
 **A member with no cleared state wears `@NotCleared`** and answers `null` with a 400
 `VALIDATION_FAILED`. It is not silently ignored: ignoring it would mean this
@@ -53,9 +89,32 @@ check, for the standing reason — **a cast is not a validator**
 (`2026-08-17-decision-log-masking-mechanism.md`), and what the edge does not refuse
 the column refuses as a masked 500.
 
+**Forgetting `@NotCleared` fails silent, so a sweep holds it.** The service's `when`
+reads `Patch.Cleared -> Unit`, the request answers **200 having written nothing**, and
+nothing else notices — no 500, no leak, a contract lie. `PatchMemberSweepTest` refuses
+any `Patch` member that carries neither the annotation nor an entry in an allowlist
+**naming the domain reason it may be emptied**, in the shape `ResolvedPrincipalTest`'s
+`PUBLIC` and `ScopelessWeddingEndpointTest`'s `SCOPELESS` already use. Verified by
+deleting the annotation: the sweep names the member and goes red.
+
+**A constraint on a `Patch` member is written against `Patch`, not against the
+payload — and that is forced, not chosen.** The tidy alternative is Hibernate
+Validator's `ValueExtractor`, which would make `Patch<@Min(1) Int>` work and delete
+both hand-rolled validators. **It cannot be written in Kotlin**, tried and measured
+rather than assumed: `ValueExtractor<Patch<@ExtractedValue *>>` is a Kotlin syntax
+error (a star projection cannot be annotated), the concrete-type spelling compiles and
+is refused by HV at startup (`HV000203: fails to declare the extracted type parameter
+using @ExtractedValue`), and — decisively — `javap` shows Kotlin emits `@Min` on a type
+argument **only into `@Metadata`, never as a JVM `RuntimeVisibleTypeAnnotations`
+attribute**, which is the only place Hibernate Validator looks. So even a Java-source
+extractor would not make the constraint visible. `#12`'s five constraints therefore
+arrive as `Patch`-typed validators, and that is the cost of the wrapper rather than an
+oversight to be cleaned up.
+
 **An empty body `{}` is a legal no-op**: 200, nothing written, and `updated_at` does
-not move. A row reported as touched when it was not is a lie an audit read would
-believe.
+not move — and neither does a member **resent unchanged**, which is compared rather
+than assumed for the same reason. A row reported as touched when it was not is a lie
+an audit read would believe.
 
 ## 2. 보증인원 can be cleared, and that is a domain answer
 
@@ -126,7 +185,9 @@ against.
   "누가 보증인원을 바꿨어?" is currently unanswerable. That is a gap this record names
   and does not close — it needs an issue, not a table invented here.
 - **Whether an unknown JSON member is refused.** Unchanged and still API-wide: a
-  member this DTO does not declare is ignored.
+  member this DTO does not declare is ignored. That is a different question from a
+  **declared** member whose payload cannot be read, which §1 answers:
+  `MALFORMED_REQUEST_BODY`.
 - **The seat name** (`#175`) and the 참석 토글 (`#13`) — both inherit §1 and §3, and
   neither is written here.
 

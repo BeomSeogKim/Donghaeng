@@ -72,6 +72,10 @@ internal class UpdateWeddingContractTest : GuestFixture() {
 
     @Test
     fun `a member that is not sent is left alone`() {
+        // **What this case does NOT hold**: two PATCHes are two transactions, so the
+        // second reloads a row already holding 150 and a blind full-column write
+        // would pass here identically. That the request does not CARRY the member it
+        // never mentioned is `WeddingUpdateStatementTest`'s, against the issued SQL.
         val session = login()
         val weddingId = createWedding(session)
         patch("/weddings/$weddingId", listOf(session), """{"guaranteedHeadcount":150}""")
@@ -164,6 +168,27 @@ internal class UpdateWeddingContractTest : GuestFixture() {
     }
 
     @Test
+    fun `an empty string is not a second way to spell null, on either member`() {
+        val session = login()
+        val weddingId = createWedding(session)
+        patch("/weddings/$weddingId", listOf(session), """{"guaranteedHeadcount":150}""")
+
+        // A number input the couple blanked serialises to "" unless the client
+        // special-cases it, and `""` is a value the caller sent — not a request to
+        // clear. Jackson coerces a blank string to null for both of these types, so
+        // without a refusal in the deserializer this reads as `Set(null)`: the date
+        // becomes a masked 500, and 보증인원 is destroyed by a 200 nobody asked for.
+        listOf("""{"guaranteedHeadcount":""}""", """{"weddingDate":""}""", """{"weddingDate":"  "}""").forEach { body ->
+            val response = patch("/weddings/$weddingId", listOf(session), body)
+
+            assertThat(response.statusCode()).describedAs("%s", body).isEqualTo(400)
+            assertThat(response.json()["code"].asText()).describedAs("%s", body).isEqualTo("MALFORMED_REQUEST_BODY")
+        }
+        assertThat(headcount(session, weddingId)["guaranteedHeadcount"].asInt()).isEqualTo(150)
+        assertThat(get("/weddings/$weddingId", listOf(session)).json()["weddingDate"].asText()).isEqualTo("2026-10-10")
+    }
+
+    @Test
     fun `an empty body changes nothing, and does not claim the row was touched`() {
         val session = login()
         val weddingId = createWedding(session)
@@ -189,6 +214,21 @@ internal class UpdateWeddingContractTest : GuestFixture() {
         assertThat(withoutInstance(theirs)).isEqualTo(withoutInstance(nobodys))
         // And the refusal wrote nothing: the number the couple sees is still theirs.
         assertThat(headcount(session, weddingId).has("guaranteedHeadcount")).isFalse()
+    }
+
+    @Test
+    fun `a stranger sending an unreadable body is still told only that there is no wedding`() {
+        val session = login()
+        val weddingId = createWedding(session)
+        val stranger = loginAs("a-stranger")
+
+        // The resolver runs before the body is read, so the parse failure never
+        // happens. If it did, a 400 would tell someone with no claim on this wedding
+        // that the id resolves — the oracle the 404 exists to close.
+        val response = patch("/weddings/$weddingId", listOf(stranger), """{"guaranteedHeadcount":"""")
+
+        assertThat(response.statusCode()).isEqualTo(404)
+        assertThat(response.json()["code"].asText()).isEqualTo("WEDDING_NOT_FOUND")
     }
 
     @Test

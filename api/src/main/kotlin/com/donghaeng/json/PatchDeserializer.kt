@@ -19,6 +19,22 @@ import com.fasterxml.jackson.databind.deser.ContextualDeserializer
  * [getNullValue] is the whole reason this class is contextual work rather than a
  * `@JsonCreator`: it is the one hook that fires for an explicit `null`, and it is
  * what makes "the caller sent null" observable at all.
+ *
+ * **[Patch.Set] never carries `null`, and that has to be enforced here** (added
+ * 2026-08-22 in review of `#173`). Jackson returns `null` from `deserialize` too,
+ * not only from [getNullValue]: an empty or blank string coerces to null for most
+ * types, and neither Boot nor `Jackson2ObjectMapperBuilder` changes that. Nothing
+ * downstream would catch it — `Patch.Set`'s payload is `T`, whose upper bound is
+ * `Any?`, so Kotlin emits no null check, and a validator reading `(value as?
+ * Patch.Set)?.value ?: return true` reads such a member as "not sent". Observed:
+ * `{"guaranteedHeadcount":""}` answered **200 and erased the 보증인원** the couple
+ * had agreed with their venue.
+ *
+ * **It is refused rather than read as [Patch.Cleared]**, which is the same choice
+ * `Patch` itself makes: three named states and no unnamed conventions. `""` meaning
+ * "clear" would be a second spelling of `null`, and a client that has one spelling
+ * available does not need two (notes/2026-08-22-decision-partial-update-shape.md
+ * §1).
  */
 internal class PatchDeserializer private constructor(
     private val value: JsonDeserializer<*>?,
@@ -43,7 +59,17 @@ internal class PatchDeserializer private constructor(
     override fun deserialize(
         parser: JsonParser,
         context: DeserializationContext,
-    ): Patch<*> = Patch.Set(checkNotNull(value) { "PatchDeserializer was used uncontextualised" }.deserialize(parser, context))
+    ): Patch<*> {
+        val read = checkNotNull(value) { "PatchDeserializer was used uncontextualised" }.deserialize(parser, context)
+        // Carries no submitted text: `detail` is diagnostic, and Jackson's own
+        // messages are already the reason `docs/api-spec.md` says never to render it.
+        return Patch.Set(read ?: context.reportInputMismatch(Patch::class.java, NOT_A_VALUE))
+    }
 
     override fun getNullValue(context: DeserializationContext): Patch<*> = Patch.Cleared
+
+    private companion object {
+        private const val NOT_A_VALUE =
+            "not a value for this member: send null to clear it, or omit it to leave it alone"
+    }
 }

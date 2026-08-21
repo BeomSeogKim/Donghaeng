@@ -627,6 +627,13 @@ member and a `null` mean exactly the same thing, because both take the column's
 default. On an **update** they cannot, because there is a stored value for them to
 disagree about.
 
+**`null` is the only spelling of "clear".** An empty string, a blank string and an
+empty array are **not** ways to empty a member — each is a **400
+`MALFORMED_REQUEST_BODY`**, because the caller sent a value and the value could not be
+read. This matters to a form: a number input the couple has blanked serialises to
+`""` under `JSON.stringify`, and that request is refused rather than silently
+clearing 보증인원. **Send `null`, or leave the member out.**
+
 **Not every member can be cleared.** A member backed by a value the resource always
 has — 예식일, a 하객's 이름 — answers `null` with **400 `VALIDATION_FAILED`**. Each
 endpoint's entry says which of its members are clearable; the rule is never "try it
@@ -934,7 +941,8 @@ Request
 | `weddingDate` | `YYYY-MM-DD` | left alone | **400** — a wedding always has a date |
 | `guaranteedHeadcount` | integer ≥ 1 | left alone | **clears it** — back to not having one |
 
-**보증인원 can be set, changed and cleared.** 미설정 is a real state and a couple can
+**보증인원 can be set, changed and cleared — and `null` is how you clear it**, never
+`0` and never `""`. 미설정 is a real state and a couple can
 arrive back at it: a contract that fell through, a venue changed, a number typed into
 the wrong box. Cleared and never-set are the same state and read the same way — the
 `headcount` below simply has no `guaranteedHeadcount` member.
@@ -986,8 +994,10 @@ Errors
   `weddingDate` sent as `null`. Nothing in the body is applied when any member is
   refused.
 - 400 `MALFORMED_REQUEST_BODY` — a member of the wrong type, an unparseable
-  `weddingDate`, or a body that is not JSON. **Two codes, one meaning for the user**:
-  the request was wrong.
+  `weddingDate`, a body that is not JSON, or **a member sent as `""`, `"  "` or `[]`**
+  — see "Partial updates" above: those are not ways to clear a member, and
+  `{"guaranteedHeadcount":""}` is refused rather than emptying the venue's number.
+  **Two codes, one meaning for the user**: the request was wrong.
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
   the body is looked at**, so an anonymous request with an invalid body is a 401.
 - 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an
