@@ -1,5 +1,6 @@
 package com.donghaeng.wedding
 
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
@@ -49,8 +50,32 @@ internal class WeddingService(
                     updatedAt = now,
                 ),
             )
-        memberships.save(Membership(weddingId = wedding.id, userId = userId, createdAt = now))
+        saveMembershipOrRefuse(Membership(weddingId = wedding.id, userId = userId, createdAt = now))
         return wedding.toWeddingResponse()
+    }
+
+    /**
+     * The membership insert, with the one failure it can now suffer answered in the
+     * caller's own words.
+     *
+     * `ux_membership_user` holds 한 사람은 웨딩 하나 in the database as of 2026-08-21,
+     * so the loser of a race no longer gets a second membership — it gets a rejected
+     * INSERT. **That must read as the same 409 as arriving with a wedding already
+     * in hand**: to the caller it is one fact, and the published recovery is one
+     * recovery (`docs/api-spec.md`, `POST /weddings`). A masked 500 would say "we
+     * are broken" and invite a retry that can only fail again.
+     *
+     * Reaching here means [claimSoleMembership]'s lock was not held for this user —
+     * a writer outside this application, or a `#9`-era path that forgot the check.
+     * Rare by design, correct anyway.
+     */
+    private fun saveMembershipOrRefuse(membership: Membership) {
+        try {
+            memberships.save(membership)
+        } catch (collision: DataIntegrityViolationException) {
+            if (!SoleMembershipCollision.slotAlreadyTaken(collision)) throw collision
+            throw AlreadyInAWeddingException()
+        }
     }
 
     /**
@@ -75,12 +100,13 @@ internal class WeddingService(
      * does not pass through the proxy — which is exactly why it is written for the
      * caller that will arrive from another bean.
      *
-     * **The database does not hold this invariant, only this method does.** A partial
-     * unique index on `membership (user_id) where deleted_at is null` would make a
-     * second live membership unrepresentable; it is not here because every DDL
-     * statement against a real database is applied by hand by the founder
-     * (notes/2026-08-09-decision-schema-ownership.md), so adding one is their call
-     * and not a side effect of this issue.
+     * **The database holds this invariant too, and neither half is spare**
+     * (`ux_membership_user`, applied 2026-08-21). The index decides what may EXIST —
+     * it is the last word, and it holds against psql as well as against us. This
+     * method decides what the API ANSWERS: it is what makes the second request a
+     * plain 409 read off a committed row, instead of an INSERT that fails and has to
+     * be translated back into one ([saveMembershipOrRefuse], the backstop rather than
+     * the plan). Delete the lock and every double-tap takes the exceptional path.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     fun claimSoleMembership(userId: Long) {

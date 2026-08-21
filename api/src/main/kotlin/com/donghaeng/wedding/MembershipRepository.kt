@@ -5,9 +5,13 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 /**
- * `ix_membership_user` exists for the `user_id` lookups here — it is the index the
- * baseline schema names `user -> membership -> wedding` after. It is deliberately
- * NOT unique, which is why [lockMembershipSlotOf] exists.
+ * `ux_membership_user` serves the `user_id` lookups here — the index the baseline
+ * schema names `user -> membership -> wedding` after, UNIQUE since 2026-08-21 and so
+ * also the last word on 한 사람은 웨딩 하나. It does not replace
+ * [lockMembershipSlotOf]: the index decides which rows may exist, the lock decides
+ * which of two simultaneous requests gets to ask the question first, and only the
+ * lock makes the loser's answer come from a read rather than from a failed INSERT
+ * ([SoleMembershipCollision]).
  */
 internal interface MembershipRepository : JpaRepository<Membership, Long> {
     fun existsByWeddingIdAndUserIdAndDeletedAtIsNull(
@@ -38,8 +42,11 @@ internal interface MembershipRepository : JpaRepository<Membership, Long> {
      * person who has *no* membership yet, and `SELECT ... FOR UPDATE` cannot lock a
      * row that does not exist; `ux_membership_wedding_user` cannot help either, being
      * keyed `(wedding_id, user_id)`, so two memberships in two different weddings
-     * never collide in it. The lock is released by COMMIT or ROLLBACK — there is
-     * nothing to unlock by hand, and a failed request cannot leak one.
+     * never collide in it. `ux_membership_user` is not a substitute for this
+     * either — an index refuses the second INSERT, it does not stop the second
+     * transaction from reading nothing first. The lock is released by COMMIT or
+     * ROLLBACK — there is nothing to unlock by hand, and a failed request cannot
+     * leak one.
      *
      * **The key is the user id, and this is the application's only advisory lock.** A
      * second kind of lock must namespace both, or a wedding id and a user id of the

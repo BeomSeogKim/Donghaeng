@@ -1,5 +1,12 @@
 # Decision — refusing the second wedding: the status, the lock, and the list that holds one (2026-08-21)
 
+> **Amended the same day (`#158` follow-up).** §2's recommended partial unique index
+> **was applied by hand** — `create unique index ux_membership_user on membership
+> (user_id) where deleted_at is null`, REPLACING the non-unique `ix_membership_user`.
+> The invariant now lives in the database as well as in the application. What that
+> changed is written into §2, §4 and §5 below; the decisions this record made are
+> unchanged.
+
 `#158`, the API half of the founder's rule in
 [2026-08-21-decision-two-accounts-and-the-v1-recut.md](2026-08-21-decision-two-accounts-and-the-v1-recut.md)
 §1: **a person belongs to exactly one wedding — created or joined, never both,
@@ -46,13 +53,14 @@ Four mechanisms were available and only one of them is both correct and free of 
 DDL:
 
 - **A partial unique index** on `membership (user_id) where deleted_at is null`
-  would make a second live membership *unrepresentable*, which is what this repo
-  reaches for elsewhere. It is **not in this change** — every DDL statement against
-  a real database is applied by hand by the founder
-  ([2026-08-09-decision-schema-ownership.md](2026-08-09-decision-schema-ownership.md)),
-  so it is their call and not a side effect of an issue about an endpoint. **This is
-  the recommended follow-up**, and `V1__baseline_schema.sql` now says at the index
-  itself that the invariant is not held there.
+  makes a second live membership *unrepresentable*, which is what this repo reaches
+  for elsewhere. It was not in the endpoint change — every DDL statement against a
+  real database is applied by hand by the founder
+  ([2026-08-09-decision-schema-ownership.md](2026-08-09-decision-schema-ownership.md))
+  — and it was **applied later the same day** as `ux_membership_user`, replacing the
+  non-unique `ix_membership_user` over the same column and predicate. Two indexes
+  over one predicate is write cost buying nothing, so it is a replacement and not an
+  addition.
 - **`SELECT … FOR UPDATE`** has no row to take. The rule constrains a person with
   *no* membership yet, and you cannot lock what does not exist.
   `ux_membership_wedding_user` is no help either: it is keyed `(wedding_id, user_id)`
@@ -66,6 +74,23 @@ DDL:
   advisory locks exist for — a mutex on a key with no row — and it is released by
   `COMMIT` or `ROLLBACK`, so a failed request cannot leak one and there is nothing to
   unlock by hand.
+
+**The index did not make the lock redundant, and this is the sentence that stops it
+being deleted.** They answer different questions. The index decides **what may
+exist**: it is the last word, it holds against psql and against a `#9` path that
+forgets the check, and it cannot be reasoned around. The lock decides **what the API
+answers**: it serialises two simultaneous `POST /weddings` on the user id so that the
+second transaction *reads* the first one's committed membership and is refused by the
+ordinary check. Without the lock both read nothing, both insert, and the loser's
+answer has to be recovered from a rejected INSERT.
+
+That recovery exists and is deliberate — `SoleMembershipCollision` matches the
+constraint name off the wire (the reading `IdentityCollision` established for `#93`)
+and re-throws `AlreadyInAWeddingException`, so **the loser of a race is told exactly
+what someone who simply already had a wedding is told.** From their side it is one
+fact with one published recovery, and an untranslated violation would be a masked 500
+inviting a retry that can only fail again. But it is a backstop: the lock is what
+keeps that path exceptional rather than the normal way a double-tap is handled.
 
 **The key is the user id and it is the application's only advisory lock.** A second
 kind must namespace both keys; a collision costs waiting, never a wrong answer.
@@ -98,10 +123,14 @@ That sentence is the point. `web/` reads `[0]`, and before this rule that was a 
 about which of several ledgers the person meant. Now it is correct by contract rather
 than by luck.
 
-**"Newest first" is retained rather than dropped**, for one account: whoever acquired
-a second wedding before the refusal existed. There is no switcher and no delete, so
-which entry sorts first decides which ledger they see — and an order the database
-chose would move it on every refresh. Amends
+**"Newest first" is retained but no longer decides anything** — amended when the index
+landed. It was retained here for one account: whoever acquired a second wedding before
+the refusal existed. **`create unique index` proved there is no such account** — it
+would have failed on the duplicate — so no response can carry a second entry for the
+order to place. The `order by` stays in `findAllLiveForMember` (sorting one row costs
+nothing, and it is the right default if a person may ever hold several weddings
+again), the spec says it decides nothing, and the contract test that exercised it was
+deleted rather than kept green over a state no database of ours can hold. Amends
 [2026-08-20-decision-listing-the-callers-weddings.md](2026-08-20-decision-listing-the-callers-weddings.md)
 §1, which argued the array from "a person may belong to several"; the array survives
 its premise, on the seam argument alone.
@@ -115,15 +144,36 @@ instead of to the WEDDING** ([2026-08-19-decision-wedding-scope-gate.md](2026-08
 memberships. Left alone, those tests would have stayed green forever while testing
 nothing.
 
-They now insert the second wedding directly (`ApiFixture.insertSecondWedding`).
-**Two invariants that hold each other up fail together**, and wedding-scoping is not
-allowed to rest on a rule enforced one layer away — least of all on one the database
-does not enforce at all (§2).
+They first inserted the second wedding directly (`ApiFixture.insertSecondWedding`),
+on the argument that wedding-scoping must not rest on a rule enforced one layer away
+— least of all on one the database does not enforce at all (§2).
+
+**The index settled that, and in doing so took the workaround away too.** A caller
+with two live memberships is now a row Postgres refuses, so the fixture could only
+have survived by building a state no database of ours can hold. What replaced it is
+`ApiFixture.joinAsPartner`: **the same mutation, observed where it is still real.**
+While a caller has exactly one wedding, "the caller's rows" and "this wedding's rows"
+are the same rows and a caller-scoped query is merely equivalent — but the couple are
+two accounts in one ledger (`#9`), and there a caller-scoped query silently drops
+everything the partner entered. A 하객 missing from the list, a head missing from
+보증인원, and a 200 on both. The three tests now put a partner in the caller's wedding
+and a stranger in their own, which kills the caller-scoped mutation and the
+unscoped one in one assertion each.
+
+`CreateGuestContractTest`'s member-of-two-weddings test became "the partner writes
+into the ledger they were let into, as themselves" — the write target is no longer
+distinguishable by caller, but `created_by` is, and that is `#25`'s audit trail.
 
 ## What this does not decide
 
-- **Whether the database gets the unique index.** Recommended in §2; the founder
-  applies DDL.
+- ~~**Whether the database gets the unique index.**~~ Decided: applied 2026-08-21,
+  see the banner and §2.
+- **Whether `ux_membership_wedding_user` still earns its write.** It is now implied:
+  any live duplicate of `(wedding_id, user_id)` duplicates `user_id`, so
+  `ux_membership_user` refuses everything it would have refused, and it can no longer
+  fire alone. It is kept because it is the constraint that comes back into force the
+  day a person may hold several weddings, and because dropping an index is DDL. Not
+  in scope for the follow-up; named so nobody re-derives it.
 - **What happens to an account that already holds two.** None is known to exist. The
   refusal is on *creating*, so both of theirs keep working and `[0]` stays stable;
   merging or choosing between them is a screen nobody has designed.

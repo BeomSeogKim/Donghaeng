@@ -187,25 +187,34 @@ internal class CreateGuestContractTest : GuestFixture() {
     }
 
     @Test
-    fun `a member of two weddings writes into the one in the path`() {
-        // The accepted half of the tenancy question, and the half neither test above
-        // covers: both of those give the REFUSED caller a second membership
-        // (notes/2026-08-19-decision-wedding-scope-gate.md §2b) and neither gives one
-        // to the caller who is let through. A resolver scoped to "the caller's first
-        // membership" answers 201 to all of them.
+    fun `the partner writes into the ledger they were let into, as themselves`() {
+        // The accepted half of the tenancy question, and the half the two tests above
+        // do not cover: they say who is REFUSED, and a resolver that refused everyone
+        // would pass both.
         //
-        // This is the first endpoint that WRITES using `WeddingScope.id`, so that
-        // resolver files a 하객 into the couple's other ledger and reports success —
-        // no error, no log line, a row in the wrong wedding.
+        // **It is the partner and not a second wedding of the caller's since
+        // 2026-08-21**: `ux_membership_user` made "one caller, two weddings" an
+        // unrepresentable row, and with a caller holding exactly one wedding a
+        // resolver scoped to the caller writes into the same place as one scoped to
+        // the path. What stayed observable is the shape this product actually has —
+        // two accounts in one ledger — where a write attributed or scoped by CALLER
+        // instead of by WEDDING is a 하객 in the wrong place or under the wrong name.
         val session = login()
-        val first = createWedding(session)
-        val second = insertSecondWedding(session)
+        val wedding = createWedding(session)
+        val partner = joinAsPartner(wedding)
+        val partnerId = callerId(partner)
+        val outsider = loginAs("someone-else")
+        val theirs = createWedding(outsider)
 
-        val response = addGuest(session, second, """{"name":"김영수","side":"GROOM"}""")
+        val response = addGuest(partner, wedding, """{"name":"김영수","side":"GROOM"}""")
 
         assertThat(response.statusCode()).isEqualTo(201)
-        assertThat(rows(second)).hasSize(1)
-        assertThat(rows(first)).isEmpty()
+        assertThat(rows(theirs)).isEmpty()
+
+        // `created_by` is the partner's, not the wedding creator's: `#25`'s audit
+        // trail answers "이 숫자 누가 바꿨어?" and a couple is two people.
+        val written = rows(wedding).single()
+        assertThat(written["created_by"]).isEqualTo(partnerId)
     }
 
     @Test

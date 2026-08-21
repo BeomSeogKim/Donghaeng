@@ -29,10 +29,13 @@ internal interface WeddingRepository : JpaRepository<Wedding, Long> {
      * [Membership] holds ids, not a `@ManyToOne`, so `wedding/` can carry its own
      * rows without mapping `auth/`'s.
      *
-     * Newest first, which the spec publishes: `web/` opens the first entry, and an
-     * order the database chose would open a different ledger after a refresh. The id
-     * breaks a tie, because two weddings created in the same microsecond otherwise
-     * order arbitrarily.
+     * **Newest first, which as of 2026-08-21 sorts nothing.** `ux_membership_user`
+     * makes a second live membership unrepresentable, so this query can return at
+     * most one row — and the contract test that exercised the order was deleted with
+     * the index, because the state it needed is a row no database of ours can hold
+     * (`WeddingListContractTest`). The clause stays: sorting one row costs nothing,
+     * it is what `docs/api-spec.md` publishes, and it is the correct default the day
+     * a person may hold several weddings again. Do not read it as live behaviour.
      */
     @Query(
         """

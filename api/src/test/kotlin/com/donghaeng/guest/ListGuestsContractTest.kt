@@ -216,18 +216,25 @@ internal class ListGuestsContractTest : GuestFixture() {
     }
 
     @Test
-    fun `the list is this wedding's guests and nobody else's`() {
+    fun `the list is this wedding's guests, including the partner's, and nobody else's`() {
         val session = login()
-        val first = createWedding(session)
-        val second = insertSecondWedding(session)
-        val here = addGuest(session, first, """{"name":"김영수","side":"GROOM"}""")
-        val there = addGuest(session, second, """{"name":"이영희","side":"BRIDE"}""")
+        val wedding = createWedding(session)
+        val partner = joinAsPartner(wedding)
+        val outsider = loginAs("someone-else")
+        val theirs = createWedding(outsider)
 
-        // A member of two weddings is the case a query scoped to "the caller's
-        // guests" passes and a wedding-scoped one gets right — the accepted half of
-        // the tenancy question (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
-        assertThat(ids(list(session, first, ""))).containsExactly(here).doesNotContain(there)
-        assertThat(ids(list(session, second, ""))).containsExactly(there)
+        val mine = addGuest(session, wedding, """{"name":"김영수","side":"GROOM"}""")
+        val partners = addGuest(partner, wedding, """{"name":"이영희","side":"BRIDE"}""")
+        val strangers = addGuest(outsider, theirs, """{"name":"박철수","side":"GROOM"}""")
+
+        // Two mutations, one assertion, and neither is covered by the outsider test
+        // below. **Scoped to the CALLER**: the partner's 하객 disappears from the
+        // couple's own ledger — a wrong answer with a 200 on it, and the shape that
+        // replaced "a member of two weddings" when `ux_membership_user` made that
+        // state unrepresentable (2026-08-21). **Scoped to nothing**: the stranger's
+        // 하객 appears in it.
+        assertThat(ids(list(session, wedding, ""))).containsExactly(mine, partners).doesNotContain(strangers)
+        assertThat(ids(list(partner, wedding, ""))).containsExactly(mine, partners)
     }
 
     @Test

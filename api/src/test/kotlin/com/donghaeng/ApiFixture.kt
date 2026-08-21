@@ -46,7 +46,7 @@ internal abstract class ApiFixture {
     @LocalServerPort
     protected var port: Int = 0
 
-    /** Private, and named apart from the `jdbc` its subclasses declare: only [insertSecondWedding] uses it. */
+    /** Private, and named apart from the `jdbc` its subclasses declare: only [joinAsPartner] uses it. */
     @Autowired
     private lateinit var fixtureJdbc: JdbcTemplate
 
@@ -143,42 +143,36 @@ internal abstract class ApiFixture {
             .asLong()
 
     /**
-     * A second wedding for a person who already has one — **a state `POST /weddings`
-     * no longer mints** (`#158`), so it is inserted rather than requested.
+     * The partner: a second person, in [weddingId] with the caller. Hands back their
+     * session.
      *
-     * It exists to keep the tenancy tests worth what they were written for. Each of
-     * them kills the same mutation: a query scoped to the CALLER instead of to the
-     * WEDDING, which passes every other test in its class
-     * (notes/2026-08-19-decision-wedding-scope-gate.md §2b). That mutation is
-     * unobservable if no caller can hold two memberships — so with 한 사람은 웨딩 하나
-     * enforced, those tests would silently stop testing anything. **Two invariants
-     * that hold each other up fail together**, and wedding-scoping is not allowed to
-     * rest on a rule enforced one layer away.
+     * **This replaced `insertSecondWedding` when `ux_membership_user` was applied**
+     * (2026-08-21). The tenancy tests used to give one caller two live memberships,
+     * which the database now refuses outright — and the mutation they were killing,
+     * a query scoped to the CALLER instead of to the WEDDING
+     * (notes/2026-08-19-decision-wedding-scope-gate.md §2b), goes with it: while a
+     * caller has exactly one wedding, "the caller's rows" and "this wedding's rows"
+     * are the same rows. **It comes back the moment a wedding holds two people**,
+     * which is this product's normal state — the couple are two accounts — because
+     * then a caller-scoped query silently drops everything the partner entered. That
+     * is a 하객 missing from the ledger and a head missing from 보증인원.
      *
-     * No `deleted_at`, so both memberships are live and both weddings resolve.
+     * The membership is INSERTED because `#9`'s invite does not exist yet; nothing
+     * else here is faked, and the partner drives the API over HTTP with a session
+     * they earned. It swaps [STUB_PROVIDER]'s subject, exactly as [loginAs] does, so
+     * a later `login()` in the same test is this partner and not the caller.
      */
-    protected fun insertSecondWedding(
-        session: HttpCookie,
-        groomName: String = "박신랑",
-    ): Long {
-        val userId = callerId(session)
-        val weddingId =
-            fixtureJdbc.queryForObject(
-                """
-                insert into wedding (wedding_date, groom_name, bride_name, created_by, created_at, updated_at)
-                values (date '2026-10-10', ?, '이신부', ?, now(), now())
-                returning id
-                """.trimIndent(),
-                Long::class.java,
-                groomName,
-                userId,
-            )!!
+    protected fun joinAsPartner(
+        weddingId: Long,
+        subject: String = "the-partner",
+    ): HttpCookie {
+        val partner = loginAs(subject)
         fixtureJdbc.update(
             "insert into membership (wedding_id, user_id, created_at) values (?, ?, now())",
             weddingId,
-            userId,
+            callerId(partner),
         )
-        return weddingId
+        return partner
     }
 
     /**

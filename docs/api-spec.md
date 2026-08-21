@@ -164,7 +164,7 @@ endpoint raises:
 | `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. **Only reachable where no frontend origin is configured** — otherwise the callback redirects; see `GET /login/oauth2/code/google`. |
 | `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
 | `WEDDING_NOT_FOUND` | 404 | The wedding this request is scoped to could not be resolved for this caller. **One code for four situations on purpose** — no such wedding, a wedding the caller is not a member of, a deleted wedding, and a `{weddingId}` that is not a number. See "Being scoped to a wedding" below. |
-| `ALREADY_IN_A_WEDDING` | 409 | The caller already belongs to a wedding, and **a person belongs to exactly one** — created or joined, never both, never two. Raised by `POST /weddings` today and by the invite accept (`#9`) when it lands, from one check, so the two can never disagree. |
+| `ALREADY_IN_A_WEDDING` | 409 | The caller already belongs to a wedding, and **a person belongs to exactly one** — created or joined, never both, never two. Raised by `POST /weddings` today and by the invite accept (`#9`) when it lands, from one check, so the two can never disagree. Also the answer when two simultaneous requests race and the database refuses the loser's row (2026-08-21): one fact about the caller's account, one code, one recovery. |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A `POST`/`PUT`/`PATCH` sent a `Content-Type` the endpoint does not accept, **or sent none at all**. Not an edge case — it is how the CSRF gate refuses a request; see "Every POST, PUT and PATCH must send `Content-Type: application/json`". |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND` | as named | A framework-level error with no more specific code. |
@@ -654,7 +654,10 @@ Errors
   2026-08-21, `#158`). **The recovery is not a retry and not an error screen: call
   `GET /weddings` and open the one that comes back.** Two tabs, or one button
   tapped twice on a slow connection, produce exactly this — one 201 and one 409,
-  never two weddings.
+  never two weddings. **Since 2026-08-21 the database refuses the second row
+  itself**, so "never two weddings" holds no matter how the requests interleave, and
+  the caller who loses a race is told this and not a 500 — it is the same fact about
+  their account either way, with the same recovery.
 - 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule, in
   "Every POST, PUT and PATCH must send `Content-Type: application/json`" above.
 
@@ -731,11 +734,13 @@ about which of several ledgers the person meant.
 types from it — so narrowing it to a single object would break every call site and
 buy nothing. Read it as "zero or one", not as "a list that happens to be short".
 
-**Ordered newest first** (most recently created), and the order remains contract for
-the one account it can still matter to: whoever acquired a second wedding before the
-refusal existed. It is *not* a claim about which wedding is "current" — there is no
-switcher and no last-viewed wedding, and if either is ever built it needs a real
-answer rather than an ordering that was convenient.
+**Ordered newest first** (most recently created) — retained, and as of 2026-08-21 it
+decides nothing. The rule became a database constraint that day, and the constraint
+could only be created because no account held two weddings, so no response can have a
+second entry for the order to place. Do not build on it. It was never a claim about
+which wedding is "current" either — there is no switcher and no last-viewed wedding,
+and if either is ever built it needs a real answer rather than an ordering that was
+convenient.
 
 Errors
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. **An anonymous

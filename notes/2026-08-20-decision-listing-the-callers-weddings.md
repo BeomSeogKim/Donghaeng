@@ -2,8 +2,11 @@
 
 > **§1's premise narrowed 2026-08-21** — a person belongs to exactly one wedding,
 > so this endpoint answers **at most one entry** and `POST /weddings` refuses the
-> second. The array and the "newest first" order both survive, on the seam argument
-> rather than on "a person may belong to several": see
+> second. The array survives on the seam argument rather than on "a person may belong
+> to several". **The "newest first" order survives too but decides nothing**: later
+> the same day the rule became a database constraint (`ux_membership_user`), which
+> could only be created because no account held two weddings — so no response can
+> carry a second entry for the order to place. See
 > [2026-08-21-decision-one-wedding-per-person.md](2026-08-21-decision-one-wedding-per-person.md)
 > §4.
 
