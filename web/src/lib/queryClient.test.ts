@@ -23,7 +23,15 @@ type GuestMutation =
 type Ledger =
   paths['/weddings/{weddingId}/guests']['get']['responses'][200]['content']['*/*']
 
-function created(name: string): GuestMutation {
+/*
+ * `nth` is how many guests this mock ledger holds once the create has landed.
+ * Each of them attends with a party of one, so it is also the 식대 인원 the
+ * server would have recomputed inside the same transaction — the double grows
+ * the number as guests arrive instead of repeating one constant. No
+ * `guaranteedHeadcount`: the server omits the member until the couple has
+ * agreed one with their venue, which is the case these tests are in.
+ */
+function created(name: string, nth: number): GuestMutation {
   return {
     guest: {
       id: 41,
@@ -36,6 +44,7 @@ function created(name: string): GuestMutation {
       expectedAttending: true,
       expectedPartySize: 1,
     },
+    headcount: { mealHeadcount: nth },
   }
 }
 
@@ -139,9 +148,9 @@ it('runs mutations one at a time, in the order they were fired', async () => {
   server.use(
     http.post(LEDGER, async ({ request }) => {
       const { name } = (await request.json()) as { name: string }
-      reached.push(name)
+      const nth = reached.push(name)
       if (name === 'first') await firstHeld
-      return HttpResponse.json(created(name), { status: 201 })
+      return HttpResponse.json(created(name, nth), { status: 201 })
     }),
   )
 
@@ -173,6 +182,7 @@ it('runs mutations one at a time, in the order they were fired', async () => {
 it('would let the second response land first without that serialisation', async () => {
   // The control. Without it the test above passes on a client that does nothing,
   // because a fast local mock is not a race.
+  let guests = 0
   let releaseFirst: () => void = () => {}
   const firstHeld = new Promise<void>((resolve) => {
     releaseFirst = resolve
@@ -181,8 +191,9 @@ it('would let the second response land first without that serialisation', async 
   server.use(
     http.post(LEDGER, async ({ request }) => {
       const { name } = (await request.json()) as { name: string }
+      const nth = ++guests
       if (name === 'first') await firstHeld
-      return HttpResponse.json(created(name), { status: 201 })
+      return HttpResponse.json(created(name, nth), { status: 201 })
     }),
   )
 
