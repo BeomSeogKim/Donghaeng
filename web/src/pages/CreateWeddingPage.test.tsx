@@ -59,6 +59,21 @@ function recording() {
 const signedIn = () => HttpResponse.json<Session>({ id: 12, name: '김테스터' })
 
 /**
+ * The two reads 원장 makes the moment the couple land on it. The create writes
+ * its wedding into the list cache so the redirect back to 웨딩 만들기 never
+ * fires, but the ledger still asks the server, and an unhandled request is an
+ * error in this suite.
+ */
+const ledger = () => [
+  http.get(`${API}/weddings`, () =>
+    HttpResponse.json<Wedding[]>([
+      { id: 12, weddingDate: '2026-10-10', groomName: '김신랑', brideName: '이신부' },
+    ]),
+  ),
+  http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json([])),
+]
+
+/**
  * 201, echoing back what was stored — which is not always what was sent, since
  * the server trims the names (docs/api-spec.md § POST /weddings).
  */
@@ -120,7 +135,7 @@ it('sends someone without a session to the login screen, not to the form', async
 
 it('creates a wedding from a date and two names, and asks for nothing else', async () => {
   const calls = recording()
-  server.use(calls.me(signedIn), calls.weddings(created))
+  server.use(calls.me(signedIn), calls.weddings(created), ...ledger())
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
   await fillForm()
@@ -140,9 +155,10 @@ it('creates a wedding from a date and two names, and asks for nothing else', asy
   expect(calls.created[0]?.request.headers.get('Content-Type')).toBe('application/json')
   expect(calls.created[0]?.request.credentials).toBe('include')
 
-  // The couple land where the ledger will be (#15). Today that is the home
-  // screen as it stands.
-  expect(await screen.findByText('김테스터 님')).toBeVisible()
+  // The couple land on 원장 (`#15`), which is home — and they land ON it rather
+  // than being bounced back here by a wedding list the client fetched one
+  // request ago and which still says they have none.
+  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
 })
 
 it('trims the names it sends, because the server measures length before trimming', async () => {
@@ -297,6 +313,7 @@ it('creates one wedding when the button is pressed twice', async () => {
       await held
       return created(body)
     }),
+    ...ledger(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
@@ -310,5 +327,5 @@ it('creates one wedding when the button is pressed twice', async () => {
   // would refuse this one.
   expect(calls.created).toHaveLength(1)
   release()
-  expect(await screen.findByText('김테스터 님')).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
 })
