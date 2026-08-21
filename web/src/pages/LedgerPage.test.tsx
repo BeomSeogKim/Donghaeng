@@ -1,15 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
 import { type Guest, guestsQueryKey, ledgerQueryKey } from '../hooks/useGuests'
-import { type Headcount, headcountQueryKey, setHeadcount } from '../hooks/useHeadcount'
+import { type Headcount, headcountQueryKey } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
-import { apiError, apiFetch } from '../lib/api'
-import type { paths } from '../lib/api-types.gen'
 import { renderWithProviders } from '../test/render'
 import { server } from '../test/server'
 
@@ -777,75 +774,18 @@ it('says 초과 rather than a negative 여유 when the ledger is over the 보증
 })
 
 /*
- * WHERE THE NUMBER COMES FROM AFTER A WRITE, and the contract `#135`, `#12` and
- * `#13` inherit.
+ * WHERE THE NUMBER COMES FROM AFTER A WRITE — asserted in
+ * `components/AddGuestSheet.test.tsx` now, and no longer here.
  *
  * Every wedding-scoped mutation returns `{guest, headcount}`, recomputed inside
- * the same transaction as the write. The number is taken from that response in
- * the mutation's own `onSuccess` — never fetched by a request fired beside the
+ * the same transaction as the write, and the number is taken from that response
+ * in the mutation's own `onSuccess` — never from a request fired beside the
  * mutation, which lands outside the window mutations are serialised in and puts
- * the out-of-order race back (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md).
+ * the out-of-order race back
+ * (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md).
  *
- * The mutation below is the one this screen does not have yet, written here so
- * the contract is tested rather than described — the same reason the ledger key's
- * invalidation is asserted above before `#135` exists.
+ * A hand-written mutation stood here until `#135`, so the contract the real one
+ * would inherit was tested rather than described. 하객 추가 is that real one, it
+ * makes the same assertions through the screen the couple actually presses, and
+ * two components named 하객 추가 on one ledger is one too many.
  */
-
-type GuestMutation =
-  paths['/weddings/{weddingId}/guests']['post']['responses'][201]['content']['*/*']
-
-function AddGuest({ weddingId }: { weddingId: number }) {
-  const queryClient = useQueryClient()
-  const create = useMutation({
-    mutationFn: async (): Promise<GuestMutation> => {
-      const response = await apiFetch(`/weddings/${weddingId}/guests`, {
-        method: 'POST',
-        body: JSON.stringify({ name: '박지민', side: 'BRIDE' }),
-      })
-      if (!response.ok) throw await apiError(response)
-      return (await response.json()) as GuestMutation
-    },
-    onSuccess: (created) => {
-      setHeadcount(queryClient, weddingId, created.headcount)
-    },
-  })
-
-  return (
-    <button onClick={() => create.mutate()} type="button">
-      하객 추가
-    </button>
-  )
-}
-
-it('moves the number in place from a mutation response, without asking again', async () => {
-  const calls = api()
-  const added = guest(2, '박지민', { side: 'BRIDE' })
-  server.use(
-    calls.me(),
-    calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
-    calls.headcount(counted(1)),
-    http.post(`${API}/weddings/:weddingId/guests`, () =>
-      HttpResponse.json<GuestMutation>(
-        { guest: added, headcount: { mealHeadcount: 2 } },
-        { status: 201 },
-      ),
-    ),
-  )
-
-  renderWithProviders(
-    <>
-      <App />
-      <AddGuest weddingId={12} />
-    </>,
-    { initialEntries: ['/'] },
-  )
-  expect(await within(await headcount()).findByText('1')).toBeVisible()
-
-  await userEvent.click(screen.getByRole('button', { name: '하객 추가' }))
-
-  expect(await within(await headcount()).findByText('2')).toBeVisible()
-  // ONE read of the number, on open. The second number came off the write's own
-  // response, so the row and the total cannot disagree for a round trip.
-  expect(calls.headcountRequests).toHaveLength(1)
-})

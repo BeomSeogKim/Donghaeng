@@ -79,12 +79,48 @@ async function fetchHeadcount(weddingId: number): Promise<Headcount> {
  *
  * It exists as a function rather than as a documented `setQueryData` so the key
  * and the shape are bound together and checked: a caller cannot write a guest,
- * or another wedding's number, into this key by hand.
+ * or another wedding's number, into this key by hand — and so the cancel below
+ * cannot be the thing a call site forgets.
+ *
+ * A READ ALREADY IN FLIGHT IS CANCELLED FIRST, AND THAT IS THE WHOLE POINT OF
+ * THE FIRST LINE. This query runs `staleTime: 0` and `refetchOnWindowFocus`,
+ * both deliberate, so the ordinary sequence is real: a couple tabs back from
+ * KakaoTalk, a read starts that will answer 128, they tap 추가, the write
+ * answers 129 — and then the older read lands. query-core's fetch resolution
+ * calls `setData` unconditionally, with no comparison of when the two answers
+ * were computed, and `setQueryData` does not cancel anything on its own. The
+ * pinned 인원수 would then read 128 beside a sheet saying 129. **A number
+ * lagging a tap by 100ms is fine; a number moving backwards is not.**
+ *
+ * THE ORDER OF THESE TWO LINES IS LOAD-BEARING, and not for the obvious reason.
+ * `cancelQueries` defaults to `revert: true`, which restores the state captured
+ * when that fetch STARTED — the stale number. It applies it synchronously,
+ * inside the call: `retryer.cancel()` rejects and then invokes `onCancel`,
+ * which is what calls `setState(revertState)`. So the revert happens first and
+ * the write below overwrites it. **Reverse these two lines and the stale value
+ * is what survives.** `revert: false` is worse than either order: a
+ * `CancelledError` that is neither silent nor reverting falls through to the
+ * query's error dispatch, and the screen drops the number entirely.
+ *
+ * Awaiting the returned promise and writing in the `then` is *not* broken —
+ * corrected 2026-08-22, having been claimed here as a third way to break it.
+ * The revert is already applied by the time that promise settles, and it
+ * restores the value that was on screen anyway, so the write still lands last
+ * and correct. It is a microtask of deferral that buys nothing, which is why
+ * this does not do it — not a trap.
+ *
+ * The cancelled fetch cannot write afterwards either: its promise rejects with
+ * a `CancelledError` carrying `revert`, and that branch returns the current
+ * data instead of reaching `setData`.
  */
 export function setHeadcount(
   queryClient: QueryClient,
   weddingId: number,
   headcount: Headcount,
 ): void {
-  queryClient.setQueryData(headcountQueryKey(weddingId), headcount)
+  const queryKey = headcountQueryKey(weddingId)
+  // Not awaited: everything this has to do to the cache is already done when it
+  // returns. The promise is only the cancelled fetch settling.
+  void queryClient.cancelQueries({ queryKey })
+  queryClient.setQueryData(queryKey, headcount)
 }

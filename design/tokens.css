@@ -153,6 +153,12 @@
   /* One shadow, for overlays only. Instruments do not float. */
   --dh-shadow-overlay: 0 8px 32px -8px rgb(36 31 26 / 0.24);
 
+  /* The dim behind the one thing that floats — the sheet. It is its own token
+   * rather than an alpha on --dh-ink, because ink INVERTS between the themes
+   * and a scrim does not: the ledger is dimmed by 먹 in light and by lacquer in
+   * dark, and `ink at 40%` would paint the dark theme's page white. */
+  --dh-scrim: rgb(36 31 26 / 0.4);
+
   /* ────────────────────────────────────────────────────────────
    * Motion
    * --dh-dur-count is the headcount settling after a tap, deliberately
@@ -210,6 +216,7 @@
   --dh-att-no-bg: var(--dh-surface-sunken);
 
   --dh-shadow-overlay: 0 8px 32px -8px rgb(0 0 0 / 0.7);
+  --dh-scrim: rgb(0 0 0 / 0.6);
 }
 
 /* ────────────────────────────────────────────────────────────
