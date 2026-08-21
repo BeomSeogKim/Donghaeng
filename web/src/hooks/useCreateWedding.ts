@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, apiError, apiFetch } from '../lib/api'
+import { apiError, apiFetch } from '../lib/api'
 import type { paths } from '../lib/api-types.gen'
-import { sessionQueryKey } from './useSession'
+import { type Wedding, weddingsQueryKey } from './useWeddings'
 
 // Reached through `paths[...]` rather than through the schema name, so the path
 // and the status code are checked too. Response bodies are keyed `*/*` because
@@ -12,23 +12,34 @@ import { sessionQueryKey } from './useSession'
 export type CreateWeddingRequest =
   paths['/weddings']['post']['requestBody']['content']['application/json']
 
-/** The wedding as stored — which is not always what was sent; the names are trimmed. */
-export type Wedding = paths['/weddings']['post']['responses'][201]['content']['*/*']
+// `Wedding` IS NOT DECLARED HERE. `POST /weddings`, `GET /weddings` and
+// `GET /weddings/{weddingId}` return the same `WeddingResponse` — "one type for
+// all three", in the spec's own words (docs/api-spec.md § GET /weddings) — and
+// this hook writes its result into the list this hook's neighbour reads. Two
+// aliases for one schema is how a `setQueryData` starts writing across a seam
+// nothing checks, so `useWeddings` owns the type and this file imports it.
 
 /**
  * `POST /weddings` — the wedding and the caller's membership in it, in one
  * transaction. The one endpoint in the product that is not scoped to a wedding.
  *
- * NOTHING IS WRITTEN TO THE QUERY CACHE, and that is not an oversight of the
- * "a mutation's onSuccess writes the response into the cache" rule. A wedding
- * is created empty — no guests, no meal types — so there is no aggregate to
- * carry, and the spec says so in as many words. There is also no wedding query
- * to write into yet; inventing a key here would be inventing the shape `#15`
- * has not chosen.
+ * NO AGGREGATE IS WRITTEN, and that is not an oversight of the "a mutation's
+ * onSuccess writes the response into the cache" rule: a wedding is created
+ * empty — no guests, no meal types — so there is no headcount to carry, and the
+ * spec says so in as many words.
  *
- * A 401 is the one failure with no error UI: it means "log in again", never
- * "something went wrong". Writing the session to null puts the login screen up
- * immediately rather than after a round trip that can only say the same thing.
+ * THE WEDDING ITSELF IS WRITTEN INTO `GET /weddings`, and that is not a
+ * nicety. The next screen is 원장, which resolves its wedding from that list and
+ * sends a person with none to this form. The cached list is one request old and
+ * says the person has no wedding, so without this write the couple would be
+ * bounced straight back to the form they just submitted, for as long as the
+ * refetch takes. It is prepended because the list is newest first, and that
+ * order is contract (docs/api-spec.md § GET /weddings).
+ *
+ * A 401 IS NOT HANDLED HERE. It means "log in again" rather than "something
+ * went wrong" wherever it comes from, and the client answers it once for every
+ * call in the app (`lib/queryClient.ts`). This hook answering it too was the
+ * second of two answers to one status.
  */
 export function useCreateWedding() {
   const queryClient = useQueryClient()
@@ -45,9 +56,11 @@ export function useCreateWedding() {
       // nothing here has checked that the body matches what was declared.
       return (await response.json()) as Wedding
     },
-    onError: (error) => {
-      if (error instanceof ApiError && error.status === 401)
-        queryClient.setQueryData(sessionQueryKey, null)
+    onSuccess: (wedding) => {
+      queryClient.setQueryData(
+        weddingsQueryKey,
+        (weddings: readonly Wedding[] | undefined) => [wedding, ...(weddings ?? [])],
+      )
     },
   })
 }

@@ -4,7 +4,10 @@ import { HttpResponse, http } from 'msw'
 import { useLocation, useNavigate } from 'react-router'
 import { expect, it } from 'vitest'
 import { App } from './App'
+import type { Guest } from './hooks/useGuests'
+import { guestsQueryKey } from './hooks/useGuests'
 import type { Session } from './hooks/useSession'
+import type { Wedding } from './hooks/useWeddings'
 import { apiError } from './lib/api'
 import { renderWithProviders } from './test/render'
 import { server } from './test/server'
@@ -58,6 +61,20 @@ function recording() {
     },
   }
 }
+
+/**
+ * The two reads 원장 makes on arrival. `/` is the ledger now (`#15`), so every
+ * test that signs someone in at `/` needs them — an unhandled request is an
+ * error in this suite, deliberately.
+ */
+const ledger = () => [
+  http.get(`${API}/weddings`, () =>
+    HttpResponse.json<Wedding[]>([
+      { id: 12, weddingDate: '2026-10-10', groomName: '김신랑', brideName: '이신부' },
+    ]),
+  ),
+  http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json<Guest[]>([])),
+]
 
 const unauthenticated = () =>
   HttpResponse.json(
@@ -139,7 +156,7 @@ it('starts login as a navigation to the API, never as a fetch', async () => {
   expect(calls.seen.map((request) => request.url)).toEqual([`${API}/auth/me`])
 })
 
-it('shows the signed-in person and lets them sign out', async () => {
+it('opens the ledger for a signed-in person, and lets them sign out', async () => {
   const calls = recording()
   let signedOut = false
   server.use(
@@ -148,11 +165,12 @@ it('shows the signed-in person and lets them sign out', async () => {
       signedOut = true
       return new HttpResponse(null, { status: 204 })
     }),
+    ...ledger(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
 
-  expect(await screen.findByText('김테스터 님')).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
 
   await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
 
@@ -163,6 +181,30 @@ it('shows the signed-in person and lets them sign out', async () => {
   expect(logout?.method).toBe('POST')
   // Without it the API answers 415 and the session survives the button.
   expect(logout?.headers.get('Content-Type')).toBe('application/json')
+})
+
+it('says the person is still signed in when the sign-out never reached the API', async () => {
+  const calls = recording()
+  server.use(
+    calls.me(() => signedIn('김테스터')),
+    // `POST /auth/logout` always answers 204 — no cookie, expired, already
+    // revoked, all of them mean "not logged in on this device". So a non-204 is
+    // not a refusal: it is the request never arriving, and the session on the
+    // server is still live (docs/api-spec.md § POST /auth/logout).
+    calls.logout(() => HttpResponse.error()),
+    ...ledger(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
+
+  // The couple share a phone. A button that un-disables itself and says nothing
+  // tells them they signed out when they did not.
+  expect(
+    await screen.findByText('로그아웃하지 못했습니다. 연결을 확인하고 다시 눌러 주세요.'),
+  ).toBeVisible()
+  expect(screen.getByRole('heading', { name: '원장' })).toBeVisible()
+  expect(screen.queryByRole('link', { name: '구글로 로그인' })).not.toBeInTheDocument()
 })
 
 it('refuses a sign-out that omits the JSON content type, exactly as the API does', async () => {
@@ -186,18 +228,23 @@ it('leaves nothing of the signed-out person in the cache', async () => {
   server.use(
     calls.me(() => signedIn('김테스터')),
     calls.logout(() => new HttpResponse(null, { status: 204 })),
+    ...ledger(),
   )
 
   const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
-  await screen.findByText('김테스터 님')
-  // Stands in for the ledger, which is cached under its own key from #5 onward.
-  // Two people share one device here; the next person to sign in must not be
-  // shown a frame of the last one's guests.
-  queryClient.setQueryData(['guests'], [{ name: '윤채원' }])
+  await screen.findByRole('heading', { name: '원장' })
+  // The real ledger key, which now exists. Two people share one device here;
+  // the next person to sign in must not be shown a frame of the last one's
+  // guests.
+  await waitFor(() =>
+    expect(queryClient.getQueryData(guestsQueryKey(12, {}))).toBeDefined(),
+  )
 
   await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
 
-  await waitFor(() => expect(queryClient.getQueryData(['guests'])).toBeUndefined())
+  await waitFor(() =>
+    expect(queryClient.getQueryData(guestsQueryKey(12, {}))).toBeUndefined(),
+  )
 })
 
 it('sends every request with credentials, or the API sees an anonymous caller', async () => {
@@ -205,6 +252,7 @@ it('sends every request with credentials, or the API sees an anonymous caller', 
   server.use(
     calls.me(() => signedIn('김테스터')),
     calls.logout(() => new HttpResponse(null, { status: 204 })),
+    ...ledger(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -214,14 +262,6 @@ it('sends every request with credentials, or the API sees an anonymous caller', 
   for (const request of calls.seen) {
     expect(request.credentials).toBe('include')
   }
-})
-
-it('renders a fallback when the provider returned no name', async () => {
-  server.use(recording().me(() => signedIn(null)))
-
-  renderWithProviders(<App />, { initialEntries: ['/'] })
-
-  expect(await screen.findByText('이름 없음 님')).toBeVisible()
 })
 
 it('does not claim the person is signed out when the server failed', async () => {
@@ -249,11 +289,14 @@ it('does not claim the person is signed out when the server failed', async () =>
 })
 
 it('keeps a signed-in person off the login screen', async () => {
-  server.use(recording().me(() => signedIn('김테스터')))
+  server.use(
+    recording().me(() => signedIn('김테스터')),
+    ...ledger(),
+  )
 
   renderWithProviders(<App />, { initialEntries: ['/login'] })
 
-  expect(await screen.findByText('김테스터 님')).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
 })
 
 /*

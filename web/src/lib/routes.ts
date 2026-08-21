@@ -9,13 +9,15 @@
 export const createWeddingPath = '/weddings/new'
 
 /**
- * Where a newly created wedding lands.
+ * Where a newly created wedding lands — 원장.
  *
- * THIS IS THE LINE `#15` CHANGES. The flow is 로그인 → 웨딩 만들기 → 원장
- * (notes/2026-08-07-design-screens-and-flow.md), and the ledger does not exist
- * yet, so today it is the home screen as it stands. When the ledger takes a
- * route of its own, this constant moves and nothing else does — deliberately,
- * because a redirect written at the call site is a redirect that gets copied
- * to the next call site and then forgotten at one of them.
+ * IT STAYED `/` WHEN THE LEDGER LANDED (`#15`), and that is the decision rather
+ * than an omission: 원장 is home. There is essentially one screen, everything
+ * else opens over it, and a ledger at its own path would need a home screen in
+ * front of it to link there (notes/2026-08-07-design-screens-and-flow.md).
+ *
+ * The constant survives anyway, because a redirect written at the call site is
+ * a redirect that gets copied to the next call site and then forgotten at one
+ * of them.
  */
 export const ledgerPath = '/'

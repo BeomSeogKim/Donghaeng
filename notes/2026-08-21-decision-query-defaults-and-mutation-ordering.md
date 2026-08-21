@@ -30,6 +30,27 @@ for.
 words that a second guest with the same name succeeds and is a second row, so a
 retried create writes a person into the ledger twice.
 
+### The retry predicate's `failureCount`, checked rather than assumed
+
+Added 2026-08-21, after `#156` read the predicate as always-false and the `#148`
+review carried that reading forward. **The predicate is correct and the retry does
+run**, and the reason it looked wrong is worth writing down once so it is not read
+wrong a third time.
+
+query-core calls `retry(failureCount, error)` with the count **before** the
+increment (`createRetryer` in `@tanstack/query-core@5.101.4`: `shouldRetry` is
+computed, and only then `failureCount++`). So the first failure passes `0`,
+`failureCount < 1` is true, the second passes `1` and it stops — exactly one retry.
+Measured, not read: a probe with an instrumented predicate observes `[0, 1]` and
+two `queryFn` calls.
+
+**The behaviour test next door is what makes this safe to depend on.** "Retries a
+query once when the request never reached an answer" counts requests against a real
+`createQueryClient()` and asserts `2`; it was green because the retry happened, and
+it goes red the day a query-core upgrade moves the increment. That is the whole
+argument for asserting defaults through behaviour instead of reading the config
+object back.
+
 ## Out-of-order responses: serialise, do not reconcile
 
 The standing constraint is that every mutation on a wedding-scoped resource returns
@@ -98,13 +119,37 @@ generic wrapper, because there is no such hook yet.
    `onSettled` returns before releasing the next mutation, so returning the
    invalidation promise would put a full ledger refetch between two taps.
 
+## The 401 is the client's, and there is exactly one of it
+
+Added 2026-08-21 (`#148` review). A 401 means "log in again" wherever it comes
+from — never "something went wrong" and never "check your connection" — so
+`createQueryClient` gives the client a `QueryCache` and a `MutationCache` whose
+`onError` writes `['session']` to `null` on any `ApiError` with status 401.
+
+**It is on the client rather than in the hooks because there were already two
+answers to one status.** `useCreateWedding` handled its own 401 and the ledger read
+handled none, so the ledger rendered "연결을 확인하고 다시 시도해 주세요" for an
+expired session: the wrong cause, on the screen the couple live on, in a state with
+no exit — 다시 시도 would 401 forever, and `refetchOnWindowFocus` only fires on a
+focus event that someone sitting in the tab never produces. The hook's own handler
+was deleted when the client's landed.
+
+**Both caches, not just queries.** A read and a write are the same status with the
+same meaning, and `POST /weddings` was the one call that already proved it.
+
+**`GET /auth/me` cannot loop through it.** Its 401 is the ordinary answer for a
+signed-out person and is mapped to `null` inside the query, so it never throws
+(docs/api-spec.md § GET /auth/me).
+
 ## The test helper
 
-`renderWithProviders` already existed (`#2`). It now builds its client **on top of**
-`queryClientDefaults` and overrides `retry` alone, instead of hand-writing a second
-set beside it. A test running against defaults the app does not have proves nothing
-about the app — and specifically, a mutation-flow test has to inherit the scope, or
-it asserts ordering the shipped client would not have given it.
+`renderWithProviders` already existed (`#2`). It now calls **`createQueryClient()`
+itself** and overrides `retry` alone afterwards, instead of hand-building a client
+from `queryClientDefaults` beside it. A test running against a client the app does
+not have proves nothing about the app — a mutation-flow test has to inherit the
+scope or it asserts ordering the shipped client would not have given it, and once
+the 401 answer moved onto the client's caches (above), a hand-built client would
+have had no answer to a 401 at all while every screen test stayed green.
 
 ## What reopens this
 

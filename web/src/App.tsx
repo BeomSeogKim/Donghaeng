@@ -3,10 +3,10 @@ import { Navigate, Route, Routes } from 'react-router'
 import { BrandMark } from './components/BrandMark'
 import { Screen } from './components/Screen'
 import { SessionUnavailable } from './components/SessionUnavailable'
-import { type Session, useSession } from './hooks/useSession'
+import { useSession } from './hooks/useSession'
 import { createWeddingPath } from './lib/routes'
 import { CreateWeddingPage } from './pages/CreateWeddingPage'
-import { HomePage } from './pages/HomePage'
+import { LedgerPage } from './pages/LedgerPage'
 import { LoginPage } from './pages/LoginPage'
 
 /*
@@ -51,9 +51,9 @@ export function App() {
 
   const person = session.data
 
-  /** A screen only a signed-in person may see, handed the person it is for. */
-  const signedIn = (screen: (who: Session) => ReactNode) =>
-    person === null ? <Navigate replace to="/login" /> : screen(person)
+  /** A screen only a signed-in person may see. */
+  const signedIn = (screen: () => ReactNode) =>
+    person === null ? <Navigate replace to="/login" /> : screen()
 
   return (
     <Routes>
@@ -61,7 +61,10 @@ export function App() {
         element={person === null ? <LoginPage /> : <Navigate replace to="/" />}
         path="/login"
       />
-      <Route element={signedIn((who) => <HomePage session={who} />)} path="/" />
+      {/* 원장 IS HOME (notes/2026-08-07-design-screens-and-flow.md). Everything
+          else is a sheet that opens over it or a flow that leaves and comes
+          back, so `/` is the ledger rather than a screen that links to it. */}
+      <Route element={signedIn(() => <LedgerPage />)} path="/" />
       <Route element={signedIn(() => <CreateWeddingPage />)} path={createWeddingPath} />
       {/* The OAuth callback returns the browser to the configured frontend
           origin — the root — so there is no callback route to write. Anything

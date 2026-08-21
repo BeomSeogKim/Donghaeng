@@ -1,9 +1,12 @@
 import { type FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Navigate, useNavigate } from 'react-router'
+import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { Field } from '../components/Field'
+import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { type CreateWeddingRequest, useCreateWedding } from '../hooks/useCreateWedding'
+import { useWeddings } from '../hooks/useWeddings'
 import { ApiError } from '../lib/api'
 import { ledgerPath } from '../lib/routes'
 
@@ -28,6 +31,56 @@ import { ledgerPath } from '../lib/routes'
  * parses a date anywhere in this file.
  */
 export function CreateWeddingPage() {
+  const weddings = useWeddings()
+
+  /*
+   * THE FORM IS REACHABLE ONLY WHILE THE LIST IS EMPTY — the mirror of 원장's
+   * redirect, and the guard the record already claimed was here. v1 has no
+   * wedding switcher and no delete, so a second wedding would take `[0]` and
+   * leave the first one with no route, no link and no way back: a 400-row
+   * ledger, unreachable. `create.isPending` cannot stand in for this, because
+   * it is one component's state and the way here is a bookmark, a typed URL, or
+   * a second tab still parked on the form after the first one submitted.
+   *
+   * A FAILED READ SHOWS NEITHER. Not knowing whether they already have a
+   * wedding is exactly the case where offering the form is expensive, and the
+   * cost is asymmetric: a retry costs a tap, a wrongly-offered form costs the
+   * ledger.
+   */
+  if (weddings.isPending) {
+    return (
+      <Screen>
+        <BrandMark />
+      </Screen>
+    )
+  }
+
+  if (weddings.isError) {
+    return (
+      <Screen>
+        <BrandMark />
+        <div className="flex w-full flex-col items-center gap-4">
+          <p className="text-body leading-body text-ink-muted">
+            웨딩 정보를 불러오지 못했습니다
+          </p>
+          <button
+            className={buttonClassName('secondary')}
+            onClick={() => void weddings.refetch()}
+            type="button"
+          >
+            다시 시도
+          </button>
+        </div>
+      </Screen>
+    )
+  }
+
+  if (weddings.data.length > 0) return <Navigate replace to={ledgerPath} />
+
+  return <CreateWeddingForm />
+}
+
+function CreateWeddingForm() {
   const navigate = useNavigate()
   const create = useCreateWedding()
   const [values, setValues] = useState<CreateWeddingRequest>({
@@ -116,6 +169,15 @@ export function CreateWeddingPage() {
           만들기
         </button>
       </form>
+
+      {/* THE ONLY EXIT THIS SCREEN HAS, and the reason it is here rather than
+          on 원장 alone: a person whose `GET /weddings` answers `[]` is sent
+          here and cannot leave. That is not only 최초 1회 — an empty list is
+          also what being removed from a partner's wedding looks like
+          (docs/api-spec.md § GET /weddings), and that person would otherwise
+          be parked on a form they have no reason to fill in, signed in, with
+          nothing to press. */}
+      <LogoutButton className="flex flex-col items-center gap-2 text-center" />
     </Screen>
   )
 }

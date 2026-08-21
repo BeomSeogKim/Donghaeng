@@ -1,6 +1,7 @@
 import { MutationObserver as QueryMutationObserver } from '@tanstack/react-query'
 import { delay, HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
+import { sessionQueryKey } from '../hooks/useSession'
 import { server } from '../test/server'
 import { ApiError, apiError, apiFetch } from './api'
 import type { paths } from './api-types.gen'
@@ -204,4 +205,51 @@ it('would let the second response land first without that serialisation', async 
   await Promise.all([first, second])
 
   expect(settled).toEqual(['second', 'first'])
+})
+
+/*
+ * The 401, which is the client's and not any screen's.
+ *
+ * It means "log in again" wherever it comes from, and a screen answering it on
+ * its own answers it differently: the ledger read blamed the connection for it
+ * and offered a 다시 시도 that would have 401'd forever. Wired to both caches,
+ * because a read and a write are the same status with the same meaning.
+ */
+
+it('writes the session to null when a read comes back 401', async () => {
+  server.use(http.get(LEDGER, () => problem(401, 'UNAUTHENTICATED')))
+
+  const client = createQueryClient()
+  client.setQueryData(sessionQueryKey, { id: 7, name: '김테스터' })
+  await expect(
+    client.fetchQuery({ queryKey: ['ledger'], queryFn: readLedger }),
+  ).rejects.toBeInstanceOf(ApiError)
+
+  expect(client.getQueryData(sessionQueryKey)).toBeNull()
+})
+
+it('writes the session to null when a mutation comes back 401', async () => {
+  server.use(http.post(LEDGER, () => problem(401, 'UNAUTHENTICATED')))
+
+  const client = createQueryClient()
+  client.setQueryData(sessionQueryKey, { id: 7, name: '김테스터' })
+  const observer = new QueryMutationObserver(client, { mutationFn: addGuest })
+  await expect(observer.mutate('김영수')).rejects.toBeInstanceOf(ApiError)
+
+  expect(client.getQueryData(sessionQueryKey)).toBeNull()
+})
+
+it('leaves the session alone for a failure that is not a 401', async () => {
+  server.use(http.get(LEDGER, () => problem(404, 'WEDDING_NOT_FOUND')))
+
+  const client = createQueryClient()
+  client.setQueryData(sessionQueryKey, { id: 7, name: '김테스터' })
+  await expect(
+    client.fetchQuery({ queryKey: ['ledger'], queryFn: readLedger }),
+  ).rejects.toBeInstanceOf(ApiError)
+
+  // "You are signed out" and "that failed" are different answers, and showing
+  // the first for the second sends a signed-in person back through Google to
+  // fix a problem that was never theirs.
+  expect(client.getQueryData(sessionQueryKey)).not.toBeNull()
 })
