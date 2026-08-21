@@ -42,6 +42,6 @@ internal class HeadcountService(
             // real ledger is 200–800 rows
             // (notes/2026-08-20-decision-the-ledger-read-and-its-filters.md §1).
             mealHeadcount = guests.sumAttendingPartySize(wedding.id).toInt(),
-            guaranteedHeadcount = weddings.guaranteedHeadcountOf(wedding.id),
+            guaranteedHeadcount = weddings.guaranteedHeadcountOf(wedding),
         )
 }

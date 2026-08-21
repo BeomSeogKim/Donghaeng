@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.hibernate.annotations.DynamicUpdate
 import org.hibernate.annotations.SQLRestriction
 import java.time.Instant
 import java.time.LocalDate
@@ -26,8 +27,16 @@ import java.time.LocalDate
  * The timestamps have no defaults: the service is the only clock
  * ([WeddingService.create]), so a row cannot be written with a `created_at` from
  * whenever the object happened to be constructed.
+ *
+ * `@DynamicUpdate` is what confines a race to the one column it was about
+ * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md). Without it
+ * `#8` setting [guaranteedHeadcount] alone emits a full-column UPDATE that
+ * blind-writes [groomName], [brideName] and [weddingDate] from the snapshot its
+ * transaction loaded — and `wedding` has no `guest_change` trail to recover an
+ * overwritten name from, so "last write wins is accepted" never covered it.
  */
 @Entity
+@DynamicUpdate
 @Table(name = "wedding")
 @SQLRestriction("deleted_at is null")
 internal class Wedding(

@@ -113,6 +113,11 @@ internal class WeddingService(
      * packages' arrow pointing one way
      * (notes/2026-08-21-decision-the-headcount-endpoint.md §3).
      *
+     * **Takes the resolved [WeddingScope], never a bare id**, for the reason
+     * `HeadcountService.of` does: this is exported across a package boundary, so a
+     * `Long` parameter would make "read the 보증인원 of a wedding the caller has no
+     * claim on" a mistake that compiles.
+     *
      * **`null` is "the couple has not agreed a number with their venue"**, and the
      * caller publishes it by omitting the member rather than by sending a zero. It is
      * also what a wedding deleted between the resolver and this read returns, which
@@ -120,5 +125,5 @@ internal class WeddingService(
      * nobody can reach, and the next request is a 404 like every other one.
      */
     @Transactional(readOnly = true)
-    fun guaranteedHeadcountOf(weddingId: Long): Int? = weddings.findByIdAndDeletedAtIsNull(weddingId)?.guaranteedHeadcount
+    fun guaranteedHeadcountOf(wedding: WeddingScope): Int? = weddings.findByIdAndDeletedAtIsNull(wedding.id)?.guaranteedHeadcount
 }
