@@ -84,19 +84,31 @@ internal class HeadcountContractTest : GuestFixture() {
     }
 
     @Test
-    fun `another wedding's guests contribute zero`() {
-        // One person may belong to several weddings, so a query scoped to "the
-        // caller's guests" passes every other test in this class and adds two
-        // ledgers together here
+    fun `the partner's guests are counted and another wedding's are not`() {
+        // Both directions of the same mutation, on the number that is money.
+        // **Scoped to the CALLER**: the 하객 the partner entered is not counted, and
+        // the couple books a hall for fewer people than are coming. **Scoped to
+        // nothing**: a stranger's ledger is added to theirs. Neither shows up as an
+        // error — they show up as a wrong 보증인원
         // (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
+        //
+        // The second wedding belongs to a stranger rather than to the caller since
+        // 2026-08-21: `ux_membership_user` refuses the caller a second membership,
+        // and a wedding with two people in it is where a caller-scoped sum still
+        // goes wrong.
         val session = login()
         val here = createWedding(session)
-        val there = createWedding(session, groomName = "박신랑")
-        addGuest(session, here, """{"name":"김영수","side":"GROOM","expectedPartySize":2}""")
-        addGuest(session, there, """{"name":"이영희","side":"BRIDE","expectedPartySize":7}""")
+        val partner = joinAsPartner(here)
+        val outsider = loginAs("someone-else")
+        val there = createWedding(outsider)
 
-        assertThat(mealHeadcount(session, here)).isEqualTo(2)
-        assertThat(mealHeadcount(session, there)).isEqualTo(7)
+        addGuest(session, here, """{"name":"김영수","side":"GROOM","expectedPartySize":2}""")
+        addGuest(partner, here, """{"name":"이영희","side":"BRIDE","expectedPartySize":3}""")
+        addGuest(outsider, there, """{"name":"박철수","side":"GROOM","expectedPartySize":7}""")
+
+        assertThat(mealHeadcount(session, here)).isEqualTo(5)
+        assertThat(mealHeadcount(partner, here)).isEqualTo(5)
+        assertThat(mealHeadcount(outsider, there)).isEqualTo(7)
     }
 
     @Test

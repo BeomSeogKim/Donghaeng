@@ -54,8 +54,10 @@ create type wedding_side as enum ('GROOM', 'BRIDE');
 
 
 -- ---------------------------------------------------------------------------
--- Identity. Outside every wedding — a person belongs to themselves, and may
--- belong to several weddings (the session never knows the wedding).
+-- Identity. Outside every wedding — a person belongs to themselves, and belongs
+-- to at most one wedding (narrowed 2026-08-21; the session still never knows
+-- which, because a membership can be revoked and a wedding deleted). THAT ONE
+-- IS ENFORCED HERE — see ux_membership_user below.
 -- ---------------------------------------------------------------------------
 
 create table app_user (
@@ -237,8 +239,32 @@ create unique index ux_membership_wedding_user
     where deleted_at is null;
 
 -- The hot path of the whole product: every request resolves
--- user -> membership -> wedding.
-create index ix_membership_user
+-- user -> membership -> wedding. It is also "한 사람은 웨딩 하나" (2026-08-21),
+-- which UNIQUE is what turns from a code path into a property of the data: a
+-- second live membership is not representable. ux_membership_wedding_user above
+-- does not say this, being keyed (wedding_id, user_id) — two memberships in two
+-- different weddings never collide there.
+--
+-- Applied by hand on 2026-08-21 as a REPLACEMENT for the non-unique
+-- ix_membership_user, same column and same predicate; two indexes over one
+-- predicate is write cost buying nothing.
+--
+-- THE ADVISORY LOCK IN WeddingService.claimSoleMembership IS NOT REDUNDANT NOW.
+-- The two hold different things and deleting either one costs something:
+--   * this index decides what may EXIST, against every writer including psql,
+--     and it is the last word.
+--   * the lock decides what the API ANSWERS. It serialises two simultaneous
+--     POST /weddings on the user id, so the second one reads the first one's
+--     committed membership and is refused by the ordinary check. Without it both
+--     read nothing, both insert, and the loser's answer comes out of exception
+--     translation instead — same 409 (SoleMembershipCollision), but by the path
+--     that has to be maintained rather than by the one that is obvious.
+--
+-- PARTIAL for the reason every unique constraint here is: a person removed from
+-- the wedding they were in keeps a soft-deleted row, and if that row held the
+-- slot they could never have a ledger again
+-- (notes/2026-08-10-decision-soft-delete.md).
+create unique index ux_membership_user
     on membership (user_id)
     where deleted_at is null;
 

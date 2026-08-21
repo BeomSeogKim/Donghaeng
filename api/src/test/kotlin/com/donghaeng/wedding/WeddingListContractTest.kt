@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
+import java.net.HttpCookie
 
 /**
  * THE RED GATE OF `#132`: **the caller's weddings, from the session alone.**
@@ -105,35 +106,42 @@ internal class WeddingListContractTest : ApiFixture() {
     fun `a soft-deleted wedding is not in the list, though the membership is still live`() {
         val session = login()
         val deleted = createWedding(session, "김신랑")
-        val kept = createWedding(session, "박신랑")
+
+        // **The control is the same list one line earlier, and it is the test.**
+        // The expected answer after the delete is an EMPTY list, which a query that
+        // had stopped returning anything would also give; a second live wedding used
+        // to play that part, and `ux_membership_user` has made one impossible
+        // (notes/2026-08-21-decision-one-wedding-per-person.md).
+        assertThat(listed(session)).containsExactly(deleted)
 
         jdbc.update("update wedding set deleted_at = now() where id = ?", deleted)
 
-        assertThat(get("/weddings", listOf(session)).json().map { it["id"].asLong() }).containsExactly(kept)
+        assertThat(listed(session)).isEmpty()
     }
 
     @Test
     fun `a wedding whose membership was revoked is not in the list, though the wedding is live`() {
         // A removed partner keeps nothing. The wedding row is untouched here, so
-        // only the membership predicate can exclude it.
+        // only the membership predicate can exclude it — and the control above is
+        // what says the predicate excluded it rather than the query excluding
+        // everything.
         val session = login()
         val left = createWedding(session, "김신랑")
-        val kept = createWedding(session, "박신랑")
+
+        assertThat(listed(session)).containsExactly(left)
 
         jdbc.update("update membership set deleted_at = now() where wedding_id = ?", left)
 
-        assertThat(get("/weddings", listOf(session)).json().map { it["id"].asLong() }).containsExactly(kept)
+        assertThat(listed(session)).isEmpty()
     }
 
-    @Test
-    fun `several weddings come back newest first`() {
-        // Order is contract, not incidental: `web/` reads the first entry to decide
-        // which ledger to open, and an unordered list would open a different one on
-        // a refresh (docs/api-spec.md, `GET /weddings`).
-        val session = login()
-        val first = createWedding(session, "김신랑")
-        val second = createWedding(session, "박신랑")
+    // `two weddings come back newest first` was deleted on 2026-08-21 with
+    // `ux_membership_user`, and this line is here so the deletion is not read as a
+    // gap. The order is not reachable to assert any more: it needs one caller
+    // holding two live memberships, which is the row the index refuses, so the test
+    // could only have been kept by building a state no database of ours can hold.
+    // `WeddingRepository.findAllLiveForMember` keeps its `order by` — see its KDoc
+    // for what that is now worth.
 
-        assertThat(get("/weddings", listOf(session)).json().map { it["id"].asLong() }).containsExactly(second, first)
-    }
+    private fun listed(session: HttpCookie): List<Long> = get("/weddings", listOf(session)).json().map { it["id"].asLong() }
 }

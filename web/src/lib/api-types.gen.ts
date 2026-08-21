@@ -231,6 +231,12 @@ export interface operations {
           readonly "*/*": components["schemas"]["ProblemDetail"];
         };
       };
+      /** @description The caller already belongs to a wedding; a person belongs to exactly one. */
+      409: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
     };
   };
   /** The wedding, for a caller who is a member of it */

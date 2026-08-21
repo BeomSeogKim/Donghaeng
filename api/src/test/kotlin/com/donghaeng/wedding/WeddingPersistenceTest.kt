@@ -7,6 +7,8 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyLong
+import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.doThrow
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -91,6 +93,42 @@ internal class WeddingPersistenceTest {
         assertThat(weddings.findAll()).isEmpty()
         assertThat(jdbc.queryForObject("select count(*) from wedding where created_by = ?", Long::class.java, userId))
             .isZero()
+    }
+
+    @Test
+    fun `the loser of the race is told what someone who already had a wedding is told`() {
+        // The state `ux_membership_user` created (2026-08-21): the check can now be
+        // WRONG — two transactions that both read no membership, of which one
+        // commits first — and the loser's INSERT is refused by the database instead
+        // of succeeding. **That must be the same answer as never having raced at
+        // all.** From the caller's side it is one fact ("you already belong to a
+        // wedding") with one published recovery, and an untranslated violation is a
+        // masked 500 that reads as "we are broken" and invites a retry that can only
+        // fail again.
+        //
+        // The race is SIMULATED rather than run, and deliberately: the advisory lock
+        // makes it unreachable over HTTP, which is what
+        // `simultaneous creates leave exactly one wedding` asserts. Stubbing the
+        // check to keep answering "no membership" is exactly the window the lock
+        // closes, so this is the only way to reach the backstop on purpose.
+        // AlreadyInAWeddingException is 409 ALREADY_IN_A_WEDDING; that half is
+        // `CreateWeddingContractTest`'s.
+        doReturn(false).`when`(membershipRows).existsByUserIdAndDeletedAtIsNull(anyLong())
+
+        creations.create(userId, CreateWeddingRequest(LocalDate.of(2026, 10, 10), "김신랑", "이신부"))
+
+        assertThatThrownBy {
+            creations.create(userId, CreateWeddingRequest(LocalDate.of(2027, 3, 3), "박신랑", "최신부"))
+        }.isInstanceOf(AlreadyInAWeddingException::class.java)
+
+        // And the refusal is still total. The wedding of the losing request is
+        // written BEFORE its membership — the foreign key leaves no other order — so
+        // a translation that did not let the transaction roll back would leave a
+        // ledger nobody can open, which is the failure `@Transactional` on `create`
+        // exists for.
+        assertThat(weddings.findAll()).hasSize(1)
+        assertThat(jdbc.queryForObject("select count(*) from wedding where created_by = ?", Long::class.java, userId)).isOne()
+        assertThat(memberships.findAll()).hasSize(1)
     }
 
     @Test

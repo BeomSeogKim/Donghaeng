@@ -6,7 +6,9 @@ import com.donghaeng.auth.session.SessionTokens
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.BeforeEach
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import java.net.HttpCookie
@@ -43,6 +45,10 @@ internal const val STUB_AUTHORIZATION_CODE = "stub-authorization-code"
 internal abstract class ApiFixture {
     @LocalServerPort
     protected var port: Int = 0
+
+    /** Private, and named apart from the `jdbc` its subclasses declare: only [joinAsPartner] uses it. */
+    @Autowired
+    private lateinit var fixtureJdbc: JdbcTemplate
 
     protected val mapper = ObjectMapper()
 
@@ -137,12 +143,46 @@ internal abstract class ApiFixture {
             .asLong()
 
     /**
+     * The partner: a second person, in [weddingId] with the caller. Hands back their
+     * session.
+     *
+     * **This replaced `insertSecondWedding` when `ux_membership_user` was applied**
+     * (2026-08-21). The tenancy tests used to give one caller two live memberships,
+     * which the database now refuses outright — and the mutation they were killing,
+     * a query scoped to the CALLER instead of to the WEDDING
+     * (notes/2026-08-19-decision-wedding-scope-gate.md §2b), goes with it: while a
+     * caller has exactly one wedding, "the caller's rows" and "this wedding's rows"
+     * are the same rows. **It comes back the moment a wedding holds two people**,
+     * which is this product's normal state — the couple are two accounts — because
+     * then a caller-scoped query silently drops everything the partner entered. That
+     * is a 하객 missing from the ledger and a head missing from 보증인원.
+     *
+     * The membership is INSERTED because `#9`'s invite does not exist yet; nothing
+     * else here is faked, and the partner drives the API over HTTP with a session
+     * they earned. It swaps [STUB_PROVIDER]'s subject, exactly as [loginAs] does, so
+     * a later `login()` in the same test is this partner and not the caller.
+     */
+    protected fun joinAsPartner(
+        weddingId: Long,
+        subject: String = "the-partner",
+    ): HttpCookie {
+        val partner = loginAs(subject)
+        fixtureJdbc.update(
+            "insert into membership (wedding_id, user_id, created_at) values (?, ?, now())",
+            weddingId,
+            callerId(partner),
+        )
+        return partner
+    }
+
+    /**
      * A second person, with their own `app_user` row and their own session.
      *
-     * The standing fact this exists for: a person may belong to several weddings and
-     * a wedding to several people, so "the caller's wedding" is never a property of
-     * the session — it is a walk that can fail, and a tenancy test needs someone for
-     * it to fail for (notes/2026-08-19-decision-wedding-scope-gate.md §2b).
+     * The standing fact this exists for: a wedding may have two people in it — the
+     * couple are two accounts (2026-08-21) — so "the caller's wedding" is never a
+     * property of the session; it is a walk that can fail, and a tenancy test needs
+     * someone for it to fail for (notes/2026-08-19-decision-wedding-scope-gate.md
+     * §2b).
      */
     protected fun loginAs(subject: String): HttpCookie {
         STUB_PROVIDER.subject = subject

@@ -9,8 +9,8 @@ import jakarta.persistence.Table
 import java.time.Instant
 
 /**
- * A person. Outside every wedding — one person may belong to several, and the
- * session never knows which (`V1__baseline_schema.sql`, Identity).
+ * A person. Outside every wedding — they belong to at most one and the session
+ * never knows which (`V1__baseline_schema.sql`, Identity).
  *
  * [email] is the ACCOUNT MERGE KEY and is written only when the provider asserts
  * the address as verified (notes/2026-08-11-decision-baseline-schema-calls.md §A).
