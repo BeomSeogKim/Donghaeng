@@ -72,7 +72,7 @@ internal class ScopelessWeddingEndpointTest {
         assertThat(unlisted)
             .describedAs(
                 "A handler under `/weddings` that takes no WeddingScope is a wedding read or write that nothing " +
-                    "scoped: the membership walk is the only thing that decides whose ledger this is, and no " +
+                    "scoped: the seat walk is the only thing that decides whose ledger this is, and no " +
                     "`{weddingId}` in the path means `ResolvedPrincipalTest` cannot ask for it. Take a WeddingScope " +
                     "— or, if the endpoint genuinely answers from the session alone, add it to SCOPELESS below WITH " +
                     "the reason (notes/2026-08-20-decision-listing-the-callers-weddings.md).",
@@ -127,12 +127,12 @@ internal class ScopelessWeddingEndpointTest {
          * reason, and "it has no `{weddingId}` to resolve" is a restatement rather
          * than one — the question is what the caller could reach that is not theirs.
          *
-         * - `WeddingController.create` makes the first membership, so there is
+         * - `WeddingController.create` makes the caller's first seat, so there is
          *   nothing to resolve until it has run. It reads no existing wedding and
          *   writes only rows it creates.
          * - `WeddingController.list` answers "which weddings are the caller's", which
          *   is the question a client asks BEFORE it has an id (`#132`) — for the
-         *   "최초 1회" branch and for the ledger to survive a refresh. The membership
+         *   "최초 1회" branch and for the ledger to survive a refresh. The seat
          *   join IS its scope: it can only ever return rows the resolver would have
          *   accepted one at a time, and `WeddingListContractTest` is what holds that.
          *

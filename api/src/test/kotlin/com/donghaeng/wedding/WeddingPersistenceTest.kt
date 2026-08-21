@@ -24,15 +24,15 @@ import java.time.LocalDate
  * What the rows themselves enforce, against a real Postgres. Two claims the contract
  * test structurally cannot make.
  *
- * **Atomicity**: if the membership does not get written, the wedding must not exist
- * either. `CreateWeddingContractTest` proves both rows appear when nothing goes
- * wrong, which is a different claim — with `@Transactional` deleted it stays green,
- * because Spring Data gives each `save` a transaction of its own and both still
- * commit. So the failure is injected rather than waited for.
+ * **Atomicity**: if the seats do not get written, the wedding must not exist either.
+ * `CreateWeddingContractTest` proves every row appears when nothing goes wrong, which
+ * is a different claim — with `@Transactional` deleted it stays green, because Spring
+ * Data gives each `save` a transaction of its own and all of them still commit. So the
+ * failure is injected rather than waited for.
  *
- * **The soft-delete filter**: nothing deletes a wedding or a membership yet (`#8`,
+ * **The soft-delete filter**: nothing deletes a wedding or releases a seat yet (`#8`,
  * `#9`), so without this `@SQLRestriction` could be dropped from either entity with
- * the whole suite green — and the miss would surface as a removed partner still
+ * the whole suite green — and the miss would surface as a released partner still
  * reading the ledger. The rows are soft-deleted through JDBC precisely because no
  * domain method exists; what is under test is the mapping.
  */
@@ -41,13 +41,13 @@ import java.time.LocalDate
 internal class WeddingPersistenceTest {
     @Autowired private lateinit var weddings: WeddingRepository
 
-    @Autowired private lateinit var memberships: MembershipRepository
+    @Autowired private lateinit var seats: WeddingSeatRepository
 
     @Autowired private lateinit var creations: WeddingService
 
     @Autowired private lateinit var jdbc: JdbcTemplate
 
-    @MockitoSpyBean private lateinit var membershipRows: MembershipRepository
+    @MockitoSpyBean private lateinit var seatRows: WeddingSeatRepository
 
     /**
      * One `app_user` per test, created here rather than per test method so the
@@ -72,20 +72,19 @@ internal class WeddingPersistenceTest {
      */
     @AfterEach
     fun clean() {
-        jdbc.update("delete from membership where user_id = ?", userId)
+        jdbc.update("delete from wedding_subscription where wedding_id in (select id from wedding where created_by = ?)", userId)
+        jdbc.update("delete from wedding_party where wedding_id in (select id from wedding where created_by = ?)", userId)
         jdbc.update("delete from wedding where created_by = ?", userId)
         jdbc.update("delete from app_user where id = ?", userId)
     }
 
     @Test
-    fun `a wedding whose membership write fails is not left behind`() {
-        doThrow(IllegalStateException("the membership write fails"))
-            .`when`(membershipRows)
-            .save(any(Membership::class.java))
+    fun `a wedding whose seat write fails is not left behind`() {
+        doThrow(IllegalStateException("the seat write fails"))
+            .`when`(seatRows)
+            .save(any(WeddingSeat::class.java))
 
-        assertThatThrownBy {
-            creations.create(userId, CreateWeddingRequest(LocalDate.of(2026, 10, 10), "김신랑", "이신부"))
-        }.isInstanceOf(IllegalStateException::class.java)
+        assertThatThrownBy { creations.create(userId, request()) }.isInstanceOf(IllegalStateException::class.java)
 
         // Read outside the failed transaction, and read natively as well:
         // `@SQLRestriction` would hide a row that survived and was then soft-deleted,
@@ -93,61 +92,85 @@ internal class WeddingPersistenceTest {
         assertThat(weddings.findAll()).isEmpty()
         assertThat(jdbc.queryForObject("select count(*) from wedding where created_by = ?", Long::class.java, userId))
             .isZero()
+        assertThat(liveTerms()).isZero()
     }
 
     @Test
     fun `the loser of the race is told what someone who already had a wedding is told`() {
-        // The state `ux_membership_user` created (2026-08-21): the check can now be
-        // WRONG — two transactions that both read no membership, of which one
-        // commits first — and the loser's INSERT is refused by the database instead
-        // of succeeding. **That must be the same answer as never having raced at
-        // all.** From the caller's side it is one fact ("you already belong to a
-        // wedding") with one published recovery, and an untranslated violation is a
-        // masked 500 that reads as "we are broken" and invites a retry that can only
-        // fail again.
+        // The state `ux_party_user` created (2026-08-21, carried into `wedding_party`
+        // unchanged): the check can now be WRONG — two transactions that both read no
+        // seat, of which one commits first — and the loser's INSERT is refused by the
+        // database instead of succeeding. **That must be the same answer as never
+        // having raced at all.** From the caller's side it is one fact ("you already
+        // belong to a wedding") with one published recovery, and an untranslated
+        // violation is a masked 500 that reads as "we are broken" and invites a retry
+        // that can only fail again.
         //
         // The race is SIMULATED rather than run, and deliberately: the advisory lock
         // makes it unreachable over HTTP, which is what
         // `simultaneous creates leave exactly one wedding` asserts. Stubbing the
-        // check to keep answering "no membership" is exactly the window the lock
-        // closes, so this is the only way to reach the backstop on purpose.
+        // check to keep answering "no seat" is exactly the window the lock closes, so
+        // this is the only way to reach the backstop on purpose.
         // AlreadyInAWeddingException is 409 ALREADY_IN_A_WEDDING; that half is
         // `CreateWeddingContractTest`'s.
-        doReturn(false).`when`(membershipRows).existsByUserIdAndDeletedAtIsNull(anyLong())
+        doReturn(false).`when`(seatRows).existsByUserIdAndDeletedAtIsNull(anyLong())
 
-        creations.create(userId, CreateWeddingRequest(LocalDate.of(2026, 10, 10), "김신랑", "이신부"))
+        creations.create(userId, request())
 
         assertThatThrownBy {
-            creations.create(userId, CreateWeddingRequest(LocalDate.of(2027, 3, 3), "박신랑", "최신부"))
+            creations.create(userId, CreateWeddingRequest(LocalDate.of(2027, 3, 3), WeddingSide.BRIDE, "최신부"))
         }.isInstanceOf(AlreadyInAWeddingException::class.java)
 
         // And the refusal is still total. The wedding of the losing request is
-        // written BEFORE its membership — the foreign key leaves no other order — so
-        // a translation that did not let the transaction roll back would leave a
-        // ledger nobody can open, which is the failure `@Transactional` on `create`
-        // exists for.
+        // written BEFORE its seats — the foreign key leaves no other order — so a
+        // translation that did not let the transaction roll back would leave a ledger
+        // nobody can open, which is the failure `@Transactional` on `create` exists
+        // for.
         assertThat(weddings.findAll()).hasSize(1)
         assertThat(jdbc.queryForObject("select count(*) from wedding where created_by = ?", Long::class.java, userId)).isOne()
-        assertThat(memberships.findAll()).hasSize(1)
+        assertThat(seats.findAll()).hasSize(2)
+        assertThat(liveTerms()).isOne()
     }
 
     @Test
-    fun `a soft-deleted wedding and membership are invisible to the JPA path`() {
+    fun `a soft-deleted wedding and seat are invisible to the JPA path`() {
         val now = Instant.now()
-        val wedding = weddings.save(Wedding(LocalDate.of(2026, 10, 10), "김신랑", "이신부", userId, now, now))
-        val membership = memberships.save(Membership(weddingId = wedding.id, userId = userId, createdAt = now))
+        val wedding = weddings.save(Wedding(LocalDate.of(2026, 10, 10), userId, now, now))
+        val seat =
+            seats.save(
+                WeddingSeat(
+                    weddingId = wedding.id,
+                    side = WeddingSide.GROOM,
+                    name = "김신랑",
+                    userId = userId,
+                    joinedAt = now,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
 
         assertThat(weddings.findById(wedding.id)).isPresent()
-        assertThat(memberships.findById(membership.id)).isPresent()
+        assertThat(seats.findById(seat.id)).isPresent()
 
         jdbc.update("update wedding set deleted_at = now() where id = ?", wedding.id)
-        jdbc.update("update membership set deleted_at = now() where id = ?", membership.id)
+        jdbc.update("update wedding_party set deleted_at = now() where id = ?", seat.id)
 
         // Both rows are still there — soft, not gone — and neither is reachable.
         assertThat(jdbc.queryForObject("select count(*) from wedding where id = ?", Long::class.java, wedding.id)).isOne()
         assertThat(weddings.findById(wedding.id)).isEmpty()
-        assertThat(memberships.findById(membership.id)).isEmpty()
+        assertThat(seats.findById(seat.id)).isEmpty()
     }
+
+    private fun request() = CreateWeddingRequest(LocalDate.of(2026, 10, 10), WeddingSide.GROOM, "김신랑")
+
+    /** Scoped to this test's own user: the container is shared, so a global count would read another class's rows. */
+    private fun liveTerms(): Long =
+        jdbc.queryForObject(
+            "select count(*) from wedding_subscription t join wedding w on w.id = t.wedding_id " +
+                "where w.created_by = ? and t.ended_at is null",
+            Long::class.java,
+            userId,
+        )!!
 
     companion object {
         @JvmStatic

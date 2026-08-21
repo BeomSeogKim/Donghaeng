@@ -27,8 +27,8 @@ class WeddingController internal constructor(
     /**
      * 웨딩 만들기 (`#7`), and one of the two endpoints in the product not scoped to a
      * wedding ([list] is the other, `#132`): it takes a caller and no
-     * `CurrentWedding`, because this is where a person's first membership comes from
-     * and there is nothing to resolve until it has run
+     * `CurrentWedding`, because this is where a person's first seat comes from and
+     * there is nothing to resolve until it has run
      * (notes/2026-08-10-decision-auth-gate-and-sequence.md). Both are named in
      * `ScopelessWeddingEndpointTest`, and a third is a design change rather than a
      * line in that list.
@@ -41,9 +41,12 @@ class WeddingController internal constructor(
      * refused before its body is read — one answer, rather than one that tells the
      * caller which fields exist. `CurrentUserParameterTest` sweeps that rule.
      */
-    @Operation(summary = "Create a wedding and the creator's membership in it")
+    @Operation(summary = "Create a wedding, both of its seats and its free subscription term")
     @ApiResponses(
-        ApiResponse(responseCode = "201", description = "The wedding and the caller's membership were created."),
+        ApiResponse(
+            responseCode = "201",
+            description = "The wedding, the caller's seat, their partner's empty seat and a FREE term were created.",
+        ),
         ApiResponse(
             responseCode = "400",
             description = "A blank or over-long name, an unstorable date, or a body that could not be read.",
@@ -79,12 +82,12 @@ class WeddingController internal constructor(
      * declares no [WeddingScope], so a sixteenth endpoint cannot inherit the property
      * by copying this signature.
      *
-     * **What stands in for the scope is the membership join** in
+     * **What stands in for the scope is the seat join** in
      * [WeddingRepository.findAllLiveForMember] — it can only return rows the resolver
      * would have accepted — plus [AuthenticatedUser], which under `permitAll` is the
      * only thing between this endpoint and an anonymous one.
      */
-    @Operation(summary = "The weddings the caller is a member of, newest first")
+    @Operation(summary = "The weddings the caller holds a seat in, newest first")
     @ApiResponses(
         ApiResponse(responseCode = "200", description = "The caller's weddings — an empty array when they have none."),
         ApiResponse(
@@ -105,7 +108,7 @@ class WeddingController internal constructor(
      *
      * There is no `@PathVariable weddingId` and there may never be one on any
      * handler. `{weddingId}` is a value the caller chose; what makes it theirs is
-     * their membership, and [CurrentWedding] resolution is the only thing that
+     * their seat, and [CurrentWedding] resolution is the only thing that
      * checks it (notes/2026-08-10-decision-auth-gate-and-sequence.md). The path
      * variable is therefore read by the resolver, which is also why an id that is
      * not a number answers 404 rather than 400 — one answer for every id the caller
@@ -115,7 +118,7 @@ class WeddingController internal constructor(
      * reason: it is in the path template and in no signature, and `web/` generates
      * its client from that document.
      */
-    @Operation(summary = "The wedding, for a caller who is a member of it")
+    @Operation(summary = "The wedding and its two seats, for a caller who holds one of them")
     @Parameters(
         Parameter(
             name = "weddingId",
@@ -125,7 +128,7 @@ class WeddingController internal constructor(
         ),
     )
     @ApiResponses(
-        ApiResponse(responseCode = "200", description = "The caller is a member of this wedding."),
+        ApiResponse(responseCode = "200", description = "The caller holds a seat in this wedding."),
         ApiResponse(
             responseCode = "401",
             description = "No session, or an expired or revoked one.",
@@ -134,7 +137,7 @@ class WeddingController internal constructor(
         ApiResponse(
             responseCode = "404",
             description =
-                "No such wedding — which is also the answer when it exists and the caller is not a member of it, " +
+                "No such wedding — which is also the answer when it exists and the caller holds no seat in it, " +
                     "and when it has been deleted.",
             content = [Content(schema = Schema(implementation = ProblemDetail::class))],
         ),

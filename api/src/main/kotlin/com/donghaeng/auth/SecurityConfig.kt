@@ -29,7 +29,7 @@ import org.springframework.security.web.savedrequest.NullRequestCache
  *
  * **`permitAll` everywhere, in every environment.** The gate is the resolver, not
  * the filter chain (notes/2026-08-10-decision-auth-gate-and-sequence.md): a
- * request is rejected because `user → membership → wedding` resolution failed, and
+ * request is rejected because `user → seat → wedding` resolution failed, and
  * that stays true in production. It is a design rather than deferred hardening
  * because the retrofit costs differ — flipping this line later is one line and
  * announces itself in CI, whereas retrofitting [CurrentUser] means threading a

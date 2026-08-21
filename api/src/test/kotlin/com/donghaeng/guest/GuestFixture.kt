@@ -28,7 +28,8 @@ internal abstract class GuestFixture : ApiFixture() {
     @AfterEach
     fun cleanLedger() {
         jdbc.update("delete from guest")
-        jdbc.update("delete from membership")
+        jdbc.update("delete from wedding_subscription")
+        jdbc.update("delete from wedding_party")
         jdbc.update("delete from wedding")
     }
 }

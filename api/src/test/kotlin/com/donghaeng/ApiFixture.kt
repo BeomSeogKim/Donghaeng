@@ -124,21 +124,23 @@ internal abstract class ApiFixture {
     }
 
     /**
-     * A wedding, and the caller's membership in it — the state every wedding-scoped
+     * A wedding, and the caller's seat in it — the state every wedding-scoped
      * endpoint needs before it can be called at all. Created over HTTP rather than
-     * inserted, so a test is scoped to a wedding the API itself would accept.
+     * inserted, so a test is scoped to a wedding the API itself would accept, and so
+     * the 신부 seat it also creates is the one [joinAsPartner] fills.
      *
-     * [groomName] is a parameter only because a test that creates two weddings wants
-     * to tell them apart in a failure message.
+     * [name] is a parameter only because a test that creates two weddings wants to
+     * tell them apart in a failure message. The caller always takes the 신랑 seat
+     * here; a test that cares which side it took says so itself.
      */
     protected fun createWedding(
         session: HttpCookie,
-        groomName: String = "김신랑",
+        name: String = "김신랑",
     ): Long =
         post(
             "/weddings",
             listOf(session),
-            """{"weddingDate":"2026-10-10","groomName":"$groomName","brideName":"이신부"}""",
+            """{"weddingDate":"2026-10-10","side":"GROOM","name":"$name"}""",
         ).json()["id"]
             .asLong()
 
@@ -146,8 +148,9 @@ internal abstract class ApiFixture {
      * The partner: a second person, in [weddingId] with the caller. Hands back their
      * session.
      *
-     * **This replaced `insertSecondWedding` when `ux_membership_user` was applied**
-     * (2026-08-21). The tenancy tests used to give one caller two live memberships,
+     * **This replaced `insertSecondWedding` when the one-wedding index was applied**
+     * (2026-08-21, now `ux_party_user`). The tenancy tests used to give one caller
+     * two live seats,
      * which the database now refuses outright — and the mutation they were killing,
      * a query scoped to the CALLER instead of to the WEDDING
      * (notes/2026-08-19-decision-wedding-scope-gate.md §2b), goes with it: while a
@@ -157,21 +160,29 @@ internal abstract class ApiFixture {
      * then a caller-scoped query silently drops everything the partner entered. That
      * is a 하객 missing from the ledger and a head missing from 보증인원.
      *
-     * The membership is INSERTED because `#9`'s invite does not exist yet; nothing
-     * else here is faked, and the partner drives the API over HTTP with a session
-     * they earned. It swaps [STUB_PROVIDER]'s subject, exactly as [loginAs] does, so
-     * a later `login()` in the same test is this partner and not the caller.
+     * The seat is CLAIMED through SQL because `#9`'s invite does not exist yet — and
+     * an UPDATE rather than an INSERT, which is what that invite will be too: the
+     * empty 신부 seat was created with the wedding, so there is a row to fill
+     * (notes/2026-08-22-decision-the-couples-two-seats.md §2). Nothing else here is
+     * faked, and the partner drives the API over HTTP with a session they earned. It
+     * swaps [STUB_PROVIDER]'s subject, exactly as [loginAs] does, so a later
+     * `login()` in the same test is this partner and not the caller.
      */
     protected fun joinAsPartner(
         weddingId: Long,
         subject: String = "the-partner",
+        name: String = "이신부",
     ): HttpCookie {
         val partner = loginAs(subject)
-        fixtureJdbc.update(
-            "insert into membership (wedding_id, user_id, created_at) values (?, ?, now())",
-            weddingId,
-            callerId(partner),
-        )
+        val claimed =
+            fixtureJdbc.update(
+                "update wedding_party set user_id = ?, name = ?, joined_at = now(), updated_at = now() " +
+                    "where wedding_id = ? and user_id is null and deleted_at is null",
+                callerId(partner),
+                name,
+                weddingId,
+            )
+        check(claimed == 1) { "expected one waiting seat in wedding $weddingId, filled $claimed" }
         return partner
     }
 

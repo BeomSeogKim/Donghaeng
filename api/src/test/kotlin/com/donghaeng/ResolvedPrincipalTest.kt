@@ -154,7 +154,7 @@ internal class ResolvedPrincipalTest {
         assertThat(undeclared)
             .describedAs(
                 "Under `permitAll` a handler that declares no resolved principal is reachable by anyone, with no " +
-                    "session and no membership — the endpoint works, and nothing else goes red. Take an " +
+                    "session and no seat — the endpoint works, and nothing else goes red. Take an " +
                     "AuthenticatedUser (who is asking) or a WeddingScope (which wedding), or, if it is genuinely " +
                     "public, add it to PUBLIC below WITH the reason " +
                     "(notes/2026-08-10-decision-auth-gate-and-sequence.md).",
@@ -170,7 +170,7 @@ internal class ResolvedPrincipalTest {
                     when {
                         // The rename. `/weddings/{id}` is mapped and served, and the
                         // resolver looks up `weddingId` and finds nothing — so the id
-                        // in the path is one nobody checked the membership for.
+                        // in the path is one nobody checked a seat for.
                         named != null && named != WEDDING_ID ->
                             "${nameOf(handler)} maps $path, whose wedding variable is named `$named` and not `$WEDDING_ID`"
                         // The omission, wherever the template sits in the path.
@@ -183,7 +183,7 @@ internal class ResolvedPrincipalTest {
 
         assertThat(unscoped)
             .describedAs(
-                "A wedding id read straight out of the path is a wedding id the caller chose; membership is what " +
+                "A wedding id read straight out of the path is a wedding id the caller chose; a seat is what " +
                     "makes it theirs, and the resolver is the only thing that checks it. The NAME is half the rule " +
                     "because the resolver reads the variable by name — see WEDDING_ID_VARIABLE in " +
                     "CurrentWeddingResolution.kt (notes/2026-08-19-decision-wedding-scope-gate.md).",
@@ -371,7 +371,7 @@ internal class ResolvedPrincipalTest {
         /** Who is asking. */
         const val CALLER = "$ROOT.auth.session.AuthenticatedUser"
 
-        /** Which wedding — resolved from the caller's membership, never from the request. */
+        /** Which wedding — resolved from the caller's seat, never from the request. */
         const val WEDDING = "$ROOT.wedding.WeddingScope"
 
         val PRINCIPALS = setOf(CALLER, WEDDING)

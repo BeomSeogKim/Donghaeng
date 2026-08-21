@@ -163,7 +163,7 @@ inline. The parts that constrain everyday backend work:
 - **The auth gate is our resolver, not Spring Security's filter chain**
   (decided 2026-08-10, `notes/2026-08-10-decision-auth-gate-and-sequence.md`).
   `authorizeHttpRequests` stays `permitAll` in **every** environment; what
-  rejects a request is `user → membership → wedding` resolution failing. The
+  rejects a request is `user → seat → wedding` resolution failing. The
   asymmetry is retrofit cost: flipping the filter chain later is one line,
   whereas retrofitting the resolver means threading a parameter through every
   endpoint written in the meantime, by hand and silently. This is a design,
@@ -235,7 +235,7 @@ how `api/` is required to implement them.
   `guest` and filters `guest.deleted_at`. Held by `GuestMealCountSchemaTest`.
 - **Every delete is soft** (decided 2026-08-10,
   `notes/2026-08-10-decision-soft-delete.md`) — but only on rows a *user* can
-  delete. `guest`, `membership`, meal type and `wedding` carry `deleted_at`;
+  delete. `guest`, `wedding_party`, meal type and `wedding` carry `deleted_at`;
   `guest_change` and the import/ingest records do not, because a deletable
   audit log is not an audit log and deleting an ingest breaks hash
   idempotency. Three consequences:
@@ -249,7 +249,7 @@ how `api/` is required to implement them.
   cannot ask "되살릴까요?" about a row it cannot load. An explicitly named
   bypass, never an ambient one.
   **(3)** Every unique constraint becomes a **partial** index
-  (`WHERE deleted_at IS NULL`), or a dead membership blocks a re-invite.
+  (`WHERE deleted_at IS NULL`), or a released seat blocks a re-invite.
 - **Postgres enum types only where the value set is closed forever** — `side`
   qualifies; `group_category`, `source`, `status`, `provider` do not. Use
   varchar plus application-level validation, so adding a value is a deploy and
@@ -257,7 +257,7 @@ how `api/` is required to implement them.
   changes again. (`guest.lifecycle` is not in v1 at all — decided 2026-08-11,
   returns with the RSVP links; the varchar rule binds it whenever it does.)
 - **The session never knows the wedding, and a person is in at most one** — every
-  path that creates a `membership` calls `WeddingService.claimSoleMembership`.
+  path that seats a person calls `WeddingService.claimSoleSeat`.
 - **Every mutation writes `GuestChange` in the same transaction** (`#25`, in v1
   as of 2026-08-20): one row per changed **field** — old, new, who, when, source
   (`MANUAL` / `VENDOR_EMAIL` / `IMPORT` + nullable FK to the ingest or import).
