@@ -74,6 +74,7 @@ see that file's `Rules` section for the admission test.
 | Record | What it settles |
 |---|---|
 | `2026-08-21-decision-ledger-screen.md` | 원장 is home; 이름 가나다순 is the client's order; one filter value per axis; the ledger's query keys |
+| `2026-08-21-decision-the-headcount-on-screen.md` | 세지 않은 숫자는 0으로 그리지 않는다; 보증인원이 없으면 화면은 그 얘기를 하지 않는다; 뮤테이션 숫자는 `setHeadcount`로 들어온다 |
 | `2026-08-21-decision-query-defaults-and-mutation-ordering.md` | The QueryClient's defaults; out-of-order mutation responses are prevented by serialising, not reconciled |
 | `2026-08-19-decision-generated-api-types.md` | The generated types are committed; a `seam` CI job refuses a stale one; what stays hand-written |
 | `2026-08-13-decision-frontend-routing.md` | Plain `<Routes>`, no loaders; the session gate sits above the table |

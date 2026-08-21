@@ -1,11 +1,15 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
 import { type Guest, guestsQueryKey, ledgerQueryKey } from '../hooks/useGuests'
+import { type Headcount, headcountQueryKey, setHeadcount } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
+import { apiError, apiFetch } from '../lib/api'
+import type { paths } from '../lib/api-types.gen'
 import { renderWithProviders } from '../test/render'
 import { server } from '../test/server'
 
@@ -48,13 +52,16 @@ function guest(id: number, name: string, overrides: Partial<Guest> = {}): Guest 
 }
 
 /**
- * The three calls this screen makes, with every ledger request kept in the order
- * it arrived — the URL included, which is the whole point.
+ * The four calls this screen makes, with every ledger request kept in the order
+ * it arrived — the URL included, which is the whole point — and every headcount
+ * request counted, because "it is not asked again after a mutation" is a count.
  */
 function api() {
   const ledgerRequests: URL[] = []
+  const headcountRequests: URL[] = []
   return {
     ledgerRequests,
+    headcountRequests,
     /** The last ledger URL the server was asked for. */
     lastLedgerRequest: () => ledgerRequests[ledgerRequests.length - 1],
     me: () =>
@@ -69,7 +76,30 @@ function api() {
         ledgerRequests.push(url)
         return await respond(url)
       }),
+    headcount: (respond: () => Response | Promise<Response> = counted(0)) =>
+      http.get(`${API}/weddings/:weddingId/headcount`, async ({ request }) => {
+        headcountRequests.push(new URL(request.url))
+        return await respond()
+      }),
   }
+}
+
+/**
+ * The number the server would have computed for these guests.
+ *
+ * Every double below sums to the rows it is handed — a constant beside a list it
+ * contradicts is a double the screen could pass while the real screen shows a
+ * wrong number. `guaranteedHeadcount` is passed only where a test is about it:
+ * the server omits the member until the couple has agreed one with their venue,
+ * which is every couple in v1 (docs/api-spec.md § GET .../headcount).
+ */
+function counted(mealHeadcount: number, guaranteedHeadcount?: number) {
+  return () =>
+    HttpResponse.json<Headcount>(
+      guaranteedHeadcount === undefined
+        ? { mealHeadcount }
+        : { mealHeadcount, guaranteedHeadcount },
+    )
 }
 
 const problem = (status: number, code: string) =>
@@ -103,6 +133,7 @@ it('renders the wedding it took from GET /weddings, in 이름 가나다순', asy
         guest(4, '이서연'),
       ]),
     ),
+    calls.headcount(counted(4)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -123,6 +154,7 @@ it('sends no filter parameter at all while both sides and both answers are wante
     calls.me(),
     calls.weddings(),
     calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -138,6 +170,7 @@ it('narrows to one 측 with a single parameter, and never repeats it', async () 
     calls.me(),
     calls.weddings(),
     calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -170,6 +203,7 @@ it('carries both axes at once, each exactly once', async () => {
     calls.me(),
     calls.weddings(),
     calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -192,6 +226,7 @@ it('says the ledger is empty when nobody has been entered yet', async () => {
     calls.me(),
     calls.weddings(),
     calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -211,6 +246,7 @@ it('never leaves a filter at a dead end', async () => {
         url.search === '' ? [guest(1, '김영수', { side: 'GROOM' })] : [],
       ),
     ),
+    calls.headcount(counted(1)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -253,6 +289,7 @@ it('shows each guest with the side, group and party size the ledger is read by',
         }),
       ]),
     ),
+    calls.headcount(counted(2)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -279,6 +316,7 @@ it('offers the failure again rather than explaining it away', async () => {
         ? problem(500, 'INTERNAL_ERROR')
         : HttpResponse.json<Guest[]>([guest(1, '김영수')])
     }),
+    calls.headcount(counted(1)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -296,6 +334,7 @@ it('turns a 404 into the same failure as any other, never into an existence hint
     calls.me(),
     calls.weddings(),
     calls.guests(() => problem(404, 'WEDDING_NOT_FOUND')),
+    calls.headcount(() => problem(404, 'WEDDING_NOT_FOUND')),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -318,6 +357,7 @@ it('reads a failed wedding list as the same failure, and recovers from it', asyn
         : HttpResponse.json<Wedding[]>([WEDDING])
     }),
     calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
+    calls.headcount(counted(1)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -370,6 +410,7 @@ it('does not say a filter matched nobody before the server has answered it', asy
       await held
       return HttpResponse.json<Guest[]>([guest(1, '윤채원', { side: 'BRIDE' })])
     }),
+    calls.headcount(counted(1)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -408,6 +449,7 @@ it('does not call the ledger empty while it is holding a filter\u0027s rows', as
       await held
       return HttpResponse.json<Guest[]>([guest(1, '김영수')])
     }),
+    calls.headcount(counted(1)),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -429,6 +471,7 @@ it('sends a 401 on the ledger read back to log in, not to a connection message',
     calls.me(),
     calls.weddings(),
     calls.guests(() => problem(401, 'UNAUTHENTICATED')),
+    calls.headcount(() => problem(401, 'UNAUTHENTICATED')),
   )
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -447,6 +490,7 @@ it('refetches the filtered ledger when the wedding\u0027s ledger key is invalida
     calls.me(),
     calls.weddings(),
     calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
+    calls.headcount(counted(1)),
   )
 
   const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
@@ -467,4 +511,310 @@ it('refetches the filtered ledger when the wedding\u0027s ledger key is invalida
   // And the unfiltered list behind it — the one a guest added under a pressed
   // chip would otherwise leave stale — is marked for refetching too.
   expect(queryClient.getQueryState(guestsQueryKey(12, {}))?.isInvalidated).toBe(true)
+})
+
+/*
+ * 인원수 — the number pinned above the ledger (`#17`).
+ *
+ * Mandatory tests, like the list beside them: the headcount display is named in
+ * notes/2026-08-08-decision-frontend-testing-methodology.md, and this is the
+ * number the couple takes to their venue. What is asserted here is what the
+ * screen SAYS in each state, because the failure this product cannot have is a
+ * number that is wrong while looking exactly like a number that is right.
+ */
+
+/**
+ * The block itself — a landmark, so nothing here has to guess at a container.
+ * `find`, because 원장 is not the first thing on screen: the session and the
+ * couple's weddings resolve above it.
+ */
+async function headcount() {
+  return await screen.findByRole('region', { name: '인원수' })
+}
+
+/**
+ * One reading that spans two elements — "보증 3" is a label with the figure in
+ * its own element, because a figure is semibold and tabular and the label is
+ * neither. The default text matcher only sees an element's own text nodes, so
+ * the two halves have to be put back together here.
+ */
+function reads(text: string) {
+  return (_: string, element: Element | null) =>
+    element?.textContent?.replace(/\s+/g, ' ').trim() === text
+}
+
+it('asks for the number beside the ledger rather than after it', async () => {
+  const calls = api()
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(async () => {
+      await held
+      return HttpResponse.json<Guest[]>([guest(1, '김영수')])
+    }),
+    calls.headcount(counted(1)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  // The number is on screen while the ledger is still in flight, so it was not
+  // queued behind it: 원장 화면 opens both, in parallel, and the list response
+  // carries no aggregate to wait for (docs/api-spec.md).
+  expect(await within(await headcount()).findByText('1')).toBeVisible()
+  expect(calls.ledgerRequests).toHaveLength(1)
+  expect(screen.getByText('원장을 불러오는 중입니다')).toBeVisible()
+
+  release()
+  expect(await screen.findByTestId('guest-name')).toHaveTextContent('김영수')
+})
+
+it('never draws a number it has not been given as 0', async () => {
+  const calls = api()
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+    ),
+    calls.headcount(async () => {
+      await held
+      return counted(2)()
+    }),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  // A ledger with two people in it and a read that has not landed are not the
+  // same thing as an empty ledger, and 0 is what an empty ledger says.
+  expect(within(await headcount()).queryByText('0')).not.toBeInTheDocument()
+  expect(within(await headcount()).getByText('—')).toBeVisible()
+  expect(await headcount()).toHaveAttribute('aria-busy', 'true')
+
+  release()
+  expect(await within(await headcount()).findByText('2')).toBeVisible()
+  expect(await headcount()).toHaveAttribute('aria-busy', 'false')
+})
+
+it('says the number failed rather than showing one, and asks for it again', async () => {
+  const calls = api()
+  let attempt = 0
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+    ),
+    calls.headcount(() => {
+      attempt += 1
+      return attempt === 1 ? problem(500, 'INTERNAL_ERROR') : counted(2)()
+    }),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  expect(await screen.findByText('인원수를 불러오지 못했습니다.')).toBeVisible()
+  expect(within(await headcount()).queryByText('0')).not.toBeInTheDocument()
+  // Two reads, two answers: a number that did not arrive does not blank the
+  // list, and the couple can still work the ledger while it is missing.
+  expect(screen.getAllByTestId('guest-name')).toHaveLength(2)
+
+  await userEvent.click(
+    within(await headcount()).getByRole('button', { name: '다시 시도' }),
+  )
+
+  expect(await within(await headcount()).findByText('2')).toBeVisible()
+  expect(screen.queryByText('인원수를 불러오지 못했습니다.')).not.toBeInTheDocument()
+})
+
+it('drops the number rather than keeping a stale one when a refetch fails', async () => {
+  const calls = api()
+  let attempt = 0
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+    ),
+    calls.headcount(() => {
+      attempt += 1
+      return attempt === 1 ? counted(2)() : problem(500, 'INTERNAL_ERROR')
+    }),
+  )
+
+  const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
+  expect(await within(await headcount()).findByText('2')).toBeVisible()
+
+  await act(async () => {
+    await queryClient.invalidateQueries({ queryKey: headcountQueryKey(12) })
+  })
+
+  // The couple would otherwise be shown a 40px figure from an earlier moment at
+  // full confidence, with a 13px note beside it. `staleTime` is 0 and the window
+  // regains focus, so a refetch here is ordinary rather than exotic.
+  expect(await within(await headcount()).findByText('—')).toBeVisible()
+  expect(within(await headcount()).queryByText('2')).not.toBeInTheDocument()
+  expect(screen.getByText('인원수를 불러오지 못했습니다.')).toBeVisible()
+})
+
+it('shows 0 for a ledger with nobody in it, because that 0 was counted', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(counted(0)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  // Day one for every couple who just made a wedding, and a 200 — the empty
+  // ledger's number is a real answer, unlike the two states above.
+  expect(await screen.findByText('아직 등록된 하객이 없습니다')).toBeVisible()
+  expect(within(await headcount()).getByText('0')).toBeVisible()
+  expect(within(await headcount()).queryByText('—')).not.toBeInTheDocument()
+})
+
+it('draws no comparison at all while the couple has no 보증인원', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+    ),
+    // The member is omitted, not null — and until `#8` there is no screen that
+    // could set it, so this is every couple in v1.
+    calls.headcount(counted(2)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  expect(await within(await headcount()).findByText('2')).toBeVisible()
+  expect(within(await headcount()).queryByText(/보증/)).not.toBeInTheDocument()
+  expect(within(await headcount()).queryByText(/여유|초과/)).not.toBeInTheDocument()
+  expect(
+    within(await headcount()).queryByTestId('guarantee-meter'),
+  ).not.toBeInTheDocument()
+})
+
+it('subtracts the two numbers itself when the venue has given one', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+    ),
+    calls.headcount(counted(2, 3)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  // 대비는 화면의 뺄셈이다: the server sends two numbers and never a difference,
+  // a percentage or a recommendation.
+  expect(await within(await headcount()).findByText(reads('보증 3'))).toBeVisible()
+  expect(within(await headcount()).getByText(reads('여유 1'))).toBeVisible()
+})
+
+it('says 초과 rather than a negative 여유 when the ledger is over the 보증인원', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<Guest[]>([
+        guest(1, '김영수', { expectedPartySize: 2 }),
+        guest(2, '박지민'),
+        guest(3, '이서연'),
+      ]),
+    ),
+    calls.headcount(counted(4, 3)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  expect(await within(await headcount()).findByText(reads('초과 1'))).toBeVisible()
+  expect(within(await headcount()).queryByText(/여유/)).not.toBeInTheDocument()
+})
+
+/*
+ * WHERE THE NUMBER COMES FROM AFTER A WRITE, and the contract `#135`, `#12` and
+ * `#13` inherit.
+ *
+ * Every wedding-scoped mutation returns `{guest, headcount}`, recomputed inside
+ * the same transaction as the write. The number is taken from that response in
+ * the mutation's own `onSuccess` — never fetched by a request fired beside the
+ * mutation, which lands outside the window mutations are serialised in and puts
+ * the out-of-order race back (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md).
+ *
+ * The mutation below is the one this screen does not have yet, written here so
+ * the contract is tested rather than described — the same reason the ledger key's
+ * invalidation is asserted above before `#135` exists.
+ */
+
+type GuestMutation =
+  paths['/weddings/{weddingId}/guests']['post']['responses'][201]['content']['*/*']
+
+function AddGuest({ weddingId }: { weddingId: number }) {
+  const queryClient = useQueryClient()
+  const create = useMutation({
+    mutationFn: async (): Promise<GuestMutation> => {
+      const response = await apiFetch(`/weddings/${weddingId}/guests`, {
+        method: 'POST',
+        body: JSON.stringify({ name: '박지민', side: 'BRIDE' }),
+      })
+      if (!response.ok) throw await apiError(response)
+      return (await response.json()) as GuestMutation
+    },
+    onSuccess: (created) => {
+      setHeadcount(queryClient, weddingId, created.headcount)
+    },
+  })
+
+  return (
+    <button onClick={() => create.mutate()} type="button">
+      하객 추가
+    </button>
+  )
+}
+
+it('moves the number in place from a mutation response, without asking again', async () => {
+  const calls = api()
+  const added = guest(2, '박지민', { side: 'BRIDE' })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
+    calls.headcount(counted(1)),
+    http.post(`${API}/weddings/:weddingId/guests`, () =>
+      HttpResponse.json<GuestMutation>(
+        { guest: added, headcount: { mealHeadcount: 2 } },
+        { status: 201 },
+      ),
+    ),
+  )
+
+  renderWithProviders(
+    <>
+      <App />
+      <AddGuest weddingId={12} />
+    </>,
+    { initialEntries: ['/'] },
+  )
+  expect(await within(await headcount()).findByText('1')).toBeVisible()
+
+  await userEvent.click(screen.getByRole('button', { name: '하객 추가' }))
+
+  expect(await within(await headcount()).findByText('2')).toBeVisible()
+  // ONE read of the number, on open. The second number came off the write's own
+  // response, so the row and the total cannot disagree for a round trip.
+  expect(calls.headcountRequests).toHaveLength(1)
 })
