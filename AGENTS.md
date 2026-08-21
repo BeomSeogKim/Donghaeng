@@ -136,8 +136,10 @@ bind only while one requirement is built live in that requirement's `notes/`
 record**, loaded when the issue is picked up — the only moment they mean
 anything.
 
-- **The Wedding, not the user, is the top-level unit.** The couple shares full
-  access to one ledger, and one person may belong to several weddings.
+- **The Wedding, not the user, is the top-level unit.** The couple are **two
+  accounts on one ledger**, each editing under their own name, and **a person
+  belongs to exactly one wedding** — created or joined, never both, never two
+  (2026-08-21). The partner arrives by invite link (`#9`).
 - **보증인원 is the venue's number, never ours.** We never recommend it and
   never adjust counts statistically — the headcount sums real responses and the
   couple's own expected values, nothing else. **유아식 does not adjust it
