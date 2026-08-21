@@ -1,65 +1,71 @@
-import { QueryClient } from '@tanstack/react-query'
+import { type DefaultOptions, QueryClient } from '@tanstack/react-query'
+import { ApiError } from './api'
 
 /*
  * The app's single QueryClient. Server state — anything that is a client-side
  * copy of what the API owns — lives here and nowhere else
  * (notes/2026-08-08-decision-frontend-architecture.md).
  *
- * Defaults, and why each is not the stock value:
- *
- * - mutations retry: 0. A mutation here is not idempotent — a retried guest
- *   create double-writes a person into the ledger. This product's claim is
- *   never-wrong numbers, so a failed mutation surfaces as a failure the couple
- *   sees, never as a silent second attempt.
- * - queries retry: 1. A read is safe to repeat, and one retry covers a dropped
- *   connection without making a genuinely broken screen take four round trips
- *   to say so.
- * - refetchOnWindowFocus: true (the stock value, kept deliberately). Two people
- *   share one ledger by design, so the partner's edit appearing when you tab
- *   back is correct behaviour, not a surprise.
- * - staleTime: 0 (stock, kept deliberately). The alternative is showing a
- *   number we already know might be old, which is the one thing this product
- *   may not do. Traffic is one couple, so refetching costs nothing worth
- *   trading a stale headcount for.
+ * Every default below is argued from the three reads this product actually has —
+ * the session probe, the couple's weddings, and the whole ledger, which does not
+ * paginate — in notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md.
+ * The tests next door assert them as behaviour; change one and read that record.
  */
-export function createQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: { retry: 1, staleTime: 0, refetchOnWindowFocus: true },
-      mutations: { retry: 0 },
-    },
-  })
-}
+export const queryClientDefaults = {
+  queries: {
+    /*
+     * Retry a read once, but only when nothing answered it. A 4xx is an answer:
+     * the server looked and decided, and repeating the question cannot change
+     * 404 WEDDING_NOT_FOUND or 400 into anything else — it only puts a second
+     * round trip between the couple and the screen that says so.
+     */
+    retry: (failureCount: number, error: Error) =>
+      !(error instanceof ApiError && error.status >= 400 && error.status < 500) &&
+      failureCount < 1,
 
-/*
- * Out-of-order responses — the guard, decided here so the first mutation stop
- * inherits a decision rather than a blank (AGENTS.md: a number lagging the tap
- * by 100ms is fine, a number moving backwards is not).
- *
- * The hazard is specific: every mutation response carries the recomputed
- * aggregate, and a mutation's onSuccess writes that aggregate straight into the
- * query cache. Tap 참석 then tap 불참 quickly, and if the first response lands
- * second, the cache is overwritten with the older headcount.
- *
- * The guard, in preference order:
- *
- * 1. If the aggregate carries a server-side monotonic marker — a version, a
- *    sequence, or a strictly-increasing updatedAt — onSuccess compares against
- *    the marker already in the cache and drops the older payload. This is the
- *    one that also covers the partner mutating concurrently from another
- *    device, because the ordering comes from the server rather than from this
- *    client's own timeline. It is what to ask the backend for.
- * 2. If no such marker exists, a client-side monotonic counter: each mutation
- *    captures a sequence number when it fires, and onSuccess writes only if its
- *    number is the highest that has settled so far. Needs nothing from the API
- *    and fixes the double-tap case, but cannot order this client against the
- *    partner's.
- * 3. Either way, onSettled invalidates the query as a backstop, so the last
- *    word always comes from a fresh read rather than from a race.
- *
- * Which of 1 or 2 applies cannot be settled here: docs/api-spec.md has no
- * endpoint yet, so the aggregate's shape is unknown, and inventing a version
- * field the API does not return would be exactly the client-side guess the
- * spec rule forbids. #39 (generated types) will reveal which; #44 implements
- * whichever it turns out to be.
- */
+    /*
+     * Stock, and kept on purpose. The alternative is knowingly showing a number
+     * that may be old, which is the one thing this product may not do. It is
+     * also what makes the line below mean anything: above zero, a refetch on
+     * focus or on mount is skipped as fresh, and the ledger's number is a
+     * refetch until #17 gives mutations an aggregate to carry.
+     */
+    staleTime: 0,
+
+    /*
+     * Stock, kept on purpose. Two people share one ledger by design, so the
+     * partner's edit being there when you tab back is correct behaviour rather
+     * than a surprise — and it is the only thing that orders this client
+     * against another device.
+     */
+    refetchOnWindowFocus: true,
+  },
+  mutations: {
+    /*
+     * A mutation here is not idempotent, and the spec says so in as many words:
+     * a second guest with the same name succeeds and is a second row. A retried
+     * create writes a person into the ledger twice, and this product's whole
+     * claim is that the number is never wrong. A failed mutation surfaces as a
+     * failure the couple sees, never as a silent second attempt.
+     */
+    retry: 0,
+
+    /*
+     * THE OUT-OF-ORDER GUARD. Mutations sharing a scope id run one at a time, in
+     * the order they were fired, and React Query awaits the finished one's
+     * onSuccess before starting the next — so a cache write can never be
+     * overtaken by an older one from this client, and the server applies the
+     * taps in the order the couple made them.
+     *
+     * One id for the whole app, not one per wedding: a default cannot be
+     * forgotten at a call site, and forgetting is silent. The concurrency it
+     * gives up is concurrency one couple at a human tap rate never had. A call
+     * site may still pass a narrower scope; this is the floor.
+     */
+    scope: { id: 'donghaeng' },
+  },
+} satisfies DefaultOptions
+
+export function createQueryClient() {
+  return new QueryClient({ defaultOptions: queryClientDefaults })
+}

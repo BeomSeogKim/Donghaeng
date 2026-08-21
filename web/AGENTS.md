@@ -61,6 +61,13 @@ coverage target.
   `fetch` + `useState`. A mutation's `onSuccess` writes the response straight
   into the query cache — this is the mechanism behind "every mutation response
   carries the recomputed aggregate."
+- **Mutations run one at a time**, by a default `scope` on the client, which is
+  what stops a response being overtaken by an older one
+  (`notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md`). Two
+  things put that race straight back, so neither is allowed: **fetching the
+  aggregate in a request fired alongside the mutation** rather than reading it
+  off the mutation's own response, and **awaiting the `onSettled` invalidation**,
+  which query-core waits on before releasing the next mutation.
 - **Client state escalates one rung at a time**: `useState` → lift to the
   common parent → `useReducer` → Context (wrapped in a custom hook,
   immediately) → a client-state library, only once Context is provably
