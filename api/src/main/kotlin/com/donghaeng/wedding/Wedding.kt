@@ -26,10 +26,12 @@ import java.time.LocalDate
  * depend on `auth/`'s rows, which the architecture forbids; the foreign key still
  * exists in the database and nothing here needs to load the person.
  *
- * **[guaranteedHeadcount] is read and never written here.** `#151` publishes it
- * beside the 식대 인원, and `#8` is what will let the couple set it; until then it is
- * NULL on every row and the headcount simply omits the member
- * (notes/2026-08-21-decision-the-headcount-endpoint.md §2).
+ * **[guaranteedHeadcount] is NULL until the couple says otherwise, and can go back
+ * to being NULL.** `#151` publishes it beside the 식대 인원 and `#173` is the write
+ * path; a row that has never met a venue contract and a row whose contract fell
+ * through are the same state, and the headcount omits the member for both
+ * (notes/2026-08-21-decision-the-headcount-endpoint.md §2,
+ * notes/2026-08-22-decision-partial-update-shape.md).
  *
  * The timestamps have no defaults: the service is the only clock
  * ([WeddingService.create]), so a row cannot be written with a `created_at` from
@@ -47,8 +49,10 @@ import java.time.LocalDate
 @Table(name = "wedding")
 @SQLRestriction("deleted_at is null")
 internal class Wedding(
+    // `var` since #173: 예식일 is editable in 설정, and it is the one column of this
+    // row a partial update may write without being able to clear it.
     @Column(name = "wedding_date", nullable = false)
-    val weddingDate: LocalDate,
+    var weddingDate: LocalDate,
     @Column(name = "created_by", nullable = false, updatable = false)
     val createdBy: Long,
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -56,8 +60,8 @@ internal class Wedding(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant,
     // 보증인원 — the VENUE's number, never ours, and nullable because a couple signs
-    // up before booking one. `var` because `#8` edits it; nothing in this tree
-    // assigns to it yet.
+    // up before booking one, and because a couple who has un-signed goes back to
+    // having none: `PATCH /weddings/{weddingId}` sets it and clears it (#173).
     @Column(name = "guaranteed_headcount")
     var guaranteedHeadcount: Int? = null,
     @Column(name = "deleted_at")

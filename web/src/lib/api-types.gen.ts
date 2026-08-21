@@ -22,6 +22,8 @@ export interface paths {
   "/weddings/{weddingId}": {
     /** The wedding and its two seats, for a caller who holds one of them */
     get: operations["read"];
+    /** Change 예식일 or 보증인원, and answer with the recomputed 인원수 */
+    patch: operations["updateWedding"];
   };
   "/weddings/{weddingId}/guests": {
     /** The wedding's ledger, filtered by side and attendance */
@@ -140,6 +142,24 @@ export interface components {
       /** Format: uri */
       readonly type?: string;
     };
+    readonly UpdateWeddingRequest: {
+      /**
+       * Format: int32
+       * @description 보증인원 — the venue's number. Omit to leave it alone, send `null` to go back to not having one
+       * @example 150
+       */
+      readonly guaranteedHeadcount?: number | null;
+      /**
+       * Format: date
+       * @description 예식일. Omit to leave it alone; it cannot be cleared, so `null` is a 400
+       * @example 2026-10-10
+       */
+      readonly weddingDate?: string;
+    };
+    readonly WeddingMutationResponse: {
+      readonly headcount: components["schemas"]["HeadcountResponse"];
+      readonly wedding: components["schemas"]["WeddingResponse"];
+    };
     readonly WeddingResponse: {
       /** Format: int64 */
       readonly id: number;
@@ -255,6 +275,45 @@ export interface operations {
       200: {
         content: {
           readonly "*/*": components["schemas"]["WeddingResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller holds no seat in it, and when it has been deleted. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** Change 예식일 or 보증인원, and answer with the recomputed 인원수 */
+  updateWedding: {
+    parameters: {
+      path: {
+        weddingId: number;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["UpdateWeddingRequest"];
+      };
+    };
+    responses: {
+      /** @description The wedding as it now stands, and the recomputed 인원수. An empty body is a legal no-op: it changes nothing and answers the current state. */
+      200: {
+        content: {
+          readonly "*/*": components["schemas"]["WeddingMutationResponse"];
+        };
+      };
+      /** @description A 보증인원 below 1, an unstorable 예식일, a `weddingDate` sent as `null` — it cannot be cleared — or a body that could not be read. */
+      400: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
         };
       };
       /** @description No session, or an expired or revoked one. */

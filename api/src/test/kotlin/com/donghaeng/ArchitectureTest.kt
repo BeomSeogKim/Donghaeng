@@ -363,7 +363,15 @@ class ArchitectureTest {
                 .withImportOption(ImportOption.DoNotIncludeTests())
                 .importPackages(ROOT)
 
-        /** Packages that are underneath every domain rather than beside them. */
-        val SUBSTRATE = setOf("config", "error")
+        /**
+         * Packages that are underneath every domain rather than beside them.
+         *
+         * `json/` joined them with `#173`: [com.donghaeng.json.Patch] is how every
+         * partial-update body is read, so `wedding/` and `guest/` both point at it
+         * and it may point at neither. Listing it here is what says so — the cycle
+         * rule alone would allow it to reach into one domain, which is exactly how a
+         * mechanism stops being one.
+         */
+        val SUBSTRATE = setOf("config", "error", "json")
     }
 }
