@@ -121,16 +121,17 @@ what that costs. Everything below still binds.
   them when real branch protection arrives
   (`notes/2026-08-08-decision-merge-gate.md`).
 
-## v1 scope (cut 2026-08-06)
+## v1 scope (cut 2026-08-06, recut through 2026-08-21)
 
-> **A tool the couple operates for headcount and meal planning, plus a
-> vendor-email parser that saves them typing.**
+> **A tool the couple operates for headcount and meal planning.**
 
-`notes/2026-08-06-decision-v1-scope-and-meals.md`. Intake is direct couple
-entry and a parsed vendor RSVP email, plus CSV import — which builds the ledger
-rather than answering it. **Our own RSVP links are deferred, not cancelled. No
-guest meets the product in v1**, so the review *queue* has nothing to fill it,
-but **matching still runs** at vendor-email paste and CSV import.
+`notes/2026-08-06-decision-v1-scope-and-meals.md`, recut requirement by
+requirement against one test — *does this stand between a couple and a working
+원장?* (`notes/2026-08-19-decision-launch-date-and-google-only.md`). **Intake in
+v1 is direct couple entry and nothing else**: the vendor-email parser and CSV
+import (`#19`–`#23`) are `post-v1`, and the matching pipeline and the review
+queue went with them. 유아식 (`#10`, `#14`) too. Our own RSVP links were already
+deferred. **No guest meets the product in v1.**
 
 ## Standing product facts
 
