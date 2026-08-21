@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Navigate } from 'react-router'
+import { AddGuestSheet } from '../components/AddGuestSheet'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { GuestRow } from '../components/GuestRow'
@@ -86,6 +87,14 @@ function Ledger({ wedding }: { wedding: Wedding }) {
   const guests = useGuests(wedding.id, filters)
   const narrowed = describe(filters)
 
+  /*
+   * 하객 추가 opens OVER this screen and the main action never leaves it
+   * (notes/2026-08-07-design-screens-and-flow.md). Whether the sheet is open is
+   * this screen's own state and nobody else's, so it stays on the bottom rung —
+   * `useState`, here (notes/2026-08-08-decision-frontend-architecture.md).
+   */
+  const [adding, setAdding] = useState(false)
+
   /** The states the list itself can be in, and they are exclusive. */
   function list() {
     if (guests.isPending) return <Notice title="원장을 불러오는 중입니다" />
@@ -136,17 +145,17 @@ function Ledger({ wedding }: { wedding: Wedding }) {
 
     /*
      * Day one for every couple who just made a wedding, so it is a real state
-     * rather than an edge case. It says what it can honestly say and no more:
-     * 하객 추가 (`#135`), the file import and the vendor-email paste are the
-     * actions that fill a ledger, and none of them exists yet — an empty screen
-     * offering a button that does nothing would be worse than one that admits
-     * it. No illustration and no emoji: a tool has no reason to be cheerful
-     * about being empty.
+     * rather than an edge case. It names the one action that fills a ledger in
+     * v1 — direct entry, the import and the vendor-email paste being post-v1 —
+     * and points at the button rather than repeating it: a second 하객 추가 on
+     * screen is two places to press for one action, and the pinned one is
+     * always there. No illustration and no emoji: a tool has no reason to be
+     * cheerful about being empty.
      */
     return (
       <Notice title="아직 등록된 하객이 없습니다">
         <p className="text-body leading-body text-ink-muted">
-          하객을 추가하는 화면은 아직 준비 중입니다.
+          위 하객 추가로 첫 하객을 등록해 주세요.
         </p>
       </Notice>
     )
@@ -154,6 +163,22 @@ function Ledger({ wedding }: { wedding: Wedding }) {
 
   return (
     <Frame
+      /*
+       * PINNED WITH THE NUMBER AND THE FILTERS, not in the tools row and not at
+       * the bottom of the screen. The bottom belongs to the list, and the
+       * filter row is 2rem tall on purpose — a 44px button in it would push the
+       * list down on the device 원장 is mostly read on
+       * (notes/2026-08-21-decision-ledger-screen.md).
+       */
+      action={
+        <button
+          className={buttonClassName('primary')}
+          onClick={() => setAdding(true)}
+          type="button"
+        >
+          하객 추가
+        </button>
+      }
       /*
        * THE NUMBER IS READ BESIDE THE LIST, NOT AFTER IT. Both queries mount in
        * this same commit, so neither waits on the other's response — and neither
@@ -220,6 +245,9 @@ function Ledger({ wedding }: { wedding: Wedding }) {
       wedding={wedding}
     >
       {list()}
+      {adding && (
+        <AddGuestSheet onClose={() => setAdding(false)} weddingId={wedding.id} />
+      )}
     </Frame>
   )
 }
@@ -232,11 +260,13 @@ function Ledger({ wedding }: { wedding: Wedding }) {
  * when they tap, and they tap while scrolled into the list.
  */
 function Frame({
+  action,
   children,
   headcount,
   tools,
   wedding,
 }: {
+  action: ReactNode
   children: ReactNode
   headcount: ReactNode
   tools: ReactNode
@@ -259,7 +289,10 @@ function Frame({
               {wedding.seats.map(seatLabel).join(' · ')}
             </p>
           </div>
-          <LogoutButton className="flex flex-col items-end gap-2 text-right" />
+          <div className="flex shrink-0 items-start gap-2">
+            {action}
+            <LogoutButton className="flex flex-col items-end gap-2 text-right" />
+          </div>
         </header>
 
         {/* 인원수 — above the tools and above the list, and inside the pinned

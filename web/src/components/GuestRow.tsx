@@ -1,4 +1,4 @@
-import type { Guest } from '../hooks/useGuests'
+import { GROUP_LABELS, type Guest } from '../hooks/useGuests'
 import { Tag } from './Tag'
 
 /*
@@ -23,17 +23,6 @@ import { Tag } from './Tag'
 
 const SIDE = { GROOM: '신랑', BRIDE: '신부' } as const
 
-/** The seven aggregation groups, in the API's spelling. There is no eighth. */
-const GROUP = {
-  FAMILY: '가족',
-  RELATIVE: '친척',
-  COUSIN: '사촌',
-  PARENTS_GUEST: '혼주 손님',
-  FRIEND: '친구',
-  COWORKER: '직장동료',
-  OTHER: '기타',
-} as const
-
 export function GuestRow({ guest }: { guest: Guest }) {
   const label = guest.groupLabel ?? ''
 
@@ -51,7 +40,7 @@ export function GuestRow({ guest }: { guest: Guest }) {
         </p>
         <p className="flex min-w-0 items-center gap-2 text-meta leading-snug text-ink-muted">
           <Tag variant="side">{SIDE[guest.side]}</Tag>
-          <Tag variant="group">{GROUP[guest.groupCategory]}</Tag>
+          <Tag variant="group">{GROUP_LABELS[guest.groupCategory]}</Tag>
           {label !== '' && <Tag variant="free">{label}</Tag>}
           {/* One text node, so the count and its unit never wrap apart. Every
               digit that can change in place is tabular. */}

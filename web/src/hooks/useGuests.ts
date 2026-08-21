@@ -14,6 +14,30 @@ type ListGuests = paths['/weddings/{weddingId}/guests']['get']
 export type Guest = ListGuests['responses'][200]['content']['*/*'][number]
 
 /**
+ * The seven aggregation groups, in the API's spelling, and what each is called
+ * on screen. There is no eighth — an eighth value is a 400.
+ *
+ * IT LIVES BESIDE THE TYPE IT LABELS, not in the row that first rendered it:
+ * 원장 reads these and 하객 추가 writes them, and a second copy of seven Korean
+ * spellings is how one screen starts calling `PARENTS_GUEST` something the
+ * other does not. `satisfies` is what makes that checkable — a group added to
+ * the API fails this file rather than rendering blank.
+ *
+ * THE ORDER IS THE API'S, and the select offers them in it. 기타 is last
+ * because it is the residual: it honestly means "not stated yet", which is what
+ * lets it be a default at all (docs/api-spec.md § POST /weddings/{weddingId}/guests).
+ */
+export const GROUP_LABELS = {
+  FAMILY: '가족',
+  RELATIVE: '친척',
+  COUSIN: '사촌',
+  PARENTS_GUEST: '혼주 손님',
+  FRIEND: '친구',
+  COWORKER: '직장동료',
+  OTHER: '기타',
+} as const satisfies Record<Guest['groupCategory'], string>
+
+/**
  * The two filters, exactly as the endpoint declares them.
  *
  * IT IS AT MOST ONE VALUE PER AXIS, AND THAT IS LOAD-BEARING RATHER THAN

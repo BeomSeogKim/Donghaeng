@@ -63,6 +63,7 @@
   --color-att-maybe-bg: var(--dh-att-maybe-bg);
   --color-att-no-fg: var(--dh-att-no-fg);
   --color-att-no-bg: var(--dh-att-no-bg);
+  --color-scrim: var(--dh-scrim);
 
   --font-*: initial;
   --font-sans: var(--dh-font-sans);
