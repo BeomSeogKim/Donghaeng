@@ -708,9 +708,15 @@ it('never lets a wedding read already in flight overwrite the date the save wrot
     api.me(),
     /*
      * The second read is the one a couple tabbing back from KakaoTalk starts,
-     * and it was answered BEFORE the save — so it carries the old 예식일. The
-     * `onSettled` invalidation is no defence here: it dedupes into the fetch
-     * already in flight rather than starting a fresh one.
+     * and it was answered BEFORE the save — so it carries the old 예식일.
+     *
+     * THIS TEST DOES NOT ISOLATE `setWedding`'s CANCEL, and saying so is the
+     * point of this comment: with a couple still on the screen, `onSettled`'s
+     * invalidation repairs this case on its own — `invalidateQueries` defaults
+     * to `cancelRefetch: true`, so it aborts the stale fetch and starts a fresh
+     * one. Delete the cancel and this test stays green. What the cancel is FOR
+     * is the test below it, where nobody is left on screen to refetch for
+     * (`useWeddings.ts` § setWedding).
      */
     http.get(`${API}/weddings`, async () => {
       reads += 1
@@ -751,3 +757,91 @@ it('never lets a wedding read already in flight overwrite the date the save wrot
     { id: 12, weddingDate: '2027-03-14', seats: SEATS },
   ])
 })
+
+it('holds the date it wrote when nobody is left on screen to refetch it', async () => {
+  const api = weddingApi({ weddingDate: '2026-10-10' })
+  let releaseStale = () => {}
+  const stale = new Promise<void>((resolve) => {
+    releaseStale = resolve
+  })
+  let releaseSave = () => {}
+  const held = new Promise<void>((resolve) => {
+    releaseSave = resolve
+  })
+  let reads = 0
+  server.use(
+    api.me(),
+    http.get(`${API}/weddings`, async () => {
+      reads += 1
+      if (reads === 2) {
+        await stale
+        return HttpResponse.json<Wedding[]>([
+          { id: 12, weddingDate: '2026-10-10', seats: SEATS },
+        ])
+      }
+      return HttpResponse.json<Wedding[]>([
+        { id: 12, weddingDate: api.stored().weddingDate, seats: SEATS },
+      ])
+    }),
+    api.headcount(),
+    http.patch(`${API}/weddings/:weddingId`, async ({ request }) => {
+      api.saved.push({
+        request,
+        body: (await request.clone().json()) as UpdateWeddingRequest,
+        raw: '',
+      })
+      await held
+      return HttpResponse.json<WeddingMutation>({
+        wedding: { id: 12, weddingDate: '2027-03-14', seats: SEATS },
+        headcount: { mealHeadcount: 128 },
+      })
+    }),
+  )
+
+  const { queryClient, unmount } = renderWithProviders(<App />, {
+    initialEntries: ['/settings'],
+  })
+  const fields = await form()
+
+  // A read a couple's own tab-back started, still in flight and already stale.
+  void queryClient.refetchQueries({ queryKey: weddingsQueryKey, exact: true })
+  await waitFor(() => expect(reads).toBe(2))
+
+  await fields.fill(fields.date, '2027-03-14')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+
+  /*
+   * THEY LEAVE THE MOMENT THEY PRESS 저장 — closed the tab, went back to
+   * KakaoTalk, killed the app. The write still lands: a mutation's own
+   * `onSuccess` runs whether or not the component that fired it is still
+   * mounted.
+   */
+  unmount()
+  releaseSave()
+  await settle()
+
+  /*
+   * AND NOW NOTHING ELSE CAN REPAIR THE CACHE. `invalidateQueries` defaults to
+   * `refetchType: 'active'`, and there are no active observers left, so
+   * `onSettled` marks the list stale and refetches NOTHING. The stale read is
+   * the only thing still in flight — so unless `setWedding` cancelled it, its
+   * answer is the last word and 원장 opens on the date the couple replaced.
+   *
+   * This is the case that isolates the cancel: delete `cancelQueries` from
+   * `setWedding` and this test alone goes red.
+   */
+  releaseStale()
+  await settle()
+
+  expect(queryClient.getQueryData(weddingsQueryKey)).toEqual([
+    { id: 12, weddingDate: '2027-03-14', seats: SEATS },
+  ])
+})
+
+/** Let every queued promise and the cache writes behind them run out. */
+async function settle() {
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 20))
+  })
+}

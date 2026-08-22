@@ -69,15 +69,18 @@ async function fetchWeddings(): Promise<readonly Wedding[]> {
  * 예식일.
  *
  * WHAT `onSettled`'S INVALIDATION DOES ABOUT THAT, MEASURED RATHER THAN
- * ASSUMED: it repairs the ordinary case on its own, because `invalidateQueries`
+ * ASSUMED: it repairs the ORDINARY case on its own, because `invalidateQueries`
  * defaults to `cancelRefetch: true` and therefore aborts the stale fetch and
- * starts a fresh one rather than deduping into it. Removing both this line and
- * that invalidation turns the ordering test red; removing this line alone does
- * not. **This line is still what makes the write correct rather than repaired**,
- * and it holds the two cases the invalidation does not: a stale answer landing
- * in the window between the write and that refetch, and an invalidation with no
- * active observer to refetch for — a couple who leave the screen the moment they
- * press 저장 — where the in-flight read still writes when it lands.
+ * starts a fresh one rather than deduping into it (query-core 5.101.4). So with
+ * a couple still on the screen, removing this line changes nothing.
+ *
+ * **THE CASE IT CANNOT REPAIR IS THE ONE THIS LINE IS FOR**, and it is ordinary
+ * too: `invalidateQueries` also defaults to `refetchType: 'active'`, so a couple
+ * who leave the moment they press 저장 — closed the tab, back to KakaoTalk —
+ * leave no active observer, and the invalidation refetches NOTHING. The stale
+ * read is then the only thing still in flight and its answer is the last word.
+ * That case is a test (`SettingsPage.test.tsx` § holds the date it wrote when
+ * nobody is left on screen), and deleting this line is what turns it red.
  *
  * THE ORDER OF THE TWO LINES IS LOAD-BEARING, exactly as in `setHeadcount`:
  * `cancelQueries` defaults to `revert: true` and applies the revert
