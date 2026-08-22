@@ -24,12 +24,15 @@ import { createWeddingPath, invitePath, settingsPath } from '../lib/routes'
  * see the number, find the person, tap. 원장과 인원수는 한 화면 — the number is
  * `components/Headcount.tsx` and it is read beside the list, never after it.
  *
- * THE WEDDING ID IS NOT IN THE URL. It comes from `GET /weddings`, whose first
- * entry is contract (newest first), so a reload lands on the same ledger. That
- * also means this screen never calls `GET /weddings/{weddingId}` — the header it
- * would render is already in the list entry, and a second round trip for the
- * same four fields buys nothing. It starts to matter when a wedding id can
- * arrive from outside the list, which v1 has no way to produce.
+ * THE WEDDING ID IS NOT IN THE URL. It comes from `GET /weddings`, which holds
+ * AT MOST ONE ENTRY — a person belongs to exactly one wedding, and that sentence
+ * is what makes `[0]` correct rather than lucky, so a reload lands on the same
+ * ledger (docs/api-spec.md § GET /weddings; the list's newest-first order is
+ * retained and decides nothing). That also means this screen never calls
+ * `GET /weddings/{weddingId}` — the header it would render is already in the
+ * list entry, and a second round trip for the same four fields buys nothing. It
+ * starts to matter when a wedding id can arrive from outside the list, which v1
+ * has no way to produce.
  */
 export function LedgerPage() {
   const weddings = useWeddings()

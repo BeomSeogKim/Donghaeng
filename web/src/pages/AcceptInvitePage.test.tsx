@@ -51,15 +51,21 @@ function inviteApi({
   signedIn = true,
   weddings = [],
   held: hold = false,
+  holdWeddings = false,
 }: {
   signedIn?: boolean
   weddings?: Wedding[]
   held?: boolean
+  holdWeddings?: boolean
 } = {}) {
   const joins: { body: JoinWeddingRequest; contentType: string | null }[] = []
   // The list this person's `GET /weddings` answers, which a successful join
   // changes exactly as the server would.
   let held = weddings
+  // The session, which 로그아웃 ends — the recovery for "I signed in with the
+  // wrong Google account", and the one thing that has to take the 409 verdict
+  // with it.
+  let session = signedIn
 
   /*
    * A join that has not answered yet, which is the only window a second press
@@ -72,16 +78,35 @@ function inviteApi({
     release = resolve
   })
 
+  /*
+   * 원장's own read, held open so that the trip through it is observable. Both
+   * arrivals at this screen render the same words, so a test of the SECOND one
+   * has to see the first leave — and it leaves the moment 원장 mounts with its
+   * list still in flight.
+   */
+  let releaseWeddings = () => {}
+  const listing = new Promise<void>((resolve) => {
+    releaseWeddings = resolve
+  })
+
   return {
     joins,
     release,
+    releaseWeddings,
     handlers: (respond?: () => Response) => [
       http.get(`${API}/auth/me`, () =>
-        signedIn
+        session
           ? HttpResponse.json<Session>({ id: 7, name: null })
           : problem(401, 'UNAUTHENTICATED'),
       ),
-      http.get(`${API}/weddings`, () => HttpResponse.json<Wedding[]>(held)),
+      http.post(`${API}/auth/logout`, () => {
+        session = false
+        return new HttpResponse(null, { status: 204 })
+      }),
+      http.get(`${API}/weddings`, async () => {
+        if (holdWeddings) await listing
+        return HttpResponse.json<Wedding[]>(held)
+      }),
       http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json([])),
       http.get(`${API}/weddings/:weddingId/headcount`, () =>
         HttpResponse.json<Headcount>({ mealHeadcount: 0 }),
@@ -350,11 +375,54 @@ it('treats a person who already has a ledger as having one, not as having failed
    */
   expect(stored()).toBe(TOKEN)
 
+  // 로그아웃 is on this screen, not only under the form: for somebody who
+  // signed in as the wrong account it IS the recovery.
+  expect(screen.getByRole('button', { name: '로그아웃' })).toBeVisible()
+
   // The spec's own recovery: open the wedding `GET /weddings` comes back with.
   // A held token cannot divert them back here — 원장 only reads it when the
   // list is EMPTY, and this person's is not (LedgerPage.tsx).
   await userEvent.click(screen.getByRole('link', { name: '내 원장 열기' }))
   expect(await screen.findByRole('heading', { name: '원장' })).toBeInTheDocument()
+})
+
+it('says it again on the second arrival instead of offering the form that refused them', async () => {
+  // The list DISAGREES with the 409: it says this person holds no wedding. A
+  // replica read or a late cache produces exactly this, and it is what turns
+  // the recovery into a loop — 원장 hands an empty list straight back to 수락
+  // (LedgerPage.tsx), which is the form that has just refused them.
+  const api = inviteApi({ holdWeddings: true })
+  server.use(...api.handlers(() => problem(409, 'ALREADY_IN_A_WEDDING')))
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+  await accept('이신부')
+  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeVisible()
+
+  // On 원장 now, with its list still in flight — this screen is gone, so what
+  // comes back below is the second arrival and not this render.
+  await userEvent.click(screen.getByRole('link', { name: '내 원장 열기' }))
+  await waitFor(() =>
+    expect(screen.queryByText('이미 다른 웨딩에 속해 있습니다')).not.toBeInTheDocument(),
+  )
+  api.releaseWeddings()
+
+  /*
+   * THE SCREEN SPEAKS RATHER THAN LOOPING. Neither half of the loop is
+   * reverted — the token survives the 409 because the spec says it is not
+   * spent, and 원장 sends an empty list here because that is exactly what a
+   * partner who has not joined looks like (`#158`). What changes is that this
+   * arrival remembers the verdict and says it.
+   */
+  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeVisible()
+  expect(screen.queryByLabelText('내 이름')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '내 원장 열기' })).toBeVisible()
+  expect(screen.getByRole('button', { name: '로그아웃' })).toBeVisible()
+
+  // Nothing was pressed a second time, and the token is untouched: the verdict
+  // is about this caller, never about the invite.
+  expect(api.joins).toHaveLength(1)
+  expect(stored()).toBe(TOKEN)
 })
 
 it('keeps the invite alive for the person who signed in as the wrong account', async () => {
@@ -375,6 +443,27 @@ it('keeps the invite alive for the person who signed in as the wrong account', a
    * this same screen is the whole recovery. Wiping it lands the real partner on
    * an empty `GET /weddings` instead: 웨딩 만들기, which they may never fill in
    * (`#158`).
+   */
+  /*
+   * AND THE SCREEN NAMES THAT POSSIBILITY, because the exit being reachable is
+   * not the same as it being guessable. Nothing in this flow says who is signed
+   * in — 마이페이지 does (`#159`) and it sits behind 원장, which this person
+   * cannot open — so 이미 다른 웨딩에 속해 있습니다 is true of the account they
+   * are in and says nothing about the one they meant.
+   */
+  expect(
+    screen.getByText('원장이 열리지 않으면 다른 계정으로 로그인한 것일 수 있습니다.'),
+  ).toBeVisible()
+
+  await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
+  expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeInTheDocument()
+  expect(stored()).toBe(TOKEN)
+
+  /*
+   * THE VERDICT DIES WITH THE LOGOUT, and that is the whole reason it is
+   * cleared where the session is rather than left to expire on its own: the
+   * next person to sign in on this tab is the one the link was meant for, and
+   * they must be handed a form they can use.
    */
   unmount()
   const right = inviteApi()

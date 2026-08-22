@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { forgetAlreadyInAWedding } from '../lib/alreadyInAWedding'
 import { apiError, apiFetch } from '../lib/api'
 import { sessionQueryKey } from './useSession'
 
@@ -38,6 +39,12 @@ export function useLogout() {
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== sessionQueryKey[0],
       })
+
+      // And the one thing the couple was told that is not in the cache: that
+      // this account already holds a wedding. It is a fact about the person who
+      // just left, so the next one to sign in on this tab must not meet a
+      // screen built on it (`lib/alreadyInAWedding.ts`).
+      forgetAlreadyInAWedding()
     },
   })
 }

@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
+import { AlreadyInAWedding } from '../components/AlreadyInAWedding'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { Field } from '../components/Field'
@@ -8,6 +9,7 @@ import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { useJoinWedding } from '../hooks/useJoinWedding'
 import { useSession } from '../hooks/useSession'
+import { wasAlreadyInAWedding } from '../lib/alreadyInAWedding'
 import { ApiError } from '../lib/api'
 import { isInAppBrowser } from '../lib/inAppBrowser'
 import { nameError } from '../lib/name'
@@ -29,10 +31,12 @@ import { ledgerPath } from '../lib/routes'
  * anybody else's name. So a partner who arrives here signs in, then says who
  * they are, and only then is anything written.
  *
- * THE FOUR REFUSALS ARE FOUR ANSWERS, not two. Two 404s that differ by whether
- * a new link would help, and two 409s that differ by whose problem it is —
- * "you already have a ledger" is not a failure at all
- * (docs/api-spec.md § POST /weddings/join).
+ * THE REFUSALS ARE ANSWERS, not one answer repeated. Two 404s differ by whether
+ * a new link would help, and the two 409s differ by whose problem it is: one is
+ * the seat being gone, and the other — "you already have a ledger" — is not a
+ * failure at all and is not even this screen's to word. 웨딩 만들기 is told the
+ * same thing by the same check, so both render one component
+ * (`lib/alreadyInAWedding.ts`, docs/api-spec.md § POST /weddings/join).
  */
 export function AcceptInvitePage({ token }: { token: string | null }) {
   const session = useSession()
@@ -179,6 +183,22 @@ function AcceptForm({ token }: { token: string }) {
     )
   }
 
+  /*
+   * NOT THIS SCREEN'S SENTENCE, AND NOT ONLY THIS ATTEMPT'S. 409
+   * `ALREADY_IN_A_WEDDING` is a fact about the caller rather than about the
+   * invite, so 웨딩 만들기 is told it too and one component answers both
+   * (`lib/alreadyInAWedding.ts`).
+   *
+   * IT IS READ AS A REMEMBERED VERDICT, which is what closes the circle `#198`
+   * found: the token is deliberately not spent by this 409, so 내 원장 열기 →
+   * an empty `GET /weddings` → 원장 deciding they are a partner who has not
+   * accepted yet lands them back HERE, in front of the form that just refused
+   * them. Neither half of that is wrong on its own and neither is reverted; the
+   * second arrival says what happened instead. Pressing 수락 again could not put
+   * anybody in two weddings, so there is nothing being withheld by saying so.
+   */
+  if (wasAlreadyInAWedding()) return <AlreadyInAWedding />
+
   const refusal = join.isError ? refusalFor(join.error) : null
 
   /*
@@ -186,23 +206,17 @@ function AcceptForm({ token }: { token: string }) {
    * only be refused again.
    *
    * "SETTLED" IS ABOUT THE ATTEMPT, NOT ABOUT THE TOKEN, and the two came apart
-   * on 2026-08-22. `ALREADY_IN_A_WEDDING` is settled for THIS person — pressing
-   * 수락 again cannot make them belong to two weddings — while the token itself
-   * stays alive, because the spec says it is not spent and the real partner can
-   * still use it (`useJoinWedding`). Which invites are dropped is that hook's
-   * business and is decided by `code`; this branch only decides whether there
-   * is anything left to press.
+   * on 2026-08-22 — `ALREADY_IN_A_WEDDING` settles the attempt while the token
+   * stays alive for the real partner, which is why it is answered above rather
+   * than here. Which invites are dropped is `useJoinWedding`'s business and is
+   * decided by `code`; this branch only decides whether there is anything left
+   * to press.
    */
   if (refusal?.settled === true) {
     return (
       <Notice signedIn title={refusal.title}>
         {refusal.detail !== undefined && (
           <p className="text-body leading-body text-ink-muted">{refusal.detail}</p>
-        )}
-        {refusal.ledger && (
-          <Link className={buttonClassName('secondary')} to={ledgerPath}>
-            내 원장 열기
-          </Link>
         )}
       </Notice>
     )
@@ -275,15 +289,13 @@ type Refusal = {
   detail?: string
   /** Whether pressing again could ever change the answer. */
   settled: boolean
-  /** Whether to offer the ledger this person turns out to already have. */
-  ledger?: boolean
 }
 
 /**
  * What a refused accept says, chosen from `code` and nothing else.
  *
- * THE FOUR SETTLED CODES ARE FOUR DIFFERENT SENTENCES, and the differences are
- * the point rather than polish:
+ * THE SETTLED CODES ARE DIFFERENT SENTENCES, and the differences are the point
+ * rather than polish:
  *
  * - `INVITE_EXPIRED` is the **common** one, not an edge case: a link lives one
  *   day, so a partner who opens it the next evening lands exactly here — and
@@ -291,11 +303,12 @@ type Refusal = {
  * - `INVITE_NOT_FOUND` says nothing more, deliberately. It covers unknown,
  *   wrong, already spent and replaced-by-a-재발급 alike, and telling those apart
  *   is what somebody guessing tokens would want (docs/api-spec.md).
- * - `ALREADY_IN_A_WEDDING` is **not a failure**. This person has their own
- *   ledger, and the spec's recovery is to open it — the same answer `#164` owes
- *   the create side, from the same code and the same check.
  * - `PARTNER_ALREADY_JOINED` is the seat being gone. There is no recovery to
  *   offer and inventing one would be a lie.
+ *
+ * `ALREADY_IN_A_WEDDING` NEVER REACHES HERE — it is **not a failure**, it is
+ * told to 웨딩 만들기 by the same check, and it is answered above by the one
+ * component both screens render (`lib/alreadyInAWedding.ts`).
  *
  * AN UNRECOGNISED `code` IS STILL SETTLED, with generic words: a 404 or a 409
  * from this endpoint means the attempt is over whatever it was called.
@@ -329,13 +342,6 @@ function refusalFor(error: unknown): Refusal | null {
       }
     case 'INVITE_NOT_FOUND':
       return { title: '이 링크는 사용할 수 없습니다', settled: true }
-    case 'ALREADY_IN_A_WEDDING':
-      return {
-        title: '이미 다른 웨딩에 속해 있습니다',
-        detail: '한 사람은 하나의 웨딩에만 속할 수 있습니다.',
-        settled: true,
-        ledger: true,
-      }
     case 'PARTNER_ALREADY_JOINED':
       return {
         title: '이 자리는 이미 채워졌습니다',

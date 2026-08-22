@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { answerAlreadyInAWedding } from '../lib/alreadyInAWedding'
 import { ApiError, apiError, apiFetch } from '../lib/api'
 import type { paths } from '../lib/api-types.gen'
 import { forgetInvite } from '../lib/invite'
@@ -113,6 +114,12 @@ export function useJoinWedding() {
     },
     onError: (error) => {
       if (error instanceof ApiError && SPENT.has(error.code)) forgetInvite()
+
+      // The other thing a refusal can be about: the CALLER rather than the
+      // token. `ALREADY_IN_A_WEDDING` is deliberately absent from the set above
+      // and present here — the invite is still good for the real partner, and
+      // it is this person who cannot use it (`lib/alreadyInAWedding.ts`).
+      answerAlreadyInAWedding(queryClient, error)
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: weddingsQueryKey, exact: true })
