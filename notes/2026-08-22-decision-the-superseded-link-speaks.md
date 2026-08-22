@@ -53,7 +53,10 @@ where the old answer was asserted, and it becomes the assertion of the new one.
 - **The receiver**: *새 링크가 발급되었습니다 — 파트너에게 최신 링크를
   요청하세요.* Which is the same recovery `INVITE_EXPIRED` offers, arrived at
   from the other direction.
-- **The issuer**: 재발급 **warns before it acts** — 이전 링크는 무효가 됩니다 —
-  rather than reporting afterwards. `201` still does not distinguish a first
-  issue from a replacement and is not being changed to: the response is not
-  where somebody learns what a button they have not pressed yet will do.
+- **The issuer**: 재발급 **warns before it acts** rather than reporting
+  afterwards — and `PartnerInvite` has said so since `#190`, in the paragraph
+  above the button: *링크는 하루 동안 쓸 수 있고, 새로 만들면 이전 링크는 바로
+  쓸 수 없게 됩니다.* Nothing is added; it is recorded here because the
+  receiver's half made it look like a gap. `201` still does not distinguish a
+  first issue from a replacement and is not being changed to: the response is
+  not where somebody learns what a button they have not pressed yet will do.
