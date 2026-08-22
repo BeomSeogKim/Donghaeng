@@ -59,7 +59,14 @@ internal class WeddingInvite(
     @Column(name = "id")
     val id: Long = 0,
 ) {
-    /** Spent. Asked before [wasSuperseded] because one row can carry both and this one wins. */
+    /**
+     * Spent — asked **before** [wasSuperseded], for a row no path here can produce:
+     * `WeddingInviteRepository.revokeLiveInviteFor` updates only unaccepted rows, and
+     * `WeddingInviteService.issue` refuses a seat that already has a person in it. The
+     * order is written down for whichever revoke lands next, because if one row ever
+     * carries both, spent is the answer: that a link was used is a fact about the person
+     * who used it, and the one asking is somebody else.
+     */
     fun wasSpent(): Boolean = acceptedAt != null
 
     /** Replaced by a 재발급 (notes/2026-08-22-decision-the-superseded-link-speaks.md). */

@@ -157,12 +157,20 @@ internal class AcceptInviteContractTest : ApiFixture() {
 
     @Test
     fun `a token that was spent and then superseded still says nothing about the person who spent it`() {
-        // The split has ONE side. `accepted_at` is somebody else's business — telling a
-        // second arrival "this link was already used" is a fact about the partner, not
-        // about the token they hold — so it stays INVITE_NOT_FOUND even when a later
-        // 재발급 has also stamped `revoked_at` on the same row. Asserted because the
-        // obvious reading of the two columns ("revoked? then superseded") gets this
-        // wrong, and the ordinary accept path leaves exactly this shape behind.
+        // **A row carrying both columns is not reachable through the API today**, which
+        // is exactly why the ordering is written down and asserted here. Two things stop
+        // it: `revokeLiveInviteFor` updates only rows with `accepted_at is null`, so a
+        // 재발급 never touches a spent invite; and `issue()` cannot reach that update at
+        // all once the seat has a person in it, because `lockWaitingSeats` filters
+        // `user_id is null` and the empty list is a 409. That is why the state below has
+        // to be forced with SQL — and why nobody will remember this ordering when a path
+        // that revokes by seat rather than by live-ness lands, and quietly starts telling
+        // a second arrival INVITE_SUPERSEDED about a link somebody else spent.
+        //
+        // The order answers a question that is not the guesser's: that a link was already
+        // used is a fact about the partner who used it, and the person asking is somebody
+        // else. So `accepted_at` wins, and the obvious reading of the two columns
+        // ("revoked? then superseded") is the wrong one.
         val weddingId = createWedding(login())
         val spent = tokenFor(weddingId)
         join(loginAs("the-partner"), body(spent))
