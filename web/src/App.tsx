@@ -3,8 +3,10 @@ import { Navigate, Route, Routes } from 'react-router'
 import { BrandMark } from './components/BrandMark'
 import { Screen } from './components/Screen'
 import { SessionUnavailable } from './components/SessionUnavailable'
+import { useInviteToken } from './hooks/useInviteToken'
 import { useSession } from './hooks/useSession'
-import { createWeddingPath, settingsPath } from './lib/routes'
+import { createWeddingPath, invitePath, settingsPath } from './lib/routes'
+import { AcceptInvitePage } from './pages/AcceptInvitePage'
 import { CreateWeddingPage } from './pages/CreateWeddingPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { LoginPage } from './pages/LoginPage'
@@ -31,6 +33,21 @@ import { SettingsPage } from './pages/SettingsPage'
  */
 export function App() {
   const session = useSession()
+
+  /*
+   * ABOVE THE SESSION GATE ON PURPOSE, and it is the only thing here that is.
+   * An invite arrives as a cold load with `#t=<token>` in the address bar, and
+   * everything below this line waits on `GET /auth/me` — the pending branch
+   * renders the brand mark, and the error branch renders 다시 시도 and never
+   * reaches the route table at all. Reading the fragment from the accept screen
+   * left a one-day bearer credential in the address bar for a network round
+   * trip, and forever when the API was unreachable (found in review of `#182`).
+   *
+   * It is a hook and not a redirect, so it costs a signed-in couple with no
+   * fragment nothing: one `URLSearchParams` on a string that is almost always
+   * empty.
+   */
+  const invite = useInviteToken()
 
   if (session.isPending) {
     return (
@@ -70,6 +87,14 @@ export function App() {
       {/* 설정 · 웨딩 정보 — the one screen a couple navigates to and back from,
           and the shell `#9`'s 파트너 초대 joins. */}
       <Route element={signedIn(() => <SettingsPage />)} path={settingsPath} />
+      {/* 초대 수락 — NOT behind `signedIn`, and it is the only screen besides
+          로그인 that is not. The person holding an invite link is almost always
+          signed out, and the token in its fragment has to be stashed BEFORE the
+          Google round trip: sending them to /login first would take the
+          fragment away with the navigation, and the alternative to that is a
+          returnTo, which is the thing this flow exists to avoid
+          (notes/2026-08-22-decision-the-invite-link.md §3). */}
+      <Route element={<AcceptInvitePage token={invite} />} path={invitePath} />
       {/* The OAuth callback returns the browser to the configured frontend
           origin — the root — so there is no callback route to write. Anything
           else is a mistyped URL, and the root will sort out where it belongs. */}

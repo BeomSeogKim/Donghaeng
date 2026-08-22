@@ -232,6 +232,25 @@ it('lets a person with no wedding sign out, because this screen is where they ar
   expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeVisible()
 })
 
+it('tells an invited partner not to make a wedding here', async () => {
+  const calls = recording()
+  server.use(calls.me(signedIn), noWedding())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await screen.findByLabelText('예식일')
+
+  /*
+   * THIS IS WHERE THE IN-APP-BROWSER DEAD END LANDS. If the Google round trip
+   * left the browser the link was opened in, the tab that comes back is not the
+   * tab that stashed the token, `sessionStorage` is empty, and the empty
+   * `GET /weddings` of a partner who has not accepted sends them exactly here.
+   * The failure is safe right up until they fill this form in, and then it is
+   * permanent (`#158`). The link is good for a day, so the recovery is one
+   * sentence long.
+   */
+  expect(screen.getByText(/초대 링크를 받았다면/)).toBeVisible()
+})
+
 it("creates a wedding from a date, a side and the caller's own name", async () => {
   const calls = recording()
   const store = weddingStore()

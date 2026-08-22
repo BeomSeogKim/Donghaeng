@@ -11,7 +11,8 @@ import { Screen } from '../components/Screen'
 import { FilterChip } from '../components/Tag'
 import { type GuestFilters, useGuests } from '../hooks/useGuests'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
-import { createWeddingPath, settingsPath } from '../lib/routes'
+import { pendingInvite } from '../lib/invite'
+import { createWeddingPath, invitePath, settingsPath } from '../lib/routes'
 
 /*
  * 원장 — and 원장 is home. There is essentially one screen in this product
@@ -59,10 +60,28 @@ export function LedgerPage() {
 
   const wedding = weddings.data[0]
 
-  // AN EMPTY ARRAY IS NOT AN ERROR — it is the ordinary answer for a person who
-  // has no wedding yet, and the branch 최초 1회 exists for. `replace`, so Back
-  // from 웨딩 만들기 does not bounce off this screen and return here.
-  if (wedding === undefined) return <Navigate replace to={createWeddingPath} />
+  /*
+   * AN EMPTY ARRAY IS NOT AN ERROR — it is the ordinary answer for a person who
+   * has no wedding yet, and the branch 최초 1회 exists for. `replace`, so Back
+   * from 웨딩 만들기 does not bounce off this screen and return here.
+   *
+   * AND A PARTNER WHO HAS NOT ACCEPTED YET IS EXACTLY THAT SAME EMPTY ARRAY,
+   * which is why 수락 is checked FIRST. Sending them to 웨딩 만들기 and letting
+   * them fill it in closes their partner's ledger to them permanently — one
+   * person, one wedding, forever (`#158`). The check is one read of
+   * `sessionStorage` rather than a rearrangement of routing, because the token
+   * came back from Google in this tab
+   * (notes/2026-08-22-decision-the-invite-link.md §3).
+   *
+   * IT IS INSIDE THIS BRANCH AND NOT ABOVE IT. A person who already holds a
+   * wedding is never diverted anywhere by a token sitting in storage — 원장 is
+   * their screen and it stays on screen.
+   */
+  if (wedding === undefined) {
+    return (
+      <Navigate replace to={pendingInvite() === null ? createWeddingPath : invitePath} />
+    )
+  }
 
   return <Ledger wedding={wedding} />
 }

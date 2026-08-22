@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, Navigate } from 'react-router'
 import { buttonClassName } from '../components/Button'
+import { PartnerInvite } from '../components/PartnerInvite'
 import { WeddingInfoForm } from '../components/WeddingInfoForm'
 import { useHeadcount } from '../hooks/useHeadcount'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
@@ -37,7 +38,12 @@ export function SettingsPage() {
       <Section title="웨딩 정보">
         <WeddingInfo />
       </Section>
-      {/* `#9` 파트너 초대 goes here, as a sibling. */}
+      {/* `#9` 파트너 초대 — the sibling this shell was built for. It reads the
+          same `GET /weddings` 웨딩 정보 does, from the same cache, and decides
+          for itself whether there is a seat left to invite anybody into. */}
+      <Section title="파트너 초대">
+        <PartnerInvite />
+      </Section>
     </Frame>
   )
 }
