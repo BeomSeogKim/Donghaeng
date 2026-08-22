@@ -96,8 +96,8 @@ and tokens.
 `notes/2026-08-07-decision-backend-api-conventions.md`.
 
 - **No generic envelope** (`{data: ...}`) — a read returns the resource's own
-  DTO directly. But a **mutation on a wedding-scoped resource** returns
-  `{resource, headcount}`: ledger and headcount are one screen (2026-08-20).
+  DTO directly. **Mutations under `/weddings/{id}/guests` return
+  `{resource, headcount}`; nothing else does** (2026-08-22 narrowed 08-20).
 - **Errors are RFC 9457 Problem Details**, via Spring Boot 3's native
   `ProblemDetail` — `spring.mvc.problemdetails.enabled=true` plus one global
   `@ControllerAdvice`. Extended with a **`code`** field (e.g.
@@ -182,8 +182,8 @@ inline. The parts that constrain everyday backend work:
   is a top-level cross-site navigation, so it drops the cookie at login.
 - **Injection risk lives exactly in the native aggregation queries.** Column
   names go through a whitelist, never string concatenation.
-- **Rate limits are per wedding**, and per link token once links exist —
-  **never IP-only** (Korean carrier NAT would block real guests).
+- **Rate limits are per wedding**, per link token once links exist, **never
+  IP-only** (carrier NAT blocks real guests). **v1 ships none** (2026-08-22).
 - **A secret never travels inside a connection string** (added 2026-08-08,
   `notes/2026-08-08-decision-scaffold-secrets-and-surface.md`) — one sealbox
   key per credential component, because HikariCP's failure path prints the
