@@ -26,9 +26,20 @@ import { Field, SelectField } from './Field'
  * (notes/2026-08-22-decision-guest-add-sheet.md). A couple works down a list
  * their parents sent them, so closing per guest charges a re-open tap for every
  * row of a 200-row ledger, on the product whose whole claim is that it is less
- * work than the spreadsheet. What is kept between guests is the 측 alone: it is
- * a filled, visible control, so it is an answer carried forward rather than a
- * default we invented, and a run of guests is normally on one side.
+ * work than the spreadsheet.
+ *
+ * WHAT IS KEPT BETWEEN GUESTS IS THE 측 AND THE 그룹, BOTH
+ * (notes/2026-08-22-decision-the-sheet-carries-both.md). Those lists arrive in
+ * BLOCKS — "신랑 친구 20명", then "직장 15명" — and inside a block neither one
+ * changes; direct entry is the only intake path in v1, so that is every row of
+ * every ledger rather than a corner case. Both are filled, visible controls, so
+ * what survives is the couple's own previous answer still on screen and not a
+ * default we invented: A SHEET OPENED FRESH STILL PRE-ANSWERS NOTHING.
+ *
+ * IT STANDS ON `#12` (하객 상세 — 수정·삭제) SHIPPING IN v1, which is what makes
+ * a carried-over mistake fixable from the row. If `#12` leaves v1 the answer
+ * inverts to resetting both — a mistake nobody can correct is worth more than
+ * the taps — and this is the code that has to move with it.
  *
  * EVERYTHING IS ON ONE SCROLL, with no "더 보기". 하객 수정 (`#12`) does not
  * exist, so a member that is not on this sheet cannot be set at all in v1.
@@ -75,8 +86,12 @@ export function AddGuestSheet({
 
     add.mutate(request(sending, sending.side), {
       onSuccess: () => {
-        // 측 alone survives — see the note at the top of this file.
-        setValues({ ...EMPTY, side: sending.side })
+        // 측 and 그룹 both survive — see the note at the top of this file.
+        setValues({
+          ...EMPTY,
+          side: sending.side,
+          groupCategory: sending.groupCategory,
+        })
         setSubmitted(false)
         nameField.current?.focus()
       },

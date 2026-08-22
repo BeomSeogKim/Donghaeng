@@ -486,7 +486,7 @@ it('puts the new row in the ledger even while a filter is pressed', async () => 
   await waitFor(() => expect(renderedNames()).toEqual(['김영수', '박지민']))
 })
 
-it('stays open for the next guest, keeping the 측 and clearing the name', async () => {
+it('stays open for the next guest, keeping the 측 and the 그룹 and clearing the name', async () => {
   const api = ledger()
   server.use(api.me(), api.weddings(), api.list(), api.headcount(), api.create())
 
@@ -494,27 +494,61 @@ it('stays open for the next guest, keeping the 측 and clearing the name', async
   const sheet = await openSheet()
   await form(sheet).name('김영수')
   await form(sheet).side('신부측')
+  await userEvent.selectOptions(within(sheet).getByLabelText('그룹'), '친구')
   await form(sheet).submit()
   await waitFor(() => expect(api.created).toHaveLength(1))
 
   /*
    * DIRECT ENTRY IS THE ONLY INTAKE PATH IN v1, so a couple works through a
-   * list their parents sent them and the ordinary case is a run of guests on
-   * one 측. Closing the sheet per guest would charge them a re-open tap each
-   * time, on the product whose whole claim is that it is less work than the
-   * spreadsheet. The 측 is retained because it is a visible, filled control —
-   * a carried-over answer, not a silent default (docs/api-spec.md: a
-   * pre-selection is a frontend affordance).
+   * list their parents sent them — and that list arrives in BLOCKS, "신부 친구
+   * 20명" then "직장 15명", inside which neither the 측 nor the 그룹 changes.
+   * Closing the sheet per guest, or resetting an answer the next guest shares,
+   * charges a tap per row on the product whose whole claim is that it is less
+   * work than the spreadsheet. Both are retained because both are visible,
+   * filled controls — the couple's own previous answer still on screen, not a
+   * silent default (notes/2026-08-22-decision-the-sheet-carries-both.md).
    */
   expect(within(sheet).getByLabelText('이름')).toHaveValue('')
   expect(within(sheet).getByRole('radio', { name: '신부측' })).toBeChecked()
+  expect(within(sheet).getByLabelText('그룹')).toHaveValue('FRIEND')
   expect(within(sheet).getByLabelText('이름')).toHaveFocus()
 
   await form(sheet).name('이서연')
   await form(sheet).submit()
 
   await waitFor(() => expect(api.created).toHaveLength(2))
-  expect(api.created[1]?.body).toMatchObject({ name: '이서연', side: 'BRIDE' })
+  expect(api.created[1]?.body).toMatchObject({
+    name: '이서연',
+    side: 'BRIDE',
+    groupCategory: 'FRIEND',
+  })
+})
+
+it('pre-answers nothing on a sheet that was opened fresh, whatever the last one held', async () => {
+  const api = ledger()
+  server.use(api.me(), api.weddings(), api.list(), api.headcount(), api.create())
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const sheet = await openSheet()
+  await form(sheet).name('김영수')
+  await form(sheet).side('신부측')
+  await userEvent.selectOptions(within(sheet).getByLabelText('그룹'), '친구')
+  await form(sheet).submit()
+  await waitFor(() => expect(api.created).toHaveLength(1))
+  await userEvent.click(within(sheet).getByRole('button', { name: '닫기' }))
+
+  /*
+   * CARRY-OVER IS NOT A DEFAULT, and this is the line between the two. What the
+   * sheet keeps between guests is an answer the couple gave a moment ago and
+   * can still see; a sheet they opened fresh has no such answer to show, so it
+   * claims nothing — 측 unpicked, 그룹 back to the 기타 that honestly means "not
+   * stated yet". Carrying it across an open would be inventing a default out of
+   * a session that had already ended.
+   */
+  const reopened = await openSheet()
+  for (const label of ['신랑측', '신부측'])
+    expect(within(reopened).getByRole('radio', { name: label })).not.toBeChecked()
+  expect(within(reopened).getByLabelText('그룹')).toHaveValue('OTHER')
 })
 
 it('sends the optional members trimmed, and nothing at all for the blank ones', async () => {
