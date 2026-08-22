@@ -51,6 +51,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-22-decision-the-seat-name-edit.md` | 필수 단일 필드는 `PATCH`가 아니라 `PUT`이다; 빈 자리는 미리 채울 수 없고 주소 자체가 없다; 숫자가 움직일 수 없는 뮤테이션은 집계를 싣지 않고 `wedding/`에 남는다; **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다** — 제품의 모든 이름 필드에 걸린다 |
 | `2026-08-22-decision-the-partner-invite.md` | 초대 토큰은 `selector.verifier`로 해시 저장된다 — 덤프로는 살아 있는 링크가 나오지 않는다; 초대 행은 자리를 가리키고 `wedding_id`를 갖지 않는다; 수락은 세 번째 비스코프 엔드포인트고, 자리 행 잠금 하나가 경쟁 넷을 다 막는다; 토큰은 딱 한 번만 보인다 |
 | `2026-08-22-decision-partial-update-shape.md` | 생략은 안 건드림, `null`은 지움; 보증인원은 다시 비울 수 있다; 집계를 싣는 뮤테이션은 `guest/`에서 조립된다; `WeddingResponse`는 보증인원을 싣지 않는다 |
 | `2026-08-21-decision-one-wedding-per-person.md` | 두 번째 웨딩은 409 `ALREADY_IN_A_WEDDING`; 동시 요청은 자문 잠금이 막는다(유니크 인덱스는 대표의 DDL); `GET /weddings`는 배열로 남되 원소는 많아야 하나 |

@@ -16,6 +16,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
@@ -146,4 +147,73 @@ class WeddingController internal constructor(
     fun read(
         @CurrentWedding wedding: WeddingScope,
     ): WeddingResponse = weddings.read(wedding.id)
+
+    /**
+     * 본인 이름 수정 (`#187`, the backend half of `#175`), specified in
+     * `docs/api-spec.md` — **the third place a name is written and the first that can
+     * be run twice.**
+     *
+     * **`me` is the whole authorization story, and it is a path segment rather than a
+     * check.** The caller's seat is the one carrying their `user_id` in this wedding;
+     * there is no seat id and no `side` to send, so writing the partner's name — the
+     * one thing 2026-08-22 took out of `POST /weddings` — is unrepresentable rather
+     * than refused (notes/2026-08-22-decision-the-seat-name-edit.md §2).
+     *
+     * **PUT and not PATCH.** A partial update means a member the caller omitted is not
+     * written, and this body has one required member: there is no "leave the name
+     * alone" to express, because that is not sending the request. Making it a `PATCH`
+     * would either give the product a `PATCH` whose member is required — the standing
+     * partial-update contract says every member is optional — or an empty-body no-op
+     * nobody asked for, and it would cost the Kotlin null check by wrapping the payload
+     * in `Patch` (notes/2026-08-22-decision-partial-update-shape.md §1).
+     *
+     * **This is not `PATCH /weddings/{weddingId}`**, which writes 예식일 and 보증인원 on
+     * the `wedding` row. Different table, different owner; the 설정 screen renders both
+     * and the endpoints stay split.
+     *
+     * [WeddingScope] is the first parameter, as on every wedding-scoped handler:
+     * resolution runs before the body is read, so an anonymous request is 401 and a
+     * stranger's is 404, neither of them a 400 that would list this endpoint's fields
+     * to somebody with no claim on the wedding.
+     *
+     * The `{weddingId}` parameter is declared to springdoc by hand — it is in the path
+     * template and in no signature, because no handler may take one.
+     */
+    @Operation(operationId = "updateSeatName", summary = "Change the caller's own name on their seat")
+    @Parameters(
+        Parameter(
+            name = "weddingId",
+            `in` = ParameterIn.PATH,
+            required = true,
+            schema = Schema(type = "integer", format = "int64"),
+        ),
+    )
+    @ApiResponses(
+        ApiResponse(
+            responseCode = "200",
+            description = "The wedding and its two seats, with the caller's name as it now stands.",
+        ),
+        ApiResponse(
+            responseCode = "400",
+            description = "A blank or over-long name, or a body that could not be read — an omitted or null `name` is this.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "401",
+            description = "No session, or an expired or revoked one.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "404",
+            description =
+                "No such wedding — which is also the answer when it exists and the caller holds no seat in it, " +
+                    "and when it has been deleted.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+    )
+    @PutMapping("/weddings/{weddingId}/seats/me", consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun renameSeat(
+        @CurrentWedding wedding: WeddingScope,
+        @Valid @RequestBody request: UpdateSeatNameRequest,
+    ): WeddingResponse = weddings.renameSeat(wedding, request)
 }

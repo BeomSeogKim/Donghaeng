@@ -37,6 +37,22 @@ internal interface WeddingSeatRepository : JpaRepository<WeddingSeat, Long> {
     fun existsByUserIdAndDeletedAtIsNull(userId: Long): Boolean
 
     /**
+     * **The one row a caller may write**: the seat carrying their own `user_id` in the
+     * wedding they were resolved for (`#187`). The pair `(weddingId, callerId)` is the
+     * whole of "may I write this" — nobody types anybody else's name
+     * (notes/2026-08-22-decision-the-couples-two-seats.md), so the partner's seat is
+     * not addressable rather than refused.
+     *
+     * The same walk [existsByWeddingIdAndUserIdAndDeletedAtIsNull] runs for the scope,
+     * so `null` here means the seat was released between the resolver's transaction and
+     * this one — which answers 404, exactly as the resolver would have a moment later.
+     */
+    fun findByWeddingIdAndUserIdAndDeletedAtIsNull(
+        weddingId: Long,
+        userId: Long,
+    ): WeddingSeat?
+
+    /**
      * Both seats of one wedding, for the response — the pair is what replaced
      * `wedding.groom_name` / `bride_name` (2026-08-22), so a wedding cannot be
      * published without reading them.

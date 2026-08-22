@@ -188,7 +188,35 @@ internal class CreateWeddingContractTest : ApiFixture() {
         // character is refused by Postgres, i.e. as a masked 500
         // (notes/2026-08-17-decision-log-masking-mechanism.md).
         val tooLong = "가".repeat(101)
-        val rejected = listOf(body(name = ""), body(name = "   "), body(name = tooLong))
+        // **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다** — the founder's rule
+        // (`#187`), so this list is not "whitespace" but every way a name can carry no
+        // visible character. Each entry is a class the previous spellings missed:
+        //   U+3000 전각 공백 — an ordinary key on a Korean IME. It passed `@NotBlank`
+        //     (Java trims `c <= ' '` only), was emptied by the service's Kotlin trim,
+        //     and was stored as `''`.
+        //   U+0000, U+0007 — the mirror image. A Kotlin-only trim leaves them intact and
+        //     PgJDBC refuses NUL in a text parameter: a masked 500, not the 400 it is.
+        //   U+200B, U+FEFF, U+00AD — stripped by NO trim in either language. These are
+        //     why the rule asks "is there a visible character" rather than "does it trim
+        //     to empty".        //
+        // **U+0000 and U+0007 are sent as JSON ESCAPES, and that is not cosmetic.** A raw
+        // control character in a JSON string is invalid JSON (RFC 8259), so the parser
+        // refuses it as `MALFORMED_REQUEST_BODY` and the validator never runs. The escape
+        // is what actually parses to a one-NUL name and reaches the rule.
+        //
+        // This endpoint is covered without its handler being touched, because all three
+        // requests wear the one `@SeatName`.
+        val rejected =
+            listOf(
+                body(name = ""),
+                body(name = "   "),
+                body(name = "\u3000"),
+                body(name = "\\u0000"),
+                body(name = "\\u0007"),
+                body(name = "\u200b"),
+                body(name = "\ufeff\u00ad"),
+                body(name = tooLong),
+            )
 
         rejected.forEach { body ->
             val response = create(session, body)
@@ -245,10 +273,16 @@ internal class CreateWeddingContractTest : ApiFixture() {
         // same place, because there is no third seat to put it in.
         val session = login()
 
+        // A `name` sent as an explicit `null` is here beside the omissions: Jackson takes
+        // the same path for both on a non-null constructor parameter, and
+        // `SeatNameValidator` returns true on null by the Jakarta convention — so Jackson
+        // is the ONLY thing between a null and `request.name.trim()`, and
+        // `docs/api-spec.md` publishes the refusal.
         listOf(
             """{"side":"GROOM","name":"김신랑"}""",
             """{"weddingDate":"2026-10-10","name":"김신랑"}""",
             """{"weddingDate":"2026-10-10","side":"BEST_MAN","name":"김신랑"}""",
+            """{"weddingDate":"2026-10-10","side":"GROOM","name":null}""",
         ).forEach { body ->
             val response = create(session, body)
             assertThat(response.statusCode()).describedAs(body).isEqualTo(400)

@@ -619,7 +619,10 @@ this endpoint takes a *credential* that resolves to one.
 ## Partial updates
 
 _Added 2026-08-22 (`#173`). Applies to every `PATCH` in this file — there is one
-today, and `#12`, `#13` and `#175` are written to the same rule._
+today, and `#12` and `#13` are written to the same rule. **`#175` is not**: the seat
+name is a single required member, so it landed as
+`PUT /weddings/{weddingId}/seats/me` and has no partial-update semantics at all
+(`notes/2026-08-22-decision-the-seat-name-edit.md` §1)._
 
 **A `PATCH` body carries only what is changing.** Every member is optional, and a
 member that is not in the body is **not written** — not rewritten with the value it
@@ -732,14 +735,19 @@ wedding is created empty — no guests, no meal types — so there is no headcou
 carry. The client's next screen is the ledger, which reads it.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than
-  100 characters; or a `weddingDate` outside the range the database can store
+- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it (`""`, spaces,
+  `"　"` U+3000, a control character, or the zero-width family — see
+  `PUT /weddings/{weddingId}/seats/me` for the rule in full) or longer than 100
+  characters as sent; or a `weddingDate` outside the range the database can store
   (before 4713 BC or after 5874897 AD).
-- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of the wrong
-  type (an unparseable `weddingDate` and **a `side` that is neither `GROOM` nor
-  `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
+- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of a type that
+  cannot be read (an unparseable `weddingDate` and **a `side` that is neither `GROOM`
+  nor `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
   wrong. They differ because one failure happens while the body is being read and the
-  other after; do not build different UI for them.
+  other after; do not build different UI for them. **A JSON number sent for `name` is
+  not among them**: scalars coerce to strings API-wide, so `{"name":42}` creates the
+  wedding with the name `"42"` (corrected 2026-08-22 with `#187`, which asserted the
+  coercion; narrowing it is `#189`).
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused
   **before the body is looked at**, so an anonymous request with an invalid body is
   a 401 and never a 400.
@@ -1028,6 +1036,130 @@ Two things this endpoint does not do:
   the couple ever needs it, that is a new table and a decision, not a quiet addition.
 - **It does not delete a wedding**, and no endpoint does yet.
 
+### `PUT /weddings/{weddingId}/seats/me`
+
+Status: active (added 2026-08-22, `#187` — the backend half of `#175`)
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
+wedding" above.
+
+설정 · 본인 이름 수정, and **the only way a name is ever fixed.** A name enters the
+product in exactly two places and both are once-only — `POST /weddings` and
+`POST /weddings/join` — so until this endpoint existed a typo was permanent in a value
+that rides in `seats[]` on every wedding response and that the 원장 header renders.
+
+**`me` is the whole of the authorization, and there is no other spelling.** The seat
+written is the one carrying the caller's account in this wedding. There is no seat id
+and no `side` in the path or the body, so **the partner's seat cannot be addressed at
+all** — not refused, unaddressable.
+
+**A couple cannot pre-fill the waiting seat, and that is a decision rather than a gap**
+(`notes/2026-08-22-decision-the-seat-name-edit.md` §2). 아무도 남의 이름을 대신 적지
+않는다 is why the partner's seat is created empty in the first place
+(`notes/2026-08-22-decision-the-couples-two-seats.md`), and it binds editing exactly as
+it binds creating: a person's name is written by that person, whichever screen they are
+on. So do not build a 신부 이름 field into 설정 for a seat nobody is sitting in — there
+is no request that would carry it. **What fills that seat is the invite**
+(`POST /weddings/{weddingId}/invite`), and the partner types their own name when they
+accept.
+
+Request
+```json
+{ "name": "김신랑" }
+```
+
+`name` is **required**, and it is **the caller's own** name. It is **trimmed before it
+is stored** — `"  김신랑  "` is stored as `"김신랑"` — it must be at most 100 characters
+**as sent**, and it must satisfy the product's one name rule:
+
+> **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다.** A name must contain at least
+> one **visible** character — one that is neither whitespace nor an invisible control or
+> formatting character (Unicode general category C).
+
+The same rule validates `POST /weddings` and `POST /weddings/join`; there is one rule for
+every screen a name is typed on, and it is enforced by one annotation in the API rather
+than three copies (added 2026-08-22, `#187`; it binds 하객 이름 too as of `#191`).
+
+**What it refuses** is a name with no visible character in it — `""`, `"   "`, `"　"`
+(U+3000 전각 공백, an ordinary key on a Korean IME), a lone NUL, and the zero-width
+family `"\u200b"`, `"\ufeff"`, `"\u00ad"`. Those last ones survive every `trim()` in
+every language, and before this rule they were stored as a seat labelled with nothing.
+
+**What it does NOT refuse** — the rule is about invisibility, not about being unusual.
+Hangul, hanja, kana, Latin, digits, hyphens, apostrophes and emoji all pass, including
+characters outside the Basic Multilingual Plane, **and including characters newer than
+the server's own Unicode tables** — a CJK Extension I ideograph is a name here even
+though our JDK has not heard of it. `"​김​"` (zero-width, 김, zero-width) passes too:
+there is a visible character in it.
+
+**The client cannot replicate this check, and should not try.** `String.prototype.trim()`
+in JS catches the common case and agrees with the server on nearly every space-like
+codepoint — **use it, plainly** — but it does not strip zero-width characters, so a name
+made only of those passes a client-side blank check and comes back 400. **The server is
+the authority; render its message.** What actually goes wrong here is a hand-rolled blank
+check: `/^\s*$/` and `/^ *$/` are both narrower than `trim()` and put a bug on the client
+that the API does not have.
+
+**There is no partial-update semantics here and no `null` case**: the body has one
+member, it is required, and there is no state "leave the name alone" — that state is
+not sending the request. See "PUT and not PATCH" below.
+
+Response 200
+```json
+{
+  "id": 12,
+  "weddingDate": "2026-10-10",
+  "seats": [
+    { "side": "GROOM", "name": "김신랑" },
+    { "side": "BRIDE", "name": null }
+  ]
+}
+```
+
+The same `WeddingResponse` the three wedding reads and `POST /weddings/join` return —
+**the whole wedding and both seats, not the one seat that changed**, because the 원장
+header renders the pair and this is the shape every screen already holds. Re-sending a
+name the seat already has is a legal 200 that changes nothing and does **not** mark the
+row as updated.
+
+Carries the recomputed aggregate: **no.** 인원수 is a fold over the 하객 ledger and a
+seat's name is not in it — the number cannot move, so there is none to recompute.
+Publishing one would be a number nobody asked for on a screen that does not show one,
+and it would invite a client to believe something was re-counted. This is the same
+answer `POST /weddings/join` gives after writing this very column, and the same one
+`POST /weddings/{weddingId}/invite` gives. **`PATCH /weddings/{weddingId}` is the one
+that does carry it**, because 보증인원 lives inside the headcount.
+
+Errors
+- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it, or longer
+  than 100 characters as sent. Nothing is written.
+- 400 `MALFORMED_REQUEST_BODY` — `name` omitted, sent as `null`, sent as an object or an
+  array, or a body that is not JSON. **Two codes, one meaning for the user**: the
+  request was wrong. (A JSON *number* is not in this list: scalars coerce to strings
+  API-wide, so `{"name":42}` stores `"42"`. Send a string.)
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before the
+  body is looked at**, so an anonymous request with an invalid body is a 401.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an id
+  that is not a number. One answer for all four, and **never 403**; do not confirm
+  existence.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
+
+Three things are decided here rather than left to the caller to infer.
+
+- **PUT and not PATCH, and it is not an oversight.** "Partial updates" above applies to
+  every `PATCH` in this file: every member optional, an omitted member not written, `{}`
+  a legal no-op. None of that means anything for a body with one required member, so
+  this endpoint is a replacement of the one thing the caller owns rather than a partial
+  update of it. A missing `name` is an error, not a no-op.
+- **This is not `PATCH /weddings/{weddingId}`.** That one writes 예식일 and 보증인원 on
+  the `wedding` row, which belongs to the wedding; this writes a name, which belongs to
+  a person. 설정 may render both on one screen — it sends two requests, and the answer
+  to each is a different shape (`{wedding, headcount}` there, a bare `WeddingResponse`
+  here).
+- **It does not record who changed the name.** `guest_change` is the 하객 ledger's audit
+  log; a seat has none, so "이름 누가 고쳤어?" is not answerable — and with two people in
+  a wedding who may each only write their own seat, the answer is always the seat's own
+  occupant anyway.
+
 ### `POST /weddings/{weddingId}/invite`
 
 Status: active (added 2026-08-22, `#181` — the backend half of `#9`)
@@ -1141,11 +1273,14 @@ Carries the recomputed aggregate: **no.** Joining changes no 하객 and no 인�
 next screen is the ledger, which reads its own numbers.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than
-  100 characters. **The token is not spent by this**, so correcting the name and
-  tapping again works.
-- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of the wrong
-  type. **An empty-string `token` is not this** — it is a 404, see below.
+- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it, or longer
+  than 100 characters as sent (the rule is stated in full under
+  `PUT /weddings/{weddingId}/seats/me`). **The token is not spent by this**, so
+  correcting the name and tapping again works.
+- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or sent as an object
+  or an array. **An empty-string `token` is not this** — it is a 404, see below, and
+  neither is a JSON number: scalars coerce to strings API-wide, so `{"name":42}` writes
+  `"42"` (corrected 2026-08-22 with `#187`, which asserted the coercion).
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused **before
   the body is looked at**, so an anonymous request never learns anything about the
   token it sent. This is what makes signing in first the whole of the accept flow.

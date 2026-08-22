@@ -1,8 +1,6 @@
 package com.donghaeng.wedding
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Size
 
 /**
  * 초대 수락 — the token the partner is holding, and **their own name**.
@@ -19,16 +17,15 @@ import jakarta.validation.constraints.Size
  * write copy for. It is a required member either way: the type is non-null, so an
  * omitted `token` fails while the body is read.
  *
- * **[name] is validated exactly as `POST /weddings` validates the same column** —
- * `@Size(max = 100)` is the `varchar(100)` it lands in, measured as sent and before the
- * trim, and `@NotBlank` refuses a name the trim would empty. One client-side rule
- * covers both screens.
+ * **[name] is validated exactly as `POST /weddings` validates the same column** — by
+ * [SeatName], which IS that rule rather than a second copy of it: the `varchar(100)`
+ * the value lands in, measured as sent and before the trim, and a refusal of a name
+ * the trim would empty. One client-side rule covers every screen a name is typed on.
  */
 data class JoinWeddingRequest(
     @param:Schema(description = "The invite token, read from the link's fragment. Never put it in a URL path")
     val token: String,
-    @field:NotBlank
-    @field:Size(max = 100)
+    @field:SeatName
     @param:Schema(description = "The accepting person's own name, as it should read on the ledger", example = "이신부")
     val name: String,
 ) {

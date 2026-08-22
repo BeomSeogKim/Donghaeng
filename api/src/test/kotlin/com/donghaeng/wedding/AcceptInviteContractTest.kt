@@ -276,17 +276,28 @@ internal class AcceptInviteContractTest : ApiFixture() {
         val token = tokenFor(weddingId)
         val partner = loginAs("the-partner")
 
-        // The same three refusals `POST /weddings` makes of the same column, measured
-        // the same way — one client-side rule covers both screens.
-        listOf("", "   ", "가".repeat(101)).forEach { name ->
-            val response = join(partner, body(token, name))
+        // **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다** (`#187`) — the same rule
+        // `POST /weddings` and `PUT .../seats/me` apply, because since `#187` it is
+        // literally one `@SeatName` and not three matching copies. The witnesses are the
+        // three classes the older spellings each missed; see `CreateWeddingContractTest`
+        // for the full note.
+        //
+        // **A fresh token per case.** A refused name does not spend one, so reuse works
+        // today — but under a regression the first ACCEPTED name spends the token and
+        // every later case fails as a 404, pointing the failure at the wrong character.        //
+        // **U+0000 and U+0007 are sent as JSON ESCAPES, and that is not cosmetic.** A raw
+        // control character in a JSON string is invalid JSON (RFC 8259), so the parser
+        // refuses it as `MALFORMED_REQUEST_BODY` and the validator never runs. The escape
+        // is what actually parses to a one-NUL name and reaches the rule.
+        listOf("", "   ", "\u3000", "\\u0000", "\\u0007", "\u200b", "\ufeff\u00ad", "가".repeat(101)).forEach { name ->
+            val response = join(partner, body(tokenFor(weddingId), name))
             assertThat(response.statusCode()).describedAs(name).isEqualTo(400)
             assertThat(response.json()["code"].asText()).describedAs(name).isEqualTo("VALIDATION_FAILED")
         }
 
         // A refused name does not spend the token either — the person simply corrects
         // it and taps again.
-        assertThat(join(partner, body(token, "가".repeat(100))).statusCode()).isEqualTo(200)
+        assertThat(join(partner, body(tokenFor(weddingId), "가".repeat(100))).statusCode()).isEqualTo(200)
     }
 
     @Test
@@ -295,7 +306,11 @@ internal class AcceptInviteContractTest : ApiFixture() {
         val token = tokenFor(weddingId)
         val partner = loginAs("the-partner")
 
-        listOf("""{"name":"이신부"}""", """{"token":"$token"}""").forEach { body ->
+        // `null` sits beside the omissions deliberately: Jackson takes the same path for
+        // both on a non-null constructor parameter, and `SeatNameValidator` returns true
+        // on null by the Jakarta convention — so Jackson is the ONLY thing between a null
+        // and `request.name.trim()`, and `docs/api-spec.md` publishes the refusal.
+        listOf("""{"name":"이신부"}""", """{"token":"$token"}""", """{"token":"$token","name":null}""").forEach { body ->
             val response = join(partner, body)
             assertThat(response.statusCode()).describedAs(body).isEqualTo(400)
             assertThat(response.json()["code"].asText()).describedAs(body).isEqualTo("MALFORMED_REQUEST_BODY")

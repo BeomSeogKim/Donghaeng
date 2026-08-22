@@ -176,6 +176,15 @@ is assembled on the ledger's side of that arrow, whatever resource it writes.**
 `#175`'s seat-name edit lands there for the same reason, and this is the sentence
 that saves it re-deriving this.
 
+> **AMENDED 2026-08-22 by `#187`** —
+> [2026-08-22-decision-the-seat-name-edit.md](2026-08-22-decision-the-seat-name-edit.md)
+> §3. `#175` shipped as `PUT /weddings/{weddingId}/seats/me` and carries **no**
+> aggregate: a seat's name is not an input to 인원수, so nothing is recomputed. The
+> sentence above is conditional on answering with the number, so its premise fails and
+> that write stays in `wedding/`. The rule itself — a mutation that DOES answer with
+> the number is assembled in `guest/` — is unchanged. §1 is also narrowed there: a body
+> with a single required member is a `PUT` and inherits none of this section.
+
 What stays in `wedding/` is the write itself — `WeddingService.update`, the row, its
 invariants and its clock. `guest/WeddingUpdateService` is the one `@Transactional`
 both happen inside. The alternatives were weighed and both cost more than they buy:
@@ -213,8 +222,9 @@ against.
   member this DTO does not declare is ignored. That is a different question from a
   **declared** member whose payload cannot be read, which §1 answers:
   `MALFORMED_REQUEST_BODY`.
-- **The seat name** (`#175`) and the 참석 토글 (`#13`) — both inherit §1 and §3, and
-  neither is written here.
+- **The seat name** (`#175`) and the 참석 토글 (`#13`). `#13` inherits §1 and §3.
+  `#175` turned out to inherit neither — see the banner in §3 — and is decided in
+  [2026-08-22-decision-the-seat-name-edit.md](2026-08-22-decision-the-seat-name-edit.md).
 
 Refs `#173`, `#8`, `#12`, `#13`, `#14`, `#175`,
 `2026-08-21-decision-the-headcount-endpoint.md`,
