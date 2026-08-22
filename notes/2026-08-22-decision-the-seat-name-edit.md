@@ -1,9 +1,11 @@
 # Decision — the seat name edit: a PUT on `me`, and nobody pre-fills an empty seat (2026-08-22)
 
-`#187`, the backend half of `#175`. Small endpoint, three decisions that outlive it:
-what a single-required-member update is shaped like, who may write a name that is not
-theirs, and when a mutation may answer without the aggregate. `#12`, `#13` and `#14`
-are all written after this one and each of them will reach for one of the three.
+`#187`, the backend half of `#175`. Small endpoint, four decisions that outlive it: what
+a single-required-member update is shaped like, who may write a name that is not theirs,
+when a mutation may answer without the aggregate, and — the founder's, added in review —
+**what makes a string a name at all** (§5), which binds every name field in the product
+and not just this one. `#12`, `#13`, `#14` and `#191` are all written after this one and
+each reaches for at least one of the four.
 
 The gap it closes: after 2026-08-22 the name is an attribute of the seat, and it enters
 in two places that are both once-only — `POST /weddings` and `POST /weddings/join`.
@@ -96,19 +98,85 @@ it becomes a name accepted on the screen that fixes it.
 than one so each keeps its own message — 101 characters and a string of spaces are still
 told apart.
 
-**And gathering them found a bug that had been sitting under all three write points.**
-`@NotBlank` is not the same function as the `trim()` the services call: Hibernate
-Validator trims with **Java**'s `String.trim()` (characters ≤ U+0020 only), while
-Kotlin's `trim()` also strips U+3000, U+00A0 and U+2000–U+200A. **U+3000 is an ordinary
-key on a Korean IME**, so `{"name":"　"}` passed validation, was emptied by the service's
-trim, and was stored as `''` — `wedding_party.name` has no CHECK. `@SeatName` therefore
-validates the **trimmed** value, with the same function the write points use, and one
-annotation fixes 웨딩 만들기, 초대 수락 and this edit at once. `@Size` stays composed and
-measures the value as sent, a bound the trim can only make slacker.
+**And gathering them found a bug that had been sitting under all three write points**,
+which is what §5 is about. `@SeatName` is where that rule lives now, so 웨딩 만들기,
+초대 수락 and this edit are fixed by one annotation and `#191` copies it rather than
+re-deriving one.
+
+`@Size` stays composed and measures the value **as sent**, a bound the write point's
+`trim()` can only make slacker.
+
+~~The `maxLength` on the seam is declared to `@Schema` beside it, because a composed
+constraint is not something to assume springdoc walks.~~ **Struck: springdoc does walk
+it.** Verified by deleting three hand-written `@Schema(maxLength = 100)` and regenerating
+the document unchanged — they were copies of the constant kept in step by nothing. What
+holds the bound now is an assertion in `OpenApiDocumentTest`, **not** the `seam` job:
+`openapi-typescript` drops `maxLength`, so the committed types are byte-identical whether
+the bound is published or not, and a green `seam` says nothing about it.
 
 That is the argument for gathering a rule into one place, stated as something that
 happened rather than as a principle: two copies were wrong in the same way and nobody
 could see it until they were one.
+
+## 5. 보이지 않는 문자로만 된 이름은 이름으로 치지 않는다
+
+**The founder's rule**, and it binds every name field in the product — 하객 이름 included
+(`#191`), which copies this predicate rather than deriving its own.
+
+> A name must contain **at least one visible character**: a code point that is neither
+> whitespace nor in Unicode general category C (`Cc` control, `Cf` format, `Cs`
+> surrogate, `Co` private use, `Cn` unassigned).
+
+**How we got here matters, because the first two answers were both wrong and each looked
+right.** `@NotBlank` and the services' `trim()` are different functions, and this record
+twice asserted one contained the other. It said Java's `String.trim()` "strips only
+characters ≤ U+0020, while Kotlin's **also** strips U+3000, U+00A0 and U+2000–U+200A".
+**"Also" asserts containment and there is none** — the two sets merely OVERLAP, measured
+against this build's kotlin-stdlib rather than reasoned about:
+
+| Class | Java `trim` (`c <= ' '`) | Kotlin `trim` (`isWhitespace() \|\| isSpaceChar()`) |
+|---|---|---|
+| U+0000–U+0008, U+000E–U+001B | strips | **does not** |
+| U+00A0, U+2000–U+200A, U+3000 | **does not** | strips |
+| U+200B, U+FEFF, U+00AD | **does not** | **does not** |
+
+Each row was a live defect. Row two is the bug that started this: `"　"` (U+3000, an
+ordinary key on a Korean IME) passed `@NotBlank`, was emptied by the service's trim, and
+was stored as `''`, since `wedding_party.name` carries no CHECK. **Row one is the
+regression the first fix introduced** — validating with Kotlin's trim alone let a NUL
+through, and PgJDBC refuses NUL in a text parameter, so a 400 became a masked 500: the
+exact shape `CreateWeddingContractTest`'s own comment exists to prevent. Row three is
+what neither trim would ever have caught, and what a union of them still would not: a
+name of one U+200B passes every trim in both languages and lands as a seat labelled with
+nothing.
+
+**So the question changed rather than the net widening.** "Does it trim to empty" cannot
+answer row three at any level of care, because no trim strips a zero-width character. "Is
+there a visible character in it" answers all three for one reason, and the reason is the
+one a person can hold: 이름은 보이는 것이다.
+
+**Two implementation facts that are not detail, both found by measuring:**
+
+- **It walks CODE POINTS, not `Char`s.** A supplementary-plane character is a surrogate
+  PAIR, so a per-`Char` predicate excluding `Cs` reads two surrogates and calls the whole
+  name invisible. The first draft refused 🙂 **and CJK Extension B hanja**, which appear
+  in real names. A test holds this from the accepting side.
+- **`Character.isSpaceChar` sits beside `isWhitespace`** because the `Character`
+  predicate excludes U+00A0 where Kotlin's `Char.isWhitespace()` includes it. Without it
+  a name of one NBSP passes.
+
+**`Co` (private use) is refused deliberately**, not by reaching for a category list.
+Nothing guarantees it renders and it is not a character a couple types; a name we cannot
+draw is not a name they can read on their own ledger.
+
+**What it does not over-reject**, since the rule is about invisibility and not about
+being unusual: Hangul, hanja, kana, Latin, digits, hyphens and emoji all carry a visible
+code point and all pass. `"​김​"` — zero-width, 김, zero-width — passes too, because
+there *is* a visible character in it. Only a name with none is refused.
+
+**The client cannot replicate this and should not try** — see the frontend note in
+`docs/api-spec.md`. JS `String.prototype.trim()` catches the common case; the server is
+the authority.
 
 ## What this does not decide
 

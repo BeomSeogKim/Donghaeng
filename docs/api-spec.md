@@ -735,10 +735,11 @@ wedding is created empty — no guests, no meal types — so there is no headcou
 carry. The client's next screen is the ledger, which reads it.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is empty once trimmed (**including one made
-  only of `"　"` U+3000, U+00A0 or U+2000–U+200A**) or longer than 100 characters as
-  sent; or a `weddingDate` outside the range the database can store (before 4713 BC or
-  after 5874897 AD).
+- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it (`""`, spaces,
+  `"　"` U+3000, a control character, or the zero-width family — see
+  `PUT /weddings/{weddingId}/seats/me` for the rule in full) or longer than 100
+  characters as sent; or a `weddingDate` outside the range the database can store
+  (before 4713 BC or after 5874897 AD).
 - 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of a type that
   cannot be read (an unparseable `weddingDate` and **a `side` that is neither `GROOM`
   nor `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
@@ -1067,18 +1068,34 @@ Request
 ```
 
 `name` is **required**, and it is **the caller's own** name. It is **trimmed before it
-is stored** — `"  김신랑  "` is stored as `"김신랑"` — and the rule is applied to what
-will actually be stored: **what is left after trimming must not be empty**, and the
-value **as sent** must be at most 100 characters. It is validated by exactly the rule
-`POST /weddings` and `POST /weddings/join` validate the same column with; one
-client-side rule covers all three screens.
+is stored** — `"  김신랑  "` is stored as `"김신랑"` — it must be at most 100 characters
+**as sent**, and it must satisfy the product's one name rule:
 
-**"Whitespace" here is wider than the space bar**, and this is worth one line of client
-code: `"　"` (U+3000, 전각 공백 — an ordinary key on a Korean IME), U+00A0 and
-U+2000–U+200A all trim away, so a name made of them is refused rather than stored as an
-empty string (fixed 2026-08-22 with `#187`, which found it accepted at all three write
-points). If a form disables its submit button on "blank", trim with the same generosity
-or the button will be live for a name the API refuses.
+> **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다.** A name must contain at least
+> one **visible** character — one that is neither whitespace nor an invisible control or
+> formatting character (Unicode general category C).
+
+The same rule validates `POST /weddings` and `POST /weddings/join`; there is one rule for
+every screen a name is typed on, and it is enforced by one annotation in the API rather
+than three copies (added 2026-08-22, `#187`; it binds 하객 이름 too as of `#191`).
+
+**What it refuses** is a name with no visible character in it — `""`, `"   "`, `"　"`
+(U+3000 전각 공백, an ordinary key on a Korean IME), a lone NUL, and the zero-width
+family `"\u200b"`, `"\ufeff"`, `"\u00ad"`. Those last ones survive every `trim()` in
+every language, and before this rule they were stored as a seat labelled with nothing.
+
+**What it does NOT refuse** — the rule is about invisibility, not about being unusual.
+Hangul, hanja, kana, Latin, digits, hyphens, apostrophes and emoji all pass, including
+characters outside the Basic Multilingual Plane. `"​김​"` (zero-width, 김, zero-width)
+passes too: there is a visible character in it.
+
+**The client cannot replicate this check, and should not try.** `String.prototype.trim()`
+in JS catches the common case and agrees with the server on nearly every space-like
+codepoint — **use it, plainly** — but it does not strip zero-width characters, so a name
+made only of those passes a client-side blank check and comes back 400. **The server is
+the authority; render its message.** What actually goes wrong here is a hand-rolled blank
+check: `/^\s*$/` and `/^ *$/` are both narrower than `trim()` and put a bug on the client
+that the API does not have.
 
 **There is no partial-update semantics here and no `null` case**: the body has one
 member, it is required, and there is no state "leave the name alone" — that state is
@@ -1111,9 +1128,8 @@ answer `POST /weddings/join` gives after writing this very column, and the same 
 that does carry it**, because 보증인원 lives inside the headcount.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is empty once trimmed (**including one made
-  only of `"　"` U+3000, U+00A0 or U+2000–U+200A**) or longer than 100 characters as
-  sent. Nothing is written.
+- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it, or longer
+  than 100 characters as sent. Nothing is written.
 - 400 `MALFORMED_REQUEST_BODY` — `name` omitted, sent as `null`, sent as an object or an
   array, or a body that is not JSON. **Two codes, one meaning for the user**: the
   request was wrong. (A JSON *number* is not in this list: scalars coerce to strings
@@ -1255,10 +1271,10 @@ Carries the recomputed aggregate: **no.** Joining changes no 하객 and no 인�
 next screen is the ledger, which reads its own numbers.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is empty once trimmed (**including one made
-  only of `"　"` U+3000, U+00A0 or U+2000–U+200A**) or longer than 100 characters as
-  sent. **The token is not spent by this**, so correcting the name and tapping again
-  works.
+- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it, or longer
+  than 100 characters as sent (the rule is stated in full under
+  `PUT /weddings/{weddingId}/seats/me`). **The token is not spent by this**, so
+  correcting the name and tapping again works.
 - 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or sent as an object
   or an array. **An empty-string `token` is not this** — it is a 404, see below, and
   neither is a JSON number: scalars coerce to strings API-wide, so `{"name":42}` writes
