@@ -6,7 +6,6 @@ import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { GuestRow } from '../components/GuestRow'
 import { Headcount } from '../components/Headcount'
-import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { FilterChip } from '../components/Tag'
 import { type GuestFilters, useGuests } from '../hooks/useGuests'
@@ -308,21 +307,21 @@ function Frame({
               {wedding.seats.map(seatLabel).join(' · ')}
             </p>
           </div>
-          {/* 하객 추가 KEEPS THE ROW IT IS PRESSED IN, and the two infrequent
-              exits share the one below it. Three controls across one row on a
-              phone squeeze the couple's own names — the line that says whose
-              ledger this is — down to an ellipsis, and 설정 and 로그아웃 are
-              both pressed rarely enough to sit under the action rather than
-              beside it. 설정 is a link because it is a navigation, the same
-              reason starting login is an <a>. */}
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          {/* TWO CONTROLS, ONE ROW — and the reason is the row itself. `#174`
+              split this into two because three controls beside the couple's own
+              names ellipsised the line that says whose ledger this is; the
+              crowding was real, but the second row lives inside `sticky top-0`,
+              so it spent vertical space above the number and the filters on
+              every scroll of the ledger. 로그아웃 was the control paying for it:
+              once a session, and it has a screen of its own now
+              (notes/2026-08-22-decision-logout-leaves-the-ledger.md). 설정 is a
+              link because it is a navigation, the same reason starting login is
+              an <a>. */}
+          <div className="flex shrink-0 items-start gap-2">
             {action}
-            <div className="flex items-start gap-2">
-              <Link className={buttonClassName('secondary')} to={settingsPath}>
-                설정
-              </Link>
-              <LogoutButton className="flex flex-col items-end gap-2 text-right" />
-            </div>
+            <Link className={buttonClassName('secondary')} to={settingsPath}>
+              설정
+            </Link>
           </div>
         </header>
 

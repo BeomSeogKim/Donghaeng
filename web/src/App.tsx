@@ -4,12 +4,13 @@ import { BrandMark } from './components/BrandMark'
 import { Screen } from './components/Screen'
 import { SessionUnavailable } from './components/SessionUnavailable'
 import { useInviteToken } from './hooks/useInviteToken'
-import { useSession } from './hooks/useSession'
-import { createWeddingPath, invitePath, settingsPath } from './lib/routes'
+import { type Session, useSession } from './hooks/useSession'
+import { createWeddingPath, invitePath, myPagePath, settingsPath } from './lib/routes'
 import { AcceptInvitePage } from './pages/AcceptInvitePage'
 import { CreateWeddingPage } from './pages/CreateWeddingPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { LoginPage } from './pages/LoginPage'
+import { MyPage } from './pages/MyPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 /*
@@ -69,9 +70,15 @@ export function App() {
 
   const person = session.data
 
-  /** A screen only a signed-in person may see. */
-  const signedIn = (screen: () => ReactNode) =>
-    person === null ? <Navigate replace to="/login" /> : screen()
+  /**
+   * A screen only a signed-in person may see.
+   *
+   * IT HANDS THE PERSON DOWN, because one screen is *about* them: 마이페이지
+   * would otherwise carry a signed-out branch for a state this function has
+   * just made unreachable. A screen that does not want the argument ignores it.
+   */
+  const signedIn = (screen: (person: Session) => ReactNode) =>
+    person === null ? <Navigate replace to="/login" /> : screen(person)
 
   return (
     <Routes>
@@ -87,6 +94,14 @@ export function App() {
       {/* 설정 · 웨딩 정보 — the one screen a couple navigates to and back from,
           and the shell `#9`'s 파트너 초대 joins. */}
       <Route element={signedIn(() => <SettingsPage />)} path={settingsPath} />
+      {/* 마이페이지 — the account, and the only screen a signed-in person is
+          parked on with something to read. Reached from 설정 and not from the
+          ledger header, which is why 로그아웃 could leave 원장 without leaving
+          the app (notes/2026-08-22-decision-logout-leaves-the-ledger.md). */}
+      <Route
+        element={signedIn((person) => <MyPage person={person} />)}
+        path={myPagePath}
+      />
       {/* 초대 수락 — NOT behind `signedIn`, and it is the only screen besides
           로그인 that is not. The person holding an invite link is almost always
           signed out, and the token in its fragment has to be stashed BEFORE the

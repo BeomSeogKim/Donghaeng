@@ -156,6 +156,27 @@ it('renders the wedding it took from GET /weddings, in 이름 가나다순', asy
   expect(calls.lastLedgerRequest().pathname).toBe('/weddings/12/guests')
 })
 
+it('offers 하객 추가 and 설정 in the header, and 로그아웃 nowhere on the ledger', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.headcount(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  expect(await screen.findByRole('button', { name: '하객 추가' })).toBeVisible()
+  expect(screen.getByRole('link', { name: '설정' })).toBeVisible()
+  // 로그아웃 LEFT THIS SCREEN. The second header row it stood in lives inside
+  // `sticky top-0`, so it spent vertical space above the number and the filters
+  // on every scroll of the ledger, for an action taken about once a session
+  // (notes/2026-08-22-decision-logout-leaves-the-ledger.md). It is on 마이페이지
+  // now, two taps away through 설정.
+  expect(screen.queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument()
+})
+
 it('names the empty seat rather than leaving a gap where a name would be', async () => {
   const calls = api()
   server.use(
