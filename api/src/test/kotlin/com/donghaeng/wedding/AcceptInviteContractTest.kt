@@ -133,10 +133,13 @@ internal class AcceptInviteContractTest : ApiFixture() {
     }
 
     @Test
-    fun `a revoked token is gone rather than stale`() {
-        // What 재발급 leaves behind. The person holding the old link is told the same
-        // thing a guesser is told — there is nothing here — because the recovery is
-        // the same and the link they hold was replaced rather than merely aged.
+    fun `a superseded token says a newer link exists, because that is where the recovery is`() {
+        // What 재발급 leaves behind, and 발급 IS 재발급 — so with a one-day life this is
+        // an ordinary daily state, not an edge case: the old link sits in one person's
+        // KakaoTalk while the working one is on the other's phone
+        // (notes/2026-08-22-decision-the-superseded-link-speaks.md). Told apart on the
+        // same argument INVITE_EXPIRED stands on, unmodified: the check is reached only
+        // after the presented verifier matched, so a guesser never gets here.
         val weddingId = createWedding(login())
         val stale = tokenFor(weddingId)
         tokenFor(weddingId)
@@ -144,8 +147,32 @@ internal class AcceptInviteContractTest : ApiFixture() {
         val response = join(loginAs("the-partner"), body(stale))
 
         assertThat(response.statusCode()).isEqualTo(404)
-        assertThat(response.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
+        assertThat(response.json()["code"].asText()).isEqualTo("INVITE_SUPERSEDED")
         assertThat(occupantsOf(weddingId)).isOne()
+
+        // And the newest link still works — the whole point of saying which death it
+        // was is that this is the link the person should be asking their partner for.
+        assertThat(join(loginAs("the-partner"), body(tokenFor(weddingId))).statusCode()).isEqualTo(200)
+    }
+
+    @Test
+    fun `a token that was spent and then superseded still says nothing about the person who spent it`() {
+        // The split has ONE side. `accepted_at` is somebody else's business — telling a
+        // second arrival "this link was already used" is a fact about the partner, not
+        // about the token they hold — so it stays INVITE_NOT_FOUND even when a later
+        // 재발급 has also stamped `revoked_at` on the same row. Asserted because the
+        // obvious reading of the two columns ("revoked? then superseded") gets this
+        // wrong, and the ordinary accept path leaves exactly this shape behind.
+        val weddingId = createWedding(login())
+        val spent = tokenFor(weddingId)
+        join(loginAs("the-partner"), body(spent))
+        jdbc.update("update wedding_invite set revoked_at = now() where accepted_at is not null")
+
+        val replay = join(loginAs("a-third-person"), body(spent))
+
+        assertThat(replay.statusCode()).isEqualTo(404)
+        assertThat(replay.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
+        assertThat(occupantsOf(weddingId)).isEqualTo(2)
     }
 
     @Test

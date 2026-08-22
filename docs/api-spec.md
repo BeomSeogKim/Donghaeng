@@ -165,8 +165,9 @@ endpoint raises:
 | `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
 | `WEDDING_NOT_FOUND` | 404 | The wedding this request is scoped to could not be resolved for this caller. **One code for four situations on purpose** — no such wedding, a wedding the caller is not a member of, a deleted wedding, and a `{weddingId}` that is not a number. See "Being scoped to a wedding" below. |
 | `ALREADY_IN_A_WEDDING` | 409 | The caller already belongs to a wedding, and **a person belongs to exactly one** — created or joined, never both, never two. Raised by `POST /weddings` and, since 2026-08-22 (`#181`), by `POST /weddings/join` — **from one check**, so the two can never disagree. Also the answer when two simultaneous requests race and the database refuses the loser's row (2026-08-21): one fact about the caller's account, one code, one recovery. |
-| `INVITE_NOT_FOUND` | 404 | `POST /weddings/join` was given a token it cannot use: malformed, unknown, wrong, already spent, or replaced by a 재발급. **One code for all of them on purpose** — telling them apart is what somebody guessing tokens would want. Added 2026-08-22 (`#181`). |
-| `INVITE_EXPIRED` | 404 | The token was ours and the link is more than a day old. **The one invite failure told apart from the others**, because its recovery is different: ask the partner to reissue. Added 2026-08-22 (`#181`). |
+| `INVITE_NOT_FOUND` | 404 | `POST /weddings/join` was given a token it cannot use: malformed, unknown, wrong, already spent, or pointing at a seat or a wedding that is gone. **One code for all of them on purpose** — telling them apart is what somebody guessing tokens would want, and *already spent* is a fact about the partner who spent it rather than about the token in this person's hand. Added 2026-08-22 (`#181`); **no longer covers a token a 재발급 replaced** (2026-08-22, `#201`). |
+| `INVITE_EXPIRED` | 404 | The token was ours and the link is more than a day old. Told apart from `INVITE_NOT_FOUND` because its recovery is different: ask the partner to reissue. Added 2026-08-22 (`#181`). |
+| `INVITE_SUPERSEDED` | 404 | The token was ours and a 재발급 replaced it — there is a newer link, and it is on the other person's phone. Told apart for the same reason `INVITE_EXPIRED` is, and it is safe for the same reason: both are only ever said to somebody who presented a correct verifier. Added 2026-08-22 (`#201`). |
 | `PARTNER_ALREADY_JOINED` | 409 | Both seats in the wedding are taken — nobody left to invite, nothing left to accept. Raised by `POST /weddings/{weddingId}/invite` and by `POST /weddings/join`. Added 2026-08-22 (`#181`). |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A `POST`/`PUT`/`PATCH` sent a `Content-Type` the endpoint does not accept, **or sent none at all**. Not an edge case — it is how the CSRF gate refuses a request; see "Every POST, PUT and PATCH must send `Content-Type: application/json`". |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
@@ -1205,9 +1206,12 @@ Six things are decided here rather than left to the caller to infer.
   재발급. **Design the screen for that** — do not build a "copy the existing link"
   view against a value you would have to keep in memory to have.
 - **재발급 kills the previous token immediately.** At most one live invite per seat.
-  A partner holding the older link gets 404 `INVITE_NOT_FOUND` from that moment,
+  A partner holding the older link gets 404 `INVITE_SUPERSEDED` from that moment,
   which is deliberate: three taps of 재발급 must not leave three live credentials in
-  three chat rooms (`notes/2026-08-22-decision-the-invite-link.md` §1).
+  three chat rooms (`notes/2026-08-22-decision-the-invite-link.md` §1). **The code is
+  what makes that survivable** — the person holding the dead link is told a newer one
+  exists rather than that there is nothing there
+  (`notes/2026-08-22-decision-the-superseded-link-speaks.md`, `#201`).
 - **`expiresAt` is at most one day out**, and it is the value to render — never a
   duration computed in the client. A link the couple sends on KakaoTalk and the
   partner opens the next evening is expected to fail, and the recovery is one tap.
@@ -1285,11 +1289,23 @@ Errors
   the body is looked at**, so an anonymous request never learns anything about the
   token it sent. This is what makes signing in first the whole of the accept flow.
 - 404 `INVITE_NOT_FOUND` — the token is not usable: malformed, unknown, ours-with-a-
-  wrong-verifier, already accepted, replaced by a 재발급, or pointing at a seat or a
-  wedding that is gone. **One answer for all of them, identical in every member.**
+  wrong-verifier, already accepted, or pointing at a seat or a wedding that is gone.
+  **One answer for all of them, identical in every member.** *Already accepted* stays
+  in here on purpose: that a link was used is a fact about the person who used it,
+  and the one asking is somebody else. It is also what a token that died in the
+  moment between being read and being spent answers.
 - 404 `INVITE_EXPIRED` — the token was ours and the link is more than a day old. This
   one *is* told apart, because the recovery is different and worth saying: 파트너에게
   새 링크를 요청하세요.
+- 404 `INVITE_SUPERSEDED` — the token was ours and a **재발급 replaced it**. Told
+  apart for the same reason and safe on the same argument: like `INVITE_EXPIRED`,
+  it is reached only after the presented verifier matched, so it is never said to
+  somebody guessing. Say that a newer link exists and to ask the partner for it —
+  never 이 링크는 사용할 수 없습니다, which sends a person nowhere while the working
+  link sits in the other person's chat room. Since 발급 *is* 재발급 and a link lives
+  one day, this is an ordinary state and not an edge case
+  (`notes/2026-08-22-decision-the-superseded-link-speaks.md`). Added 2026-08-22
+  (`#201`); before it, this was `INVITE_NOT_FOUND`.
 - 409 `ALREADY_IN_A_WEDDING` — the caller already belongs to a wedding. **The same
   code from the same check as `POST /weddings`**, and the same recovery: call
   `GET /weddings` and open the one that comes back. **The token is not spent**, so
