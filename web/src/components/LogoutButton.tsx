@@ -12,14 +12,18 @@ import { buttonClassName } from './Button'
  * says nothing tells a couple sharing a phone that they signed out when they
  * did not, which is the one thing this screen may not do.
  *
- * IT IS ON EVERY SCREEN A SIGNED-IN PERSON CAN BE PARKED ON, which is why it
- * moved out of one page: 원장 and 웨딩 만들기. A person whose `GET /weddings`
- * answers `[]` sits on the second of those with no other exit, and `[]` is also
- * what a removed membership looks like.
+ * IT IS ON THE SCREENS A SIGNED-IN PERSON CAN BE PARKED ON, and 원장 is not one
+ * of them any more (`#195`). Three of them are: 마이페이지, which is the account
+ * and where a person goes *to* sign out; 웨딩 만들기, where somebody whose
+ * `GET /weddings` answers `[]` sits with no other exit — waiting on an invite,
+ * or removed from a partner's wedding; and 수락, the only exit on a screen that
+ * has none, which the "wrong Google account" recovery is built on (`#164`).
+ * The last two are doors out of dead ends and are not duplicates of the first
+ * (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
  *
- * The wrapper's classes come from the caller because the two screens hold it
- * differently — pinned to the corner of the ledger's header, under the form on
- * a centered column — and the message has to sit with the button either way.
+ * The wrapper's classes come from the caller because the screens hold it
+ * differently — under the account it signs out of, under the form on a centered
+ * column — and the message has to sit with the button either way.
  */
 export function LogoutButton({ className }: { className: string }) {
   const logout = useLogout()

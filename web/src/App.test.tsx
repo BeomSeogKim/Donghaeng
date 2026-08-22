@@ -63,9 +63,11 @@ function recording() {
 }
 
 /**
- * The two reads 원장 makes on arrival. `/` is the ledger now (`#15`), so every
- * test that signs someone in at `/` needs them — an unhandled request is an
- * error in this suite, deliberately.
+ * The reads 원장 and 설정 make on arrival. `/` is the ledger now (`#15`), so
+ * every test that signs someone in at `/` needs them — an unhandled request is
+ * an error in this suite, deliberately. 설정 is on the way to 마이페이지, which
+ * is where 로그아웃 lives (notes/2026-08-22-decision-logout-leaves-the-ledger.md),
+ * so its 보증인원 read is here too.
  */
 const ledger = () => [
   http.get(`${API}/weddings`, () =>
@@ -81,7 +83,23 @@ const ledger = () => [
     ]),
   ),
   http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json<Guest[]>([])),
+  http.get(`${API}/weddings/:weddingId/headcount`, () =>
+    HttpResponse.json({ mealHeadcount: 0 }),
+  ),
 ]
+
+/**
+ * 원장 → 설정 → 마이페이지, walked the way a couple walks it.
+ *
+ * 로그아웃 IS NOT ON 원장 AND IS NOT ONE TAP AWAY. It sits on the one screen a
+ * signed-in person is parked on with something to read, and the ledger header
+ * is back to one row without it
+ * (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
+ */
+async function walkToMyPage() {
+  await userEvent.click(await screen.findByRole('link', { name: '설정' }))
+  await userEvent.click(await screen.findByRole('link', { name: '마이페이지' }))
+}
 
 const unauthenticated = () =>
   HttpResponse.json(
@@ -163,7 +181,7 @@ it('starts login as a navigation to the API, never as a fetch', async () => {
   expect(calls.seen.map((request) => request.url)).toEqual([`${API}/auth/me`])
 })
 
-it('opens the ledger for a signed-in person, and lets them sign out', async () => {
+it('opens the ledger for a signed-in person, and signs them out from 마이페이지', async () => {
   const calls = recording()
   let signedOut = false
   server.use(
@@ -178,8 +196,11 @@ it('opens the ledger for a signed-in person, and lets them sign out', async () =
   renderWithProviders(<App />, { initialEntries: ['/'] })
 
   expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  // The ledger no longer carries it, so the flow is the real two taps.
+  expect(screen.queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument()
 
-  await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
+  await walkToMyPage()
+  await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
 
   expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeVisible()
   // The row is revoked on the server; deleting the cookie client-side is not
@@ -199,10 +220,9 @@ it('says the person is still signed in when the sign-out never reached the API',
     // not a refusal: it is the request never arriving, and the session on the
     // server is still live (docs/api-spec.md § POST /auth/logout).
     calls.logout(() => HttpResponse.error()),
-    ...ledger(),
   )
 
-  renderWithProviders(<App />, { initialEntries: ['/'] })
+  renderWithProviders(<App />, { initialEntries: ['/me'] })
   await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
 
   // The couple share a phone. A button that un-disables itself and says nothing
@@ -210,7 +230,7 @@ it('says the person is still signed in when the sign-out never reached the API',
   expect(
     await screen.findByText('로그아웃하지 못했습니다. 연결을 확인하고 다시 눌러 주세요.'),
   ).toBeVisible()
-  expect(screen.getByRole('heading', { name: '원장' })).toBeVisible()
+  expect(screen.getByRole('heading', { name: '마이페이지' })).toBeVisible()
   expect(screen.queryByRole('link', { name: '구글로 로그인' })).not.toBeInTheDocument()
 })
 
@@ -247,7 +267,8 @@ it('leaves nothing of the signed-out person in the cache', async () => {
     expect(queryClient.getQueryData(guestsQueryKey(12, {}))).toBeDefined(),
   )
 
-  await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))
+  await walkToMyPage()
+  await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
 
   await waitFor(() =>
     expect(queryClient.getQueryData(guestsQueryKey(12, {}))).toBeUndefined(),
@@ -259,10 +280,9 @@ it('sends every request with credentials, or the API sees an anonymous caller', 
   server.use(
     calls.me(() => signedIn('김테스터')),
     calls.logout(() => new HttpResponse(null, { status: 204 })),
-    ...ledger(),
   )
 
-  renderWithProviders(<App />, { initialEntries: ['/'] })
+  renderWithProviders(<App />, { initialEntries: ['/me'] })
   await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }))
 
   await waitFor(() => expect(calls.seen.length).toBeGreaterThanOrEqual(2))

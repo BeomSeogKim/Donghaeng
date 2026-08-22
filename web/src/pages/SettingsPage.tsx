@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react'
 import { Link, Navigate } from 'react-router'
 import { buttonClassName } from '../components/Button'
 import { PartnerInvite } from '../components/PartnerInvite'
+import { Section, SubScreen } from '../components/SubScreen'
 import { WeddingInfoForm } from '../components/WeddingInfoForm'
 import { useHeadcount } from '../hooks/useHeadcount'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
-import { createWeddingPath, ledgerPath } from '../lib/routes'
+import { createWeddingPath, ledgerPath, myPagePath } from '../lib/routes'
 
 /*
  * 설정 — the wedding's own information, and **the shell every other setting
@@ -18,23 +18,32 @@ import { createWeddingPath, ledgerPath } from '../lib/routes'
  * hold a partner invite later, and an invite flow inside a sheet over the
  * ledger is a screen pretending to be an overlay.
  *
- * IT IS A LIST OF SECTIONS, AND `#9` ADDS THE SECOND ONE. 파트너 초대 attaches
- * as a sibling `<Section>` below 웨딩 정보 — that is the whole extension point,
- * and it is why the section frame exists for one section. Nothing about this
- * shell is specific to the form inside it.
+ * IT IS A LIST OF SECTIONS, and there are three: 웨딩 정보, `#9`'s 파트너 초대,
+ * and the door to 마이페이지. Each attaches as a sibling `<Section>` — that is
+ * the whole extension point, and nothing about the shell is specific to what is
+ * inside it, which is why the shell moved to `components/SubScreen` the moment
+ * a second screen wanted the same one.
  *
- * THE WEDDING'S INFORMATION, NOT THE ACCOUNT'S. 마이페이지 (`#159`) is the
- * account — the person, their login, their sign-out — and whether the two ever
- * share a screen is that issue's call, not a question this one answers.
+ * THE WEDDING'S INFORMATION, NOT THE ACCOUNT'S, and the two do not share a
+ * screen: 마이페이지 (`#159`) is the person — their name, their sign-out — while
+ * this is what their wedding has. What they share is the trip, and this is
+ * where it starts.
  *
  * NO 로그아웃 HERE. It sits on the screens a signed-in person can be *parked*
- * on with no other exit (원장, 웨딩 만들기); this screen's exit is 원장, one tap
+ * on with no other exit (수락, 웨딩 만들기); this screen's exit is 원장, one tap
  * away at the top, and a second sign-out button is a second place to press for
  * one action.
+ *
+ * THAT ARGUMENT IS WHY 마이페이지 EXISTS. When 로그아웃 left 원장's pinned header
+ * (`#195`), the obvious landing spot was this screen — and this comment refused
+ * it, because 설정 is passed through rather than inhabited. So it did not shift
+ * one screen sideways: a screen a person can be parked on was made, and it went
+ * there. 내 계정 below is the door to it
+ * (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
  */
 export function SettingsPage() {
   return (
-    <Frame>
+    <SubScreen back={{ label: '원장', to: ledgerPath }} title="설정">
       <Section title="웨딩 정보">
         <WeddingInfo />
       </Section>
@@ -44,7 +53,18 @@ export function SettingsPage() {
       <Section title="파트너 초대">
         <PartnerInvite />
       </Section>
-    </Frame>
+      {/* 마이페이지'S ENTRY POINT, AND ITS ONLY ONE. It is not in the ledger
+          header: three controls beside the couple's own names ellipsised their
+          names on a phone, which is what `#174` split the header over, and a
+          screen visited about once a session does not earn a place there. Two
+          taps from 원장 is the depth it is worth
+          (notes/2026-08-22-decision-logout-leaves-the-ledger.md). */}
+      <Section title="내 계정">
+        <Link className={buttonClassName('secondary')} to={myPagePath}>
+          마이페이지
+        </Link>
+      </Section>
+    </SubScreen>
   )
 }
 
@@ -96,57 +116,6 @@ function Prefilled({ wedding }: { wedding: Wedding }) {
       weddingDate={wedding.weddingDate}
       weddingId={wedding.id}
     />
-  )
-}
-
-/**
- * The screen around the sections: a title, and the way back to 원장.
- *
- * `Frame`, NOT `Screen`: `components/Screen` is the centered single-column shell
- * the login and 웨딩 만들기 screens wear, and it means that specific thing. 원장
- * named its own frame the same way for the same reason.
- *
- * THE WAY BACK IS ON THE SCREEN, not left to the browser's Back button — this
- * is the only route in the app a couple arrives at by choice and has to leave
- * again, and on a phone installed to the home screen there is no Back button at
- * all.
- */
-function Frame({ children }: { children: ReactNode }) {
-  return (
-    <main className="min-h-[100dvh] bg-ground text-ink">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-ground px-4 py-3 md:px-6">
-        <Link className={buttonClassName('secondary')} to={ledgerPath}>
-          <span aria-hidden="true" className="mr-1">
-            ←
-          </span>
-          원장
-        </Link>
-        {/* One of RIDIBatang's three places: the headcount, screen titles, the
-            brand mark. */}
-        <h1 className="font-display text-title leading-tight tracking-display">설정</h1>
-      </header>
-
-      <div className="flex flex-col gap-6 py-6">{children}</div>
-    </main>
-  )
-}
-
-/**
- * One setting, framed.
- *
- * Flush and hairline-separated on a phone, a bordered block on a laptop — the
- * ledger's rule, for the same reason: a card per section costs vertical rhythm
- * and buys nothing on a screen that is a list of two things.
- */
-function Section({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section
-      aria-label={title}
-      className="border-y border-line bg-surface px-4 py-5 md:mx-6 md:max-w-104 md:border md:px-6"
-    >
-      <h2 className="text-lead font-semibold leading-snug">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </section>
   )
 }
 
