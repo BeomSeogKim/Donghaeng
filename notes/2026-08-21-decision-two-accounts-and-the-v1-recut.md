@@ -1,5 +1,15 @@
 # Decision — the couple are two accounts, and v1 is recut around it (2026-08-21)
 
+> **Amended 2026-08-22 — one premise in §0 is false.** This record says
+> "`guest_change` already records *who*" as one of three reasons the correction
+> was cheap. `guest_change` is a table that **nothing writes to**: there is no
+> `GuestChange` entity, and its write path is `#25`'s, which was unbuilt and has
+> since moved to `post-v1`. The sentence is true of the *model* and false of the
+> running system. **Nothing else in this record depends on it** — the two-accounts
+> call stands, and §4's argument for `#159` inverts rather than weakens (with no
+> record, a screen saying who you are while you edit is the only thing in that
+> gap). See `2026-08-22-decision-the-audit-trail-waits.md`.
+
 A premise correction from the founder that moved scope. Recorded together because
 each of the calls below follows from the one above it.
 
