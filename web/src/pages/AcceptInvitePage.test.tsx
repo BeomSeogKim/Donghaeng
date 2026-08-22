@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { useLocation } from 'react-router'
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { App } from '../App'
 import type { Headcount } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
@@ -148,6 +148,57 @@ it('takes the token out of the address bar and keeps it for the round trip', asy
   await waitFor(() => expect(screen.getByTestId('address')).toHaveTextContent('/invite'))
   expect(screen.getByTestId('address').textContent).toBe('/invite')
   expect(stored()).toBe(TOKEN)
+})
+
+/**
+ * The browser this page believes it is running in. Restored after every test —
+ * one jsdom window is shared by the whole file.
+ */
+const SYSTEM_BROWSER = navigator.userAgent
+const KAKAOTALK =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.7.0'
+
+function openedIn(userAgent: string) {
+  Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true })
+}
+afterEach(() => openedIn(SYSTEM_BROWSER))
+
+it('warns before the tap that an in-app browser cannot finish the login', async () => {
+  const api = inviteApi({ signedIn: false })
+  server.use(...api.handlers())
+  openedIn(KAKAOTALK)
+
+  renderWithProviders(<App />, { initialEntries: [`/invite#t=${TOKEN}`] })
+
+  /*
+   * THIS IS THE LAST SCREEN THAT CAN SAY ANYTHING. Google refuses OAuth in an
+   * embedded browser (`disallowed_useragent`) and KakaoTalk's is one, so the
+   * tap does not come back here — it stops at Google's own error page. And the
+   * fragment has already been cleared from the address bar, so "open this page
+   * in another browser" would hand over a link with no token in it: the way out
+   * is the message in the chat room, which still has the whole link.
+   */
+  expect(
+    await screen.findByText('앱 안에서 열린 브라우저에서는 구글 로그인이 막힙니다.'),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText(/대화방에서 초대 링크를 길게 눌러 복사한 뒤/),
+  ).toBeInTheDocument()
+
+  // BESIDE THE BUTTON, NEVER INSTEAD OF IT: a user agent match can be wrong in
+  // both directions, and taking the login away from somebody whose login works
+  // is the worse mistake.
+  expect(screen.getByRole('link', { name: '구글로 로그인' })).toBeInTheDocument()
+})
+
+it('says nothing of the sort in an ordinary browser', async () => {
+  const api = inviteApi({ signedIn: false })
+  server.use(...api.handlers())
+
+  renderWithProviders(<App />, { initialEntries: [`/invite#t=${TOKEN}`] })
+
+  expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeInTheDocument()
+  expect(screen.queryByText(/구글 로그인이 막힙니다/)).not.toBeInTheDocument()
 })
 
 it('sends the token in the body and the name the person typed, and seats them', async () => {
