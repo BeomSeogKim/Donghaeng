@@ -1086,8 +1086,10 @@ every language, and before this rule they were stored as a seat labelled with no
 
 **What it does NOT refuse** — the rule is about invisibility, not about being unusual.
 Hangul, hanja, kana, Latin, digits, hyphens, apostrophes and emoji all pass, including
-characters outside the Basic Multilingual Plane. `"​김​"` (zero-width, 김, zero-width)
-passes too: there is a visible character in it.
+characters outside the Basic Multilingual Plane, **and including characters newer than
+the server's own Unicode tables** — a CJK Extension I ideograph is a name here even
+though our JDK has not heard of it. `"​김​"` (zero-width, 김, zero-width) passes too:
+there is a visible character in it.
 
 **The client cannot replicate this check, and should not try.** `String.prototype.trim()`
 in JS catches the common case and agrees with the server on nearly every space-like

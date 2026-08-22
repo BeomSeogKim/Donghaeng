@@ -169,6 +169,32 @@ one a person can hold: 이름은 보이는 것이다.
 Nothing guarantees it renders and it is not a character a couple types; a name we cannot
 draw is not a name they can read on their own ledger.
 
+**`Cn` (unassigned) is NOT refused, and it is the same question answered the other way.**
+The rule refuses characters that *draw nothing*; `Cn` does not say that. It says **"not
+in this JVM's Unicode tables"** — a fact about our runtime, not about the character.
+Measured on this build rather than reasoned about:
+
+| | Unicode | `Character.getType` on JDK 21 |
+|---|---|---|
+| CJK Ext B, C, G, H | 3.1 – 15.0 | letter — accepted |
+| **CJK Ext I** (U+2EBF0–U+2EE5D) | **15.1** | **`Cn`** |
+| emoji U+1FA89, U+1FADC | 15.1, 16.0 | `Cn` |
+
+**JDK 21 carries Unicode 15.0 and Extension I landed in 15.1.** Those are unified
+ideographs — hanja, name-bearing by definition — so with `Cn` in the list our server
+refuses a surname that renders perfectly on the phone that typed it. And the exposure
+**grows while the code sits still**: every Unicode release widens the gap until someone
+upgrades the JDK, so the failure gets quieter over time rather than louder. That is the
+opposite of how the rest of this rule behaves, where a wrong answer is loud and
+immediate.
+
+The cost of leaving `Cn` out is that a name of one never-assigned code point (U+0378) is
+accepted. Nobody types that, and it is a far smaller wrong than refusing a real surname.
+
+**A test holds it from the accepting side**, written as an acceptance rather than as an
+assertion about `Cn`: after a JDK upgrade assigns Extension I the test passes because
+those are letters, which is the same contract stated the same way.
+
 **What it does not over-reject**, since the rule is about invisibility and not about
 being unusual: Hangul, hanja, kana, Latin, digits, hyphens and emoji all carry a visible
 code point and all pass. `"​김​"` — zero-width, 김, zero-width — passes too, because

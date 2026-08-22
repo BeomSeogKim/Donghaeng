@@ -145,6 +145,30 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
     }
 
     @Test
+    fun `a character newer than the JVM's Unicode tables is a name, not an absence`() {
+        val session = login()
+        val weddingId = createWedding(session)
+
+        // **`Cn` is not in the refused set, and this is what holds that decision**
+        // (notes/2026-08-22-decision-the-seat-name-edit.md §5). `Cn` means "not in THIS
+        // JVM's Unicode tables", not "assigned to nothing" — JDK 21 carries Unicode
+        // 15.0, and CJK Extension I (U+2EBF0–) arrived in 15.1. Those are unified
+        // ideographs: hanja, name-bearing. Refusing them would refuse a real surname
+        // whose only fault is being newer than our runtime, and it would get quieter
+        // the longer the runtime stays put.
+        //
+        // It is written as an ACCEPTANCE, so it keeps meaning after a JDK upgrade
+        // assigns these: it then passes because they are letters rather than because
+        // `Cn` is absent, which is the same contract either way.
+        val extensionI = "\uD87A\uDFF0"
+
+        val response = put("/weddings/$weddingId/seats/me", listOf(session), """{"name":"$extensionI"}""")
+
+        assertThat(response.statusCode()).isEqualTo(200)
+        assertThat(nameOf(weddingId, "GROOM")).isEqualTo(extensionI)
+    }
+
+    @Test
     fun `the name is required, and the two ways to leave it out fail while the body is read`() {
         val session = login()
         val weddingId = createWedding(session)

@@ -53,6 +53,19 @@ private const val MAX_LENGTH = 100
  * is not a character a couple types; a name we cannot draw is not a name they can read
  * on their own ledger.
  *
+ * **`Cn` (unassigned) is NOT refused, and that is the same question answered the other
+ * way.** `Cn` does not mean "assigned to nothing" — it means "not in THIS JVM's Unicode
+ * tables", which is a fact about our runtime and not about the character. **JDK 21
+ * carries Unicode 15.0, and CJK Extension I (U+2EBF0–U+2EE5D) arrived in 15.1**:
+ * unified ideographs, so hanja, so name-bearing by definition. Measured on this build —
+ * every Extension I code point reads `Cn` here while rendering on the phone that typed
+ * it, and Extensions B through H read as letters. Including `Cn` would refuse a
+ * legitimate 이름 whose only fault is being newer than our JDK, and it would get worse
+ * the longer a runtime stays put — the failure gets *quieter* over time, not louder.
+ * The cost of leaving it out is that a name of one never-assigned code point (U+0378)
+ * is accepted; that is not something a couple types, and it is a far smaller wrong than
+ * refusing a real surname.
+ *
  * **[Size] stays a composed constraint and measures the value AS SENT**, which is a
  * bound the write point's `trim()` can only make slacker: trimming shortens, so a value
  * that passes here still fits the column. It is also what publishes `maxLength` to
@@ -88,14 +101,17 @@ internal class SeatNameValidator : ConstraintValidator<SeatName, String> {
             Character.getType(codePoint) !in INVISIBLE_CATEGORIES
 
     private companion object {
-        /** Unicode general category C, whole. A name drawn from these alone draws nothing. */
+        /**
+         * Category C **without `Cn`** — see the KDoc above. `Cn` is the one member of the
+         * category that means "this JDK has not heard of it" rather than "this draws
+         * nothing", and on JDK 21 that includes CJK Extension I.
+         */
         val INVISIBLE_CATEGORIES: Set<Int> =
             setOf(
                 CharCategory.CONTROL,
                 CharCategory.FORMAT,
                 CharCategory.SURROGATE,
                 CharCategory.PRIVATE_USE,
-                CharCategory.UNASSIGNED,
             ).map { it.value.toInt() }.toSet()
     }
 }
