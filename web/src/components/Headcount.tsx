@@ -71,11 +71,11 @@ export function Headcount({ weddingId }: { weddingId: number }) {
 
       {/*
        * 보증인원 IS ABSENT, NOT NULL, until the couple has agreed one with their
-       * venue — and `#8` is the screen that will set it, so today it is always
-       * absent. Nothing is drawn in its place: an empty slot for a number the
-       * app has no way to accept is a question the couple cannot answer, and a
+       * venue, and 미설정 is an ordinary state rather than an unfinished one —
+       * couples sign up before they book. Nothing is drawn in its place: a
        * comparison against a number nobody gave us would be ours rather than
-       * their venue's.
+       * their venue's, and the empty slot would ask a question this screen is
+       * not where to answer. 설정 · 웨딩 정보 is.
        */}
       {meal !== undefined && guaranteed != null && (
         <Comparison guaranteed={guaranteed} meal={meal} />

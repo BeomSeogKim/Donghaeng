@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useState } from 'react'
-import { Navigate } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { AddGuestSheet } from '../components/AddGuestSheet'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
@@ -11,7 +11,7 @@ import { Screen } from '../components/Screen'
 import { FilterChip } from '../components/Tag'
 import { type GuestFilters, useGuests } from '../hooks/useGuests'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
-import { createWeddingPath } from '../lib/routes'
+import { createWeddingPath, settingsPath } from '../lib/routes'
 
 /*
  * 원장 — and 원장 is home. There is essentially one screen in this product
@@ -289,9 +289,21 @@ function Frame({
               {wedding.seats.map(seatLabel).join(' · ')}
             </p>
           </div>
-          <div className="flex shrink-0 items-start gap-2">
+          {/* 하객 추가 KEEPS THE ROW IT IS PRESSED IN, and the two infrequent
+              exits share the one below it. Three controls across one row on a
+              phone squeeze the couple's own names — the line that says whose
+              ledger this is — down to an ellipsis, and 설정 and 로그아웃 are
+              both pressed rarely enough to sit under the action rather than
+              beside it. 설정 is a link because it is a navigation, the same
+              reason starting login is an <a>. */}
+          <div className="flex shrink-0 flex-col items-end gap-2">
             {action}
-            <LogoutButton className="flex flex-col items-end gap-2 text-right" />
+            <div className="flex items-start gap-2">
+              <Link className={buttonClassName('secondary')} to={settingsPath}>
+                설정
+              </Link>
+              <LogoutButton className="flex flex-col items-end gap-2 text-right" />
+            </div>
           </div>
         </header>
 
