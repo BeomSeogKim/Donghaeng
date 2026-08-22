@@ -6,8 +6,9 @@ import org.springframework.http.HttpStatus
 /**
  * The link was ours and is a day old (notes/2026-08-22-decision-the-invite-link.md §1).
  *
- * **The only refusal told apart from [InviteNotFoundException]**, and the two arguments
- * for it point the same way. It is safe: this is only ever said to someone presenting a
+ * **The first refusal told apart from [InviteNotFoundException]**, and the two arguments
+ * for it point the same way — [InviteSupersededException] later stood on both of them
+ * unmodified. It is safe: this is only ever said to someone presenting a
  * token that really was ours, verifier and all, so a guesser is told INVITE_NOT_FOUND
  * exactly as they are told for nonsense and learns nothing. And it is necessary: the
  * founder's one-day life is affordable *because* 재발급 is one tap away, which is

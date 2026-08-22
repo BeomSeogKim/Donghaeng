@@ -98,12 +98,17 @@ internal class WeddingInviteService(
      *    what stops somebody who cannot use a link from spending their partner's only
      *    invite by tapping it.
      * 2. **The token, and everything wrong with it answers the same thing** — see
-     *    [InviteNotFoundException] — except expiry, which is told apart on purpose
-     *    ([InviteExpiredException]).
+     *    [InviteNotFoundException] — except the two deaths the holder recovers from by
+     *    asking their partner for the current link: it went stale
+     *    ([InviteExpiredException]) and a 재발급 replaced it
+     *    ([InviteSupersededException]). Both are asked **after** the verifier matched,
+     *    which is the whole of why saying them is safe.
      * 3. **The seat, locked.** A seat that is gone, or a wedding that is, reads as an
      *    invite that never existed; a seat somebody else has just taken is 409.
      * 4. **The consume, conditional.** A rowcount of 0 means the token died between the
-     *    read and the write, which is the same answer as never having existed.
+     *    read and the write, which is the same answer as never having existed — and
+     *    stays so even though a 재발급 is the likeliest cause: naming that death would
+     *    need a second read, which races the same way the first one just did.
      *
      * The response is the wedding itself, so a client that has just joined already has
      * the id every scoped request needs.
@@ -121,7 +126,8 @@ internal class WeddingInviteService(
         // The gate: the selector is a public handle and this is the only thing between
         // a guessed one and a stranger's ledger.
         if (!presented.matches(invite.verifierHash)) throw InviteNotFoundException()
-        if (!invite.isLive()) throw InviteNotFoundException()
+        if (invite.wasSpent()) throw InviteNotFoundException()
+        if (invite.wasSuperseded()) throw InviteSupersededException()
         if (invite.hasExpiredAt(now)) throw InviteExpiredException()
 
         val seat = seats.lockSeat(invite.seatId) ?: throw InviteNotFoundException()

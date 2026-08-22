@@ -59,9 +59,19 @@ internal class WeddingInvite(
     @Column(name = "id")
     val id: Long = 0,
 ) {
-    /** Neither spent nor replaced — the two states that make a token dead rather than merely old. */
-    fun isLive(): Boolean = acceptedAt == null && revokedAt == null
+    /**
+     * Spent — asked **before** [wasSuperseded], for a row no path here can produce:
+     * `WeddingInviteRepository.revokeLiveInviteFor` updates only unaccepted rows, and
+     * `WeddingInviteService.issue` refuses a seat that already has a person in it. The
+     * order is written down for whichever revoke lands next, because if one row ever
+     * carries both, spent is the answer: that a link was used is a fact about the person
+     * who used it, and the one asking is somebody else.
+     */
+    fun wasSpent(): Boolean = acceptedAt != null
 
-    /** Expiry is asked separately from [isLive] because the caller is told the two apart. */
+    /** Replaced by a 재발급 (notes/2026-08-22-decision-the-superseded-link-speaks.md). */
+    fun wasSuperseded(): Boolean = revokedAt != null
+
+    /** Three deaths, three questions — the caller is told each of them apart. */
     fun hasExpiredAt(now: Instant): Boolean = !now.isBefore(expiresAt)
 }

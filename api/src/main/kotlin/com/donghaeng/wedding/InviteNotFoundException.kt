@@ -6,15 +6,20 @@ import org.springframework.http.HttpStatus
 /**
  * **One answer for every way a token can fail to be an invite**: not shaped like one,
  * an unknown selector, a selector that is ours with a verifier that is not, one that
- * was already spent, one that 재발급 replaced, and one whose seat or wedding is gone.
+ * was already spent, one whose seat or wedding is gone, and one that lost a race
+ * between the read and the write.
  *
  * Telling them apart is exactly what a guesser would want: the selector is a public
  * handle, so a caller who could learn "this selector exists, only the verifier is
  * wrong" would have turned 128 bits of the token into a target worth grinding. So the
  * document is identical in every member.
  *
- * **[InviteExpiredException] is the one exception to that**, and the reason it is safe
- * is written there.
+ * **Already spent stays here for a second reason** that survives even where the
+ * guesser argument does not reach: that a link was used is a fact about the person who
+ * used it, and the one asking is somebody else.
+ *
+ * **[InviteExpiredException] and [InviteSupersededException] are the two exceptions**,
+ * and the one reason both are safe is written in the first of them.
  */
 internal class InviteNotFoundException :
     DomainException(
