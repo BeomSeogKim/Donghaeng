@@ -164,7 +164,10 @@ endpoint raises:
 | `OAUTH_LOGIN_DENIED` | 401 | The person refused consent at the provider. **Only reachable where no frontend origin is configured** — otherwise the callback redirects; see `GET /login/oauth2/code/google`. |
 | `OAUTH_LOGIN_FAILED` | 401 | The OAuth callback did not complete for any other reason. Same caveat. |
 | `WEDDING_NOT_FOUND` | 404 | The wedding this request is scoped to could not be resolved for this caller. **One code for four situations on purpose** — no such wedding, a wedding the caller is not a member of, a deleted wedding, and a `{weddingId}` that is not a number. See "Being scoped to a wedding" below. |
-| `ALREADY_IN_A_WEDDING` | 409 | The caller already belongs to a wedding, and **a person belongs to exactly one** — created or joined, never both, never two. Raised by `POST /weddings` today and by the invite accept (`#9`) when it lands, from one check, so the two can never disagree. Also the answer when two simultaneous requests race and the database refuses the loser's row (2026-08-21): one fact about the caller's account, one code, one recovery. |
+| `ALREADY_IN_A_WEDDING` | 409 | The caller already belongs to a wedding, and **a person belongs to exactly one** — created or joined, never both, never two. Raised by `POST /weddings` and, since 2026-08-22 (`#181`), by `POST /weddings/join` — **from one check**, so the two can never disagree. Also the answer when two simultaneous requests race and the database refuses the loser's row (2026-08-21): one fact about the caller's account, one code, one recovery. |
+| `INVITE_NOT_FOUND` | 404 | `POST /weddings/join` was given a token it cannot use: malformed, unknown, wrong, already spent, or replaced by a 재발급. **One code for all of them on purpose** — telling them apart is what somebody guessing tokens would want. Added 2026-08-22 (`#181`). |
+| `INVITE_EXPIRED` | 404 | The token was ours and the link is more than a day old. **The one invite failure told apart from the others**, because its recovery is different: ask the partner to reissue. Added 2026-08-22 (`#181`). |
+| `PARTNER_ALREADY_JOINED` | 409 | Both seats in the wedding are taken — nobody left to invite, nothing left to accept. Raised by `POST /weddings/{weddingId}/invite` and by `POST /weddings/join`. Added 2026-08-22 (`#181`). |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | A `POST`/`PUT`/`PATCH` sent a `Content-Type` the endpoint does not accept, **or sent none at all**. Not an edge case — it is how the CSRF gate refuses a request; see "Every POST, PUT and PATCH must send `Content-Type: application/json`". |
 | `INTERNAL_ERROR` | 500 | Anything unhandled. See masking below. |
 | *the HTTP status name*, e.g. `METHOD_NOT_ALLOWED`, `NOT_FOUND` | as named | A framework-level error with no more specific code. |
@@ -539,9 +542,10 @@ What it means for `web/`:
 
 ## Being scoped to a wedding
 
-_Added 2026-08-19 (`#5`); amended 2026-08-20 (`#132`) and 2026-08-22 (`#166`).
-Applies to every endpoint whose path contains `{weddingId}` — which is all of them
-apart from `POST /weddings` and `GET /weddings`._
+_Added 2026-08-19 (`#5`); amended 2026-08-20 (`#132`), 2026-08-22 (`#166`) and
+2026-08-22 (`#181`). Applies to every endpoint whose path contains `{weddingId}` —
+which is all of them apart from `POST /weddings`, `GET /weddings` and
+`POST /weddings/join`._
 
 **Being logged in is not enough to reach a ledger.** Every wedding-scoped request
 resolves `user → seat → wedding` before the endpoint runs, and the endpoint runs only
@@ -596,11 +600,21 @@ response. **`GET /weddings` is the one to reach for after a page load** — a st
 is a guess about a seat that may since have been released, while the list is that
 seat, answered fresh.
 
-**`GET /weddings` and `POST /weddings` are the only two endpoints in the product that
-are not scoped to a wedding**, and that is a closed set rather than a pattern to
-copy. Both answer from the session alone because neither has a wedding in mind yet;
-anything that reads or writes a wedding's *contents* puts the id in the path, where
-the seat walk above checks it.
+**`GET /weddings`, `POST /weddings` and `POST /weddings/join` are the only three
+endpoints in the product that are not scoped to a wedding** (the third added
+2026-08-22, `#181`), and that is a closed set rather than a pattern to copy. Anything
+that reads or writes a wedding's *contents* puts the id in the path, where the seat
+walk above checks it.
+
+The first two answer from the session alone, because neither has a wedding in mind
+yet. **`POST /weddings/join` is the different one and it is worth reading twice**: it
+does have a wedding in mind, and the caller cannot be scoped to it because the whole
+point of the request is that they are not in it yet. What stands in for the seat walk
+is the **invite token** — 256 bits of CSPRNG, single use, valid one day, compared
+against a stored hash. It names the seat rather than being handed one, so a caller
+cannot address a wedding they were not invited to, and every way the token can fail
+answers one document. Nothing else in the product may take a wedding from a body;
+this endpoint takes a *credential* that resolves to one.
 
 ## Partial updates
 
@@ -886,8 +900,10 @@ and it is what the ledger header renders. Always two entries, always 신랑 먼�
 `name` is `null` for a seat whose person has not arrived — a wedding created by one
 partner reads exactly like the example above with `"name": null` in the second slot.
 **A seat publishes its `side` and its `name` and nothing else**: there is no
-`userId`, no `joinedAt` and no "is this me", because no screen renders one yet and
-`#9` is what will add whatever the invite flow turns out to need.
+`userId`, no `joinedAt` and no "is this me", because no screen renders one.
+**`#9`'s backend landed on 2026-08-22 (`#181`) and added none of them**, which
+settles the open question this sentence used to carry: the invite writes `user_id`
+and `joined_at`, and neither turned out to be anything a screen reads.
 
 **No `guaranteedHeadcount`** here either, and that is a statement about this shape
 rather than about the number: 보증인원 is published by
@@ -1011,6 +1027,167 @@ Two things this endpoint does not do:
   the `wedding` row has none, so "누가 보증인원을 바꿨어?" is not answerable today. If
   the couple ever needs it, that is a new table and a decision, not a quiet addition.
 - **It does not delete a wedding**, and no endpoint does yet.
+
+### `POST /weddings/{weddingId}/invite`
+
+Status: active (added 2026-08-22, `#181` — the backend half of `#9`)
+Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
+wedding" above.
+
+파트너 초대, from 설정: it mints the link that fills the wedding's empty seat. **The
+same call is 재발급** — there is no separate endpoint, because reissuing *is* issuing
+and the previous token dies either way.
+
+Request: **no body.** Send `Content-Type: application/json` all the same — the
+standing content-type rule is a mapping condition and a request without one does not
+reach the handler at all (see "Every POST, PUT and PATCH must send
+`Content-Type: application/json`"). An empty body is fine; so is `{}`.
+
+Response 201
+```json
+{ "token": "K3mZ8p...", "expiresAt": "2026-08-23T09:00:00Z" }
+```
+
+Carries the recomputed aggregate: **no.** Issuing a link changes no 하객, no 인원수
+and nothing else on the ledger screen — the couple is in 설정, and a headcount here
+would be a number nobody asked for on a screen that does not show one.
+
+Errors
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Decided **before
+  the id is looked at**.
+- 404 `WEDDING_NOT_FOUND` — no such wedding, or not the caller's, or deleted, or an id
+  that is not a number. One answer for all four; never 403.
+- 409 `PARTNER_ALREADY_JOINED` — both seats are taken, so there is nobody to invite.
+  **Not an error to show as a failure**: the screen that offers 재발급 should not
+  exist once the partner is in, so this is what a stale tab produces. Reload the
+  wedding and the button is gone. **How a fresh tab knows not to ask is
+  `seats[].name == null`** on any `WeddingResponse` — a seat with a name has a person
+  in it, and that is the only signal the API gives.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
+
+Six things are decided here rather than left to the caller to infer.
+
+- **The `token` is published exactly once and can never be read back.** Only a hash of
+  it is stored, so there is no endpoint that returns a link that was issued earlier
+  and there will not be one. Reopening 설정 shows no link; the only affordance is
+  재발급. **Design the screen for that** — do not build a "copy the existing link"
+  view against a value you would have to keep in memory to have.
+- **재발급 kills the previous token immediately.** At most one live invite per seat.
+  A partner holding the older link gets 404 `INVITE_NOT_FOUND` from that moment,
+  which is deliberate: three taps of 재발급 must not leave three live credentials in
+  three chat rooms (`notes/2026-08-22-decision-the-invite-link.md` §1).
+- **`expiresAt` is at most one day out**, and it is the value to render — never a
+  duration computed in the client. A link the couple sends on KakaoTalk and the
+  partner opens the next evening is expected to fail, and the recovery is one tap.
+  The founder chose this over a longer life on the strength of how couples actually
+  use it: they are sitting together when they tap it.
+- **The API does not build the URL, and the token goes in the FRAGMENT.** The link is
+  `https://<app>/invite#t=<token>` — assembled by `web/`, which knows its own origin.
+  The fragment is the only part of a URL that is never sent to any server, so the
+  token stays out of access logs, out of `Referer`, and out of every error document's
+  `instance` (`notes/2026-08-22-decision-the-invite-link.md` §2, closing `#69`).
+  **Never put the token in a path or a query string**, ours or anyone's.
+- **Either seat-holder may issue**, and the link always fills whichever seat is
+  waiting. There is no way to choose the side and nothing to send: the seats were
+  created with the wedding, so which one is empty is already settled.
+- **The token is bearer authority.** Whoever holds a live one enters the ledger and
+  reads every 하객's contact. Treat it in the client as a secret with a one-day life:
+  do not log it, do not put it in analytics, and do not persist it anywhere but the
+  `sessionStorage` hand-off the OAuth round trip needs.
+
+### `POST /weddings/join`
+
+Status: active (added 2026-08-22, `#181` — the backend half of `#9`)
+Auth: session cookie — **and an invite token in the body.** The **third endpoint in
+the product that is not scoped to a wedding**, and the only one that could not be: the
+caller holds no seat yet, so `user → seat → wedding` has nothing to resolve. See
+"Being scoped to a wedding" for what the token stands in for.
+
+초대 수락. The person accepting takes the wedding's empty seat and **writes their own
+name into it** — nobody types anybody else's name, which is the same rule that took
+the partner's name out of `POST /weddings`.
+
+Request
+```json
+{ "token": "K3mZ8p...", "name": "이신부" }
+```
+
+Both members are **required**. `name` is the **accepting person's own** name, at most
+100 characters, validated exactly as `POST /weddings` validates the same column — one
+client-side rule covers both screens. There is no `side`: the seat already exists and
+the token identifies it.
+
+**The token arrives here and nowhere else.** Read it from the URL fragment and send it
+in this body; a token in a path would be recorded in plaintext in an access log and
+reflected in an error document's `instance`.
+
+Response 200
+```json
+{
+  "id": 12,
+  "weddingDate": "2026-10-10",
+  "seats": [
+    { "side": "GROOM", "name": "김신랑" },
+    { "side": "BRIDE", "name": "이신부" }
+  ]
+}
+```
+
+The same `WeddingResponse` the three wedding endpoints return, and it is the wedding
+just joined — **so a client that accepted has the `weddingId` every scoped request
+needs and does not have to call `GET /weddings` to learn it.**
+
+Carries the recomputed aggregate: **no.** Joining changes no 하객 and no 인원수; the
+next screen is the ledger, which reads its own numbers.
+
+Errors
+- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than
+  100 characters. **The token is not spent by this**, so correcting the name and
+  tapping again works.
+- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of the wrong
+  type. **An empty-string `token` is not this** — it is a 404, see below.
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused **before
+  the body is looked at**, so an anonymous request never learns anything about the
+  token it sent. This is what makes signing in first the whole of the accept flow.
+- 404 `INVITE_NOT_FOUND` — the token is not usable: malformed, unknown, ours-with-a-
+  wrong-verifier, already accepted, replaced by a 재발급, or pointing at a seat or a
+  wedding that is gone. **One answer for all of them, identical in every member.**
+- 404 `INVITE_EXPIRED` — the token was ours and the link is more than a day old. This
+  one *is* told apart, because the recovery is different and worth saying: 파트너에게
+  새 링크를 요청하세요.
+- 409 `ALREADY_IN_A_WEDDING` — the caller already belongs to a wedding. **The same
+  code from the same check as `POST /weddings`**, and the same recovery: call
+  `GET /weddings` and open the one that comes back. **The token is not spent**, so
+  the real partner can still use it.
+- 409 `PARTNER_ALREADY_JOINED` — somebody else took the seat first. Two people opening
+  one link produce exactly this: one 200 and one refusal, never two people in one
+  seat.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
+
+Five things are decided here rather than left to the caller to infer.
+
+- **Accepting consumes the token.** Single use, and it answers a different failure
+  from expiry — an opened link being replayed, rather than an unopened one going
+  stale. A second POST with the same token never succeeds, whoever sends it.
+- **Sign the person in first.** The membership check runs before the token is looked
+  at, which is what stops somebody who already has a wedding from destroying their
+  partner's only invite by tapping the link. It also means an accept flow must have a
+  session in hand: send the person to Google, keep the token across the round trip in
+  `sessionStorage`, and POST it when they come back
+  (`notes/2026-08-22-decision-the-invite-link.md` §3). **There is no `returnTo` and
+  none is coming** — the fragment survives the round trip on its own, and a redirect
+  target taken from a request would be an open redirect on the one request that has
+  just been handed a session.
+- **The accept action must sit in front of 웨딩 만들기.** A signed-out partner who
+  lands on the root with an empty `GET /weddings` meets 최초 1회, and creating there
+  closes their partner's ledger to them permanently by the one-wedding rule. Check for
+  a pending token before the empty-list branch.
+- **A refused accept never seats anybody.** Every refusal above leaves the seat empty
+  and the caller in whatever wedding they were in — there is no half state to recover
+  from and nothing to roll back in the client.
+- **`joined_at` is not published.** A seat still publishes `side` and `name` and
+  nothing else; there is no `userId`, no `joinedAt` and no "is this me" (`#9` was
+  where that would have been added, and no screen renders one).
 
 ### `POST /weddings/{weddingId}/guests`
 

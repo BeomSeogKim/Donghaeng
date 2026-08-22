@@ -63,8 +63,10 @@ the frontend does not build a countdown from a value the server does not promise
 
 ## What this does not decide
 
-- **Not the other tokens.** The invite token keeps its single use and 72 hours;
-  the link tokens choose for themselves when they return.
+- **Not the other tokens.** The invite token keeps its single use and its own,
+  much shorter life — 72 hours when this was written, one day since 2026-08-22
+  (`2026-08-22-decision-the-invite-link.md`); the link tokens choose for
+  themselves when they return.
 - **Not JSESSIONID's own timeout**, which is `#98`. That cookie holds the OAuth
   authorization request for the length of a round trip and has nothing to do with
   these numbers.

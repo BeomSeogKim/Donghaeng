@@ -180,9 +180,14 @@ internal abstract class ApiFixture {
      * then a caller-scoped query silently drops everything the partner entered. That
      * is a 하객 missing from the ledger and a head missing from 보증인원.
      *
-     * The seat is CLAIMED through SQL because `#9`'s invite does not exist yet — and
-     * an UPDATE rather than an INSERT, which is what that invite will be too: the
-     * empty 신부 seat was created with the wedding, so there is a row to fill
+     * The seat is CLAIMED through SQL, and **since `#181` that is a choice rather than
+     * the only way**: the invite exists now, and this could issue one and accept it. It
+     * does not, because nearly every wedding-scoped test in the suite calls this —
+     * routing all of them through the invite flow would make one failure there look
+     * like a failure everywhere, and it would need the issuer's session as a second
+     * parameter. `AcceptInviteContractTest` is where the real flow is driven. The
+     * statement is an UPDATE rather than an INSERT for the same reason acceptance is:
+     * the empty 신부 seat was created with the wedding, so there is a row to fill
      * (notes/2026-08-22-decision-the-couples-two-seats.md §2). Nothing else here is
      * faked, and the partner drives the API over HTTP with a session they earned. It
      * swaps [STUB_PROVIDER]'s subject, exactly as [loginAs] does, so a later

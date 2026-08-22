@@ -27,12 +27,18 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * through it, and the difference has to be written down somewhere a person will
  * read.
  *
- * So it is written down here, as a list of two with a reason each. The property
- * cannot be inherited by accident: a new handler mapped anywhere under `/weddings`
- * is red until somebody adds its name to [SCOPELESS] and says why, in a diff a
- * reviewer sees. Copying `WeddingController.list`'s signature does not copy its
- * exemption, which is the whole reason the list lives in a test rather than in an
- * annotation a copy-paste would carry along.
+ * So it is written down here, as a list with a reason each. The property cannot be
+ * inherited by accident: a new handler mapped anywhere under `/weddings` is red until
+ * somebody adds its name to [SCOPELESS] and says why, in a diff a reviewer sees.
+ * Copying `WeddingController.list`'s signature does not copy its exemption, which is
+ * the whole reason the list lives in a test rather than in an annotation a copy-paste
+ * would carry along.
+ *
+ * **It became a list of three on 2026-08-22 (`#181`), which is what that was for.** The
+ * invite accept cannot be scoped — the caller holds no seat yet — so the exemption was
+ * argued and written rather than assumed, and the endpoint was put under `/weddings`
+ * precisely so this gate could see it. A path outside `/weddings` would have escaped
+ * the sweep entirely, which is the failure the paragraph above names.
  *
  * **The second half of the rule is that a scopeless wedding endpoint still takes a
  * caller.** Under `permitAll` an endpoint with neither principal is an anonymous
@@ -135,12 +141,27 @@ internal class ScopelessWeddingEndpointTest {
          *   "최초 1회" branch and for the ledger to survive a refresh. The seat
          *   join IS its scope: it can only ever return rows the resolver would have
          *   accepted one at a time, and `WeddingListContractTest` is what holds that.
+         * - `WeddingInviteController.join` is `#181`'s accept, and it is the design
+         *   change the previous version of this comment said a third entry would be.
+         *   **The caller is not a member yet** — that is what the request is for — so
+         *   there is no seat for the resolver to walk. **The token is what stands in
+         *   for the scope**: 256 bits of CSPRNG, single use, one day, compared against
+         *   a stored hash in constant time, and it names the seat rather than being
+         *   handed one (notes/2026-08-22-decision-the-invite-link.md,
+         *   notes/2026-08-22-decision-the-partner-invite.md). It reads nothing: every
+         *   refusal answers the same document, and the only row it writes is the seat
+         *   that token identifies. `AcceptInviteContractTest` is what holds that.
          *
-         * A third entry is a design change, not a line: any endpoint that reads or
+         * A fourth entry is a design change, not a line: any endpoint that reads or
          * writes a wedding's CONTENTS has a wedding in mind, and the id belongs in
          * the path where the resolver can check it.
          */
-        val SCOPELESS = setOf("WeddingController.create", "WeddingController.list")
+        val SCOPELESS =
+            setOf(
+                "WeddingController.create",
+                "WeddingController.list",
+                "WeddingInviteController.join",
+            )
 
         val productionClassNames: Set<String> =
             ClassFileImporter()

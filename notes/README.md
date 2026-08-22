@@ -51,6 +51,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-22-decision-the-partner-invite.md` | 초대 토큰은 `selector.verifier`로 해시 저장된다 — 덤프로는 살아 있는 링크가 나오지 않는다; 초대 행은 자리를 가리키고 `wedding_id`를 갖지 않는다; 수락은 세 번째 비스코프 엔드포인트고, 자리 행 잠금 하나가 경쟁 넷을 다 막는다; 토큰은 딱 한 번만 보인다 |
 | `2026-08-22-decision-partial-update-shape.md` | 생략은 안 건드림, `null`은 지움; 보증인원은 다시 비울 수 있다; 집계를 싣는 뮤테이션은 `guest/`에서 조립된다; `WeddingResponse`는 보증인원을 싣지 않는다 |
 | `2026-08-21-decision-one-wedding-per-person.md` | 두 번째 웨딩은 409 `ALREADY_IN_A_WEDDING`; 동시 요청은 자문 잠금이 막는다(유니크 인덱스는 대표의 DDL); `GET /weddings`는 배열로 남되 원소는 많아야 하나 |
 | `2026-08-21-decision-the-headcount-endpoint.md` | 인원수는 참석을 먼저 읽고 원장 필터와 같은 식을 쓴다; 보증인원은 비었으면 멤버가 없다; 집계는 `guest/`에서 계산한다 |

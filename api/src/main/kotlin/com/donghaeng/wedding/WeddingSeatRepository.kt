@@ -1,6 +1,8 @@
 package com.donghaeng.wedding
 
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -44,6 +46,42 @@ internal interface WeddingSeatRepository : JpaRepository<WeddingSeat, Long> {
      * would make the seam depend on the order of words inside a `create type`.
      */
     fun findAllByWeddingIdAndDeletedAtIsNull(weddingId: Long): List<WeddingSeat>
+
+    /**
+     * The seat an invite points at, locked for the rest of the caller's transaction —
+     * `#181`'s accept path, and the row acceptance is an UPDATE of.
+     *
+     * **A row lock and not the advisory one, because here there IS a row**: both seats
+     * exist from the moment the wedding does (2026-08-22 §2), which is what turns "two
+     * people opened the same link" into a lost update. Under `FOR UPDATE` the loser
+     * waits, and Postgres re-evaluates the qualification against the committed row
+     * afterwards — so it reads the winner's `user_id` rather than the empty seat its
+     * own snapshot saw, and is refused with [PartnerAlreadyJoinedException].
+     *
+     * `@SQLRestriction` supplies `deleted_at is null`, so a released seat is `null`
+     * here — an invite pointing at one is dead and answers as if it had never existed.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from WeddingSeat s where s.id = :seatId")
+    fun lockSeat(
+        @Param("seatId") seatId: Long,
+    ): WeddingSeat?
+
+    /**
+     * The wedding's unclaimed seats, locked — `#181`'s issue path, where the lock is
+     * what makes two simultaneous 재발급 taps end in one live invite instead of two.
+     *
+     * **A list rather than a single row**, because "exactly one seat is waiting" is a
+     * property of today's product rather than of this query: `POST /weddings` fills one
+     * of the two, and nothing else can. A `single()` here would turn a state this
+     * schema permits into a masked 500 on somebody's 설정 screen; taking the first
+     * refuses nothing and invents nothing.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from WeddingSeat s where s.weddingId = :weddingId and s.userId is null order by s.id")
+    fun lockWaitingSeats(
+        @Param("weddingId") weddingId: Long,
+    ): List<WeddingSeat>
 
     /**
      * Takes this person's "one seat" slot for the rest of the caller's transaction,
