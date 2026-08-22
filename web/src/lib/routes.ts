@@ -30,3 +30,15 @@ export const settingsPath = '/settings'
  * of them.
  */
 export const ledgerPath = '/'
+
+/**
+ * 초대 수락 — where a KakaoTalk link lands, and the only route a signed-out
+ * person may open besides 로그인.
+ *
+ * THE TOKEN IS NOT PART OF THE PATH AND NEVER WILL BE. It rides in the
+ * fragment, `#t=…`, which is the only part of a URL that is never sent to a
+ * server — so it stays out of access logs, out of `Referer`, and out of every
+ * error document's `instance` (notes/2026-08-22-decision-the-invite-link.md §2).
+ * `lib/invite.ts` is what assembles the link.
+ */
+export const invitePath = '/invite'

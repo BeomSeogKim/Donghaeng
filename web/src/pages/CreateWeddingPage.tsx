@@ -9,6 +9,7 @@ import { Screen } from '../components/Screen'
 import { type CreateWeddingRequest, useCreateWedding } from '../hooks/useCreateWedding'
 import { useWeddings } from '../hooks/useWeddings'
 import { ApiError } from '../lib/api'
+import { nameError } from '../lib/name'
 import { ledgerPath } from '../lib/routes'
 
 /*
@@ -240,11 +241,11 @@ function validate(values: FormValues): FieldErrors {
   const errors: FieldErrors = {}
   if (values.weddingDate === '') errors.weddingDate = '예식일을 입력해 주세요.'
   if (values.side === null) errors.side = '신랑인지 신부인지 골라 주세요.'
-  // Measured on the trimmed value, in UTF-16 code units — the same unit and the
-  // same value the server will count.
-  if (values.name === '') errors.name = '이름을 입력해 주세요.'
-  else if (values.name.length > NAME_MAX)
-    errors.name = `이름은 ${NAME_MAX}자까지 쓸 수 있습니다.`
+  // The name's rule is `lib/name.ts` and it is shared with 초대 수락: the server
+  // validates the same column the same way for both, so one client-side rule
+  // covers both screens (docs/api-spec.md § POST /weddings/join).
+  const name = nameError(values.name)
+  if (name !== undefined) errors.name = name
   return errors
 }
 
@@ -267,9 +268,6 @@ const SIDES: readonly ChoiceOption<Side>[] = [
   { value: 'GROOM', label: '신랑입니다', tone: 'primary' },
   { value: 'BRIDE', label: '신부입니다', tone: 'primary' },
 ]
-
-/** The column's limit, and the API's (docs/api-spec.md § POST /weddings). */
-const NAME_MAX = 100
 
 /**
  * What a failed create says.

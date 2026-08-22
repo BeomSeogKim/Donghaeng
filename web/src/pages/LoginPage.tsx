@@ -1,8 +1,7 @@
 import { BrandMark } from '../components/BrandMark'
-import { buttonClassName } from '../components/Button'
+import { GoogleLoginLink } from '../components/GoogleLoginLink'
 import { Screen } from '../components/Screen'
 import { type LoginFailure, useLoginFailure } from '../hooks/useLoginFailure'
-import { apiUrl } from '../lib/api'
 
 /*
  * STARTING LOGIN IS A NAVIGATION, NOT A FETCH — which is why this is an <a> and
@@ -40,12 +39,7 @@ export function LoginPage() {
             ))}
           </div>
         )}
-        <a
-          className={`${buttonClassName('primary')} w-full`}
-          href={apiUrl(GOOGLE_LOGIN_PATH)}
-        >
-          구글로 로그인
-        </a>
+        <GoogleLoginLink />
       </div>
     </Screen>
   )
@@ -78,5 +72,3 @@ const FAILURE_COPY: Record<LoginFailure, readonly string[]> = {
     '무엇 때문인지는 알 수 없습니다. 다시 시도해 주세요.',
   ],
 }
-
-const GOOGLE_LOGIN_PATH = '/oauth2/authorization/google'
