@@ -31,4 +31,21 @@ data class JoinWeddingRequest(
     @field:Size(max = 100)
     @param:Schema(description = "The accepting person's own name, as it should read on the ledger", example = "이신부")
     val name: String,
-)
+) {
+    /**
+     * **Masked, and this is not decoration** — it is the half of [InviteToken]'s masking
+     * that the token stops covering the moment its value is copied into a DTO. Spring MVC
+     * logs the deserialised body at DEBUG (`AbstractMessageConverterMethodArgumentResolver`,
+     * `Read "..." to [...]`), truncating at 100 characters — and a generated
+     * `JoinWeddingRequest(token=…)` is 91, so the whole live credential fits inside the
+     * window. `spring.mvc.log-request-details` does not gate that path and no logger pin
+     * covers `org.springframework.web`, so `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG`
+     * in a deploy platform would write working invite links to the log with the whole
+     * suite green (notes/2026-08-17-decision-log-masking-mechanism.md: close the pipe,
+     * do not filter it).
+     *
+     * [name] stays visible: it is 하객-adjacent personal data, not a credential, and the
+     * body it arrives in is logged or not logged as a whole.
+     */
+    override fun toString(): String = "JoinWeddingRequest(token=***, name=$name)"
+}

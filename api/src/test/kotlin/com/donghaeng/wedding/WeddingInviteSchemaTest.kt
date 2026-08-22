@@ -149,6 +149,14 @@ internal class WeddingInviteSchemaTest : BaselineSchemaFixture() {
                 .contains("(seat_id)")
                 .contains("accepted_at IS NULL")
                 .contains("revoked_at IS NULL")
+
+            // The plain one beside it, and NOT unique: the partial index above answers
+            // only "is there a live invite", so a read of a seat's history — retention,
+            // an audit, the FK check on a hard delete — has nothing to use without this.
+            assertThat(connection.selectText("select pg_get_indexdef('ix_wedding_invite_seat'::regclass)"))
+                .contains("CREATE INDEX")
+                .doesNotContain("UNIQUE")
+                .contains("(seat_id)")
         }
     }
 

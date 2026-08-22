@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.net.HttpCookie
 import java.net.http.HttpResponse
+import java.time.Instant
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -102,8 +103,14 @@ internal class AcceptInviteContractTest : ApiFixture() {
 
         val replay = join(loginAs("a-third-person"), body(token))
 
-        assertThat(replay.statusCode()).isIn(404, 409)
-        assertThat(replay.json()["code"].asText()).isIn("INVITE_NOT_FOUND", "PARTNER_ALREADY_JOINED")
+        // **Pinned, not a disjunction.** The first join has COMMITTED, so the token is
+        // already spent when this one reads it and the refusal short-circuits before
+        // the seat is ever looked at — there is nothing bimodal here, unlike the
+        // simultaneous case below. `docs/api-spec.md` publishes exactly this code for a
+        // spent token and `#182` branches on it, so a test that accepted either answer
+        // was weaker than the contract it was meant to hold.
+        assertThat(replay.statusCode()).isEqualTo(404)
+        assertThat(replay.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
         assertThat(occupantsOf(weddingId)).isEqualTo(2)
     }
 
@@ -142,6 +149,36 @@ internal class AcceptInviteContractTest : ApiFixture() {
     }
 
     @Test
+    fun `a token whose seat was released, or whose wedding was deleted, opens nothing`() {
+        // **Neither state is reachable through the API today** — there is no endpoint
+        // that releases a seat or deletes a wedding — which is exactly why this is
+        // written now: when one lands, nobody will remember that a live invite outlives
+        // the ledger it points at. Both are published as INVITE_NOT_FOUND, and both are
+        // one line of SQL away from being real.
+        val released = createWedding(login())
+        val releasedToken = tokenFor(released)
+        jdbc.update("update wedding_party set deleted_at = now() where wedding_id = ? and user_id is null", released)
+
+        val ofAReleasedSeat = join(loginAs("the-partner"), body(releasedToken))
+
+        assertThat(ofAReleasedSeat.statusCode()).isEqualTo(404)
+        assertThat(ofAReleasedSeat.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
+
+        // The second condition, and it is not the first one restated: a soft-deleted
+        // wedding KEEPS its seats — the partial indexes filter the seat's own
+        // `deleted_at` only — so the seat below is live and the wedding is not.
+        val deleted = createWedding(loginAs("another-couple"), name = "박신랑")
+        val deletedToken = tokenFor(deleted)
+        jdbc.update("update wedding set deleted_at = now() where id = ?", deleted)
+
+        val ofADeletedWedding = join(loginAs("another-partner"), body(deletedToken))
+
+        assertThat(ofADeletedWedding.statusCode()).isEqualTo(404)
+        assertThat(ofADeletedWedding.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
+        assertThat(occupantsOf(deleted)).isOne()
+    }
+
+    @Test
     fun `a guessed token is refused, and a right selector with a wrong verifier is refused identically`() {
         val weddingId = createWedding(login())
         val token = tokenFor(weddingId)
@@ -150,9 +187,17 @@ internal class AcceptInviteContractTest : ApiFixture() {
 
         val nonsense = join(partner, body("not-even-shaped-like-one"))
         val halfRight = join(partner, body("$selector.wrong-verifier"))
+        // **The empty string, pinned because its answer is a decision.** `token` carries
+        // no `@NotBlank` on purpose — every token this endpoint cannot use gets ONE
+        // answer — and `docs/api-spec.md` says so in as many words. Adding the
+        // annotation later would quietly turn this into a 400 `VALIDATION_FAILED` with
+        // the suite green and the published contract wrong.
+        val empty = join(partner, body(""))
 
         assertThat(nonsense.statusCode()).isEqualTo(404)
         assertThat(nonsense.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
+        assertThat(empty.statusCode()).isEqualTo(404)
+        assertThat(empty.json()["code"].asText()).isEqualTo("INVITE_NOT_FOUND")
         // The selector is a public handle carrying no authority: it identifies the
         // row, and the verifier is the only half that grants anything. Both answers
         // are identical in every member, so knowing a selector is worth nothing.
@@ -173,6 +218,24 @@ internal class AcceptInviteContractTest : ApiFixture() {
 
         assertThat(response.json()["instance"].asText()).isEqualTo("/weddings/join")
         assertThat(response.body()).doesNotContain("verifier-that-is-not-ours")
+
+        // **THE LOG HALF, which this test's title promised and did not check** — found
+        // by the `#186` security audit. `InviteToken` masks itself, and that masking
+        // stops the moment the value is copied into a DTO: a `data class` generates a
+        // `toString()` that prints every member, and Spring MVC logs exactly that on
+        // BOTH legs at DEBUG — `Read "..." to [...]` inbound
+        // (AbstractMessageConverterMethodArgumentResolver), `Writing [...]` outbound
+        // (AbstractMessageConverterMethodProcessor). `LogFormatUtils` truncates at 100
+        // characters and both renderings are shorter than that with the 66-character
+        // token intact, so the whole live credential fits inside the window.
+        //
+        // Nothing else would catch it. `spring.mvc.log-request-details: false` does not
+        // gate that path, and `LogLevelGuard` pins the Hibernate and pgjdbc loggers but
+        // nothing under `org.springframework.web` — so one deploy-platform variable
+        // writes working invite links to the log with the rest of this suite green.
+        val token = "SEL3ct0r.a-live-verifier-nobody-may-read-in-a-log"
+        assertThat(JoinWeddingRequest(token = token, name = "이신부").toString()).doesNotContain(token)
+        assertThat(IssuedInviteResponse(token = token, expiresAt = Instant.now()).toString()).doesNotContain(token)
     }
 
     @Test

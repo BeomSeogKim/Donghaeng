@@ -91,8 +91,14 @@ There is no `deleted_at`, and `2026-08-10-decision-soft-delete.md` does not appl
 nothing here is a row a user deletes. This is `user_session.revoked_at`.
 
 **The one-day cap is not a CHECK.** `expires_at > issued_at` is an invariant under
-every reading and belongs in the schema; "at most one day" is product policy that
-would need an `ALTER` the day the founder moved it. It is not a
+every reading and belongs in the schema; "at most one day" is product policy. And
+the cost of getting that distinction wrong is not "an `ALTER` some day" — it is
+worse and worth stating exactly: **a CHECK of `expires_at <= issued_at + interval
+'1 day'` would mean that LENGTHENING the lifetime breaks every INSERT between the
+deploy and the `ALTER`.** The app would ship a two-day expiry, the database would
+refuse it, and the failure would land as a masked 500 on the one write that hands a
+couple their link. A constraint that turns a policy change into an outage is a
+constraint that has stopped protecting anything. It is not a
 `@ConfigurationProperties` either — the environment outranks every yml, so
 `DONGHAENG_INVITE_LIFETIME=30d` in a deploy platform would extend a bearer
 credential thirtyfold with the whole suite green. It is a `val` in the service,
@@ -128,25 +134,49 @@ write — so there is no cycle to deadlock on.
 
 ## 5. What binds `#182`, in the order it will meet them
 
-1. **The token is published once and can never be read back.** Only the hash is
+**Read this as the screen's requirements, not as trivia.** Four of these were added
+after `#186`'s review pointed out that the list described the token and not the
+screens — the first one below reshapes 수락 more than anything else here.
+
+1. **수락 is a FORM, not a button.** `POST /weddings/join` requires a `name`, and it
+   is the accepting person's **own**: nobody types anybody else's name, which is the
+   same rule that took the partner's name out of `POST /weddings`. The partner
+   arrives from a KakaoTalk link, signs in, and then has to type who they are before
+   anything is written. Validation is `POST /weddings`' exactly — non-blank, ≤100
+   characters, measured before the server trims — so one client-side rule covers both
+   screens.
+2. **The token is published once and can never be read back.** Only the hash is
    stored. There is no endpoint that returns an existing link and there will not be
    one, so 설정 cannot show "the link you made yesterday" — the only affordance is
    재발급. A screen designed around re-displaying a link cannot be built against
    this API.
-2. **`expiresAt` is what the UI renders**, not a duration the client computes.
-3. **The link is `https://<app>/invite#t=<token>`, assembled by `web/`.** The API
+3. **`expiresAt` is what the UI renders**, not a duration the client computes — and
+   it is **memory-only**, which is the consequence of §5.2 that is easy to miss. No
+   endpoint reports whether a live invite exists or when it expires, so a reload
+   cannot render "8시간 후 만료" either. After a refresh the screen knows nothing
+   about the link that was made; that is the API's shape and not an omission to work
+   around.
+4. **What decides whether 재발급 is offered at all is `seats[].name == null`** on any
+   `WeddingResponse` — the only signal the API gives. A seat with a name has a person
+   in it, so there is nothing to invite. `PARTNER_ALREADY_JOINED` is what a **stale**
+   tab gets; this is how a fresh one knows not to ask.
+5. **The link is `https://<app>/invite#t=<token>`, assembled by `web/`.** The API
    does not know the frontend's origin and must not: the token belongs in the
    fragment, the only part of a URL never sent to a server.
-4. **Two 404 codes, and they are not one branch.** `INVITE_EXPIRED` says "ask for a
+6. **Two 404 codes, and they are not one branch.** `INVITE_EXPIRED` says "ask for a
    new one"; `INVITE_NOT_FOUND` covers everything else and says nothing more. The
    distinction is safe because it is only ever told to someone presenting a token
    that really was ours — a guesser gets `INVITE_NOT_FOUND` for a right selector
    with a wrong verifier, identical in every member to what nonsense gets.
-5. **The accept action sits in front of 웨딩 만들기.** A signed-out partner who
+7. **Two 409 codes, and they are not one branch either.** `ALREADY_IN_A_WEDDING`
+   means "you already have a ledger — open that one" and the recovery is
+   `GET /weddings`; `PARTNER_ALREADY_JOINED` means "the seat is gone" and there is no
+   recovery to offer. Same status, opposite copy, and only `code` tells them apart.
+8. **The accept action sits in front of 웨딩 만들기.** A signed-out partner who
    lands on the root with an empty `GET /weddings` meets 최초 1회, and creating there
    closes their partner's ledger to them permanently. Check the pending token before
    the empty-list branch (`2026-08-22-decision-the-invite-link.md` §3).
-6. **Neither endpoint carries a headcount**, and that is stated rather than
+9. **Neither endpoint carries a headcount**, and that is stated rather than
    defaulted — see §6.
 
 ## 6. Neither response carries the aggregate
@@ -175,6 +205,29 @@ publish a number that cannot have changed.
   selector. The standing rule is per wedding and per link token, never IP-only, and
   a guesser has neither. `#98`'s answer (name the path in the edge's rules) is the
   shape this will take when it is taken; it is not in v1.
+- **Whether a REVOKED token should say so, the way an expired one does.** Raised by
+  `#186`'s review and **not decided here** — it is the founder's. The case: 신랑 mints
+  a link, sends it on KakaoTalk, and taps 재발급 the next day not knowing the first
+  was never opened. The partner then opens the link he actually sent and is told
+  `INVITE_NOT_FOUND` with no advice, while a working link sits in the other person's
+  hand. The safety argument for telling `INVITE_EXPIRED` apart applies verbatim — a
+  revoked token is only recognisable to someone whose 256-bit verifier matched, so a
+  guesser learns nothing — and the one-day life makes 재발급 normal rather than rare,
+  which raises how often this lands. What holds it back is that a third code is a
+  third piece of copy for a state the couple cannot see from either side. The shipped
+  behaviour and the code shape are deliberately left alone until that is answered;
+  `AcceptInviteContractTest`'s `a revoked token is gone rather than stale` is where
+  the current answer is written down.
+- **Whether Spring MVC's DEBUG body logging deserves a pin of its own.** `#186`'s
+  security audit found the token's masking stopping at the DTO boundary — a
+  `data class` `toString()` is what Spring prints on both legs at DEBUG, inside the
+  100-character truncation window — and the fix taken here is to mask both DTOs,
+  which is `2026-08-17-decision-log-masking-mechanism.md`'s own preference: close the
+  pipe, do not filter it. **The pipe itself is still unpinned**: `LogLevelGuard`
+  covers the Hibernate and pgjdbc loggers and nothing under `org.springframework.web`,
+  so the next secret that travels in a request body inherits no protection. Adding
+  the pin would refuse to boot any environment debugging ordinary MVC, which is why
+  it was not taken unilaterally. It is an amendment to that record if anyone wants it.
 - **In-app browsers.** `2026-08-22-decision-the-invite-link.md` §3's residual is
   unchanged: if KakaoTalk's webview hands the OAuth round trip to the system browser,
   the tab that returns is not the tab that stashed the token. The failure is safe and

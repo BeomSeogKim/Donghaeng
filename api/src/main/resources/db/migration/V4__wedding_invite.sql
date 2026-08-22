@@ -121,3 +121,12 @@ create unique index ux_wedding_invite_selector on wedding_invite (selector);
 create unique index ux_wedding_invite_live
     on wedding_invite (seat_id)
     where accepted_at is null and revoked_at is null;
+
+-- And a PLAIN one over the same column, which is not a duplicate of it. The index
+-- above is partial on the live rows, so it serves "is there a live invite for this
+-- seat" and nothing else: every read of a seat's HISTORY — the retention sweep this
+-- table will need for the same reason `user_session` did (#91), a "누가 언제
+-- 발급했나" question, and Postgres's own check when a `wedding_party` row is hard
+-- deleted — sees no index at all and scans. The cost of carrying it is one write per
+-- issue on a table that gets a handful of rows per wedding.
+create index ix_wedding_invite_seat on wedding_invite (seat_id);

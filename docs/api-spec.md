@@ -1060,7 +1060,9 @@ Errors
 - 409 `PARTNER_ALREADY_JOINED` — both seats are taken, so there is nobody to invite.
   **Not an error to show as a failure**: the screen that offers 재발급 should not
   exist once the partner is in, so this is what a stale tab produces. Reload the
-  wedding and the button is gone.
+  wedding and the button is gone. **How a fresh tab knows not to ask is
+  `seats[].name == null`** on any `WeddingResponse` — a seat with a name has a person
+  in it, and that is the only signal the API gives.
 - 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
 
 Six things are decided here rather than left to the caller to infer.

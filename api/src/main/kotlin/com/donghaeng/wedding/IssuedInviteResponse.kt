@@ -28,4 +28,16 @@ data class IssuedInviteResponse(
     val token: String,
     @param:Schema(description = "When the link stops working — at most one day out", example = "2026-08-23T09:00:00Z")
     val expiresAt: Instant,
-)
+) {
+    /**
+     * Masked for the reason [JoinWeddingRequest] is, on the outbound leg: Spring MVC logs
+     * the value it is about to write at DEBUG (`AbstractMessageConverterMethodProcessor`,
+     * `Writing [...]`), and a generated `IssuedInviteResponse(token=…)` is 93 characters —
+     * inside the 100-character truncation window, so the whole live credential would be
+     * logged.
+     *
+     * This is the ONE object in the application that holds a usable invite token outside
+     * [InviteToken] itself, which is exactly why the masking has to follow it here.
+     */
+    override fun toString(): String = "IssuedInviteResponse(token=***, expiresAt=$expiresAt)"
+}

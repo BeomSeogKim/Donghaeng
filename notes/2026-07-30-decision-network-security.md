@@ -16,6 +16,16 @@
 > exposed" widens to **no machine-readable introspection surface** —
 > Actuator, `/v3/api-docs`, Swagger UI alike. Nothing here is retracted.
 
+> **Amended 2026-08-22** — see
+> [2026-08-22-decision-the-invite-link.md](2026-08-22-decision-the-invite-link.md)
+> and [2026-08-22-decision-the-partner-invite.md](2026-08-22-decision-the-partner-invite.md).
+> **The invite token's expiry below is no longer 72 hours; it is one day**, and
+> reissuing kills the previous token so at most one is live per seat. The line is
+> struck where it appears rather than left to be read as the standard, because a
+> stale number in this note reads as coverage. Everything else about that token —
+> single use, consumed on acceptance, CSPRNG, stored SHA-256-hashed, constant-time
+> compared, masked in logs — is unchanged and is now shipped (`#181`).
+
 Scope, as set by the founder: **security against attack — network
 exposure, DDoS, token safety, application attack surface.** Data-privacy
 and legal obligations are a separate concern and are listed at the bottom
@@ -87,7 +97,9 @@ lifetimes or privileges.
   The defense is **rotatability**: if it is abused, the couple regenerates
   it and updates the invitation.
 - **Invite token** — the most dangerous one, since it grants full ledger
-  access. **Single-use, 72-hour expiry, consumed on use.**
+  access. **Single-use, consumed on use, and expiring after one day**
+  (72 hours until 2026-08-22; the founder shortened it, and 재발급 is what makes
+  a short life affordable — `2026-08-22-decision-the-invite-link.md` §1).
 - **Session** — both idle and absolute expiry, and the session identifier
   is **regenerated on successful login** (session fixation).
 

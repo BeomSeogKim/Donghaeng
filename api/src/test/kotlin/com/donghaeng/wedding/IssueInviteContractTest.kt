@@ -15,6 +15,9 @@ import java.net.HttpCookie
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * HALF THE RED GATE OF `#181`: a person who holds a seat mints the link that fills the
@@ -123,6 +126,49 @@ internal class IssueInviteContractTest : ApiFixture() {
     }
 
     @Test
+    fun `simultaneous 재발급 taps leave one live invite, not a masked 500`() {
+        // The symmetric case to `AcceptInviteContractTest`'s two-people-one-link, and
+        // the one this class was missing: the record claims "both 201, last tap wins",
+        // and without the seat's row lock that claim is false in the worst way. Two
+        // first issues both find no live invite, both insert, and the loser collides
+        // with `ux_wedding_invite_live` — which reaches the couple as a masked 500 on
+        // their 설정 screen. Driven over HTTP because the window is between
+        // transactions; **remove the `@Lock` from `lockWaitingSeats` and this goes
+        // red.**
+        val session = login()
+        val weddingId = createWedding(session)
+        val ready = CyclicBarrier(SIMULTANEOUS)
+        val pool = Executors.newFixedThreadPool(SIMULTANEOUS)
+
+        val responses =
+            try {
+                (1..SIMULTANEOUS)
+                    .map {
+                        pool.submit<HttpResponse<String>> {
+                            ready.await(10, TimeUnit.SECONDS)
+                            issue(session, weddingId)
+                        }
+                    }.map { it.get(30, TimeUnit.SECONDS) }
+            } finally {
+                pool.shutdownNow()
+            }
+
+        val statuses = responses.map { it.statusCode() }
+        assertThat(statuses).describedAs("%s", statuses).containsOnly(201)
+        // Every tap answers a token, and exactly one of them still works: 재발급 killing
+        // the previous is what makes a short life affordable rather than a way to
+        // accumulate live credentials.
+        assertThat(responses.map { it.json()["token"].asText() }.distinct()).hasSize(SIMULTANEOUS)
+        assertThat(
+            jdbc.queryForObject(
+                "select count(*) from wedding_invite where accepted_at is null and revoked_at is null",
+                Long::class.java,
+            ),
+        ).isOne()
+        assertThat(jdbc.queryForObject("select count(*) from wedding_invite", Long::class.java)).isEqualTo(SIMULTANEOUS.toLong())
+    }
+
+    @Test
     fun `a wedding whose seats are both taken has nothing to invite`() {
         val session = login()
         val weddingId = createWedding(session)
@@ -201,4 +247,9 @@ internal class IssueInviteContractTest : ApiFixture() {
             Long::class.java,
             weddingId,
         )!!
+
+    private companion object {
+        /** Kept under Hikari's default pool size: each tap holds a connection while it waits. */
+        const val SIMULTANEOUS = 4
+    }
 }

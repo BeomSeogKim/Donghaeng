@@ -25,8 +25,10 @@ up to Kakao claiming the victim's Gmail address, logs into 동행, and the merge
 logic seats them on the victim's `app_user` row — with the victim's
 memberships, and therefore the whole ledger including every guest's phone
 number. **No token, no expiry, no invite.** The invite token was tightened to
-single-use and 72 hours for being the most dangerous thing in the system; this
-path grants the same access with none of that.
+single use and a short life for being the most dangerous thing in the system
+(72 hours when this was written; one day since 2026-08-22,
+`2026-08-22-decision-the-invite-link.md`); this path grants the same access with
+none of that.
 
 **Why not an account-linking flow.** The third option on the table was to
 neither merge nor silently split, but to tell the person — "이 이메일로 가입된
