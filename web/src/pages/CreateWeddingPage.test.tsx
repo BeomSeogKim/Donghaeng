@@ -4,6 +4,7 @@ import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
 import type { CreateWeddingRequest } from '../hooks/useCreateWedding'
+import type { Headcount } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
 import { renderWithProviders } from '../test/render'
@@ -109,9 +110,14 @@ function weddingStore(...stored: Wedding[]) {
 /** The list of a person who has not made a wedding yet — the form's own case. */
 const noWedding = () => weddingStore().list()
 
-/** 원장's other read. An unhandled request is an error in this suite. */
+/** 원장's other two reads. An unhandled request is an error in this suite. */
 const guests = () =>
   http.get(`${API}/weddings/:weddingId/guests`, () => HttpResponse.json([]))
+
+const headcount = () =>
+  http.get(`${API}/weddings/:weddingId/headcount`, () =>
+    HttpResponse.json<Headcount>({ mealHeadcount: 0 }),
+  )
 
 /**
  * A problem document as the API writes it. `detail` is included and deliberately
@@ -182,8 +188,9 @@ it('sends a person who already has a wedding to 원장 instead of the form', asy
   server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
 
   // A bookmark, a typed URL, or a second tab still parked on the form after the
-  // first one submitted. v1 has no switcher and no delete, so a second wedding
-  // would take `[0]` and leave the first ledger with no route to it at all.
+  // first one submitted. The server refuses a second wedding by the same person
+  // — 409 ALREADY_IN_A_WEDDING — so this guard is the fast path rather than the
+  // only thing standing there, and a person who already has one is taken to it.
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
 
   expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
@@ -486,11 +493,78 @@ it('creates one wedding when the button is pressed twice', async () => {
   await submit()
   await submit()
 
-  // A mutation here is not idempotent and is never retried. The server does
-  // refuse the second one — 409 ALREADY_IN_A_WEDDING, since `#158` — but the
-  // client has no path for that answer yet (`#164`), so this guard is what keeps
-  // a double press from becoming an error the couple has to read.
+  // A mutation here is not idempotent and is never retried. The server refuses
+  // the second one — 409 ALREADY_IN_A_WEDDING, since `#158` — and the client now
+  // answers that by opening the wedding they already have (`#164`); this guard
+  // is what keeps an ordinary double press from taking that detour at all.
   expect(calls.created).toHaveLength(1)
   release()
   expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+})
+
+it('opens the wedding it turns out they already have', async () => {
+  const calls = recording()
+  // The other tab won the race. By the time this one submits, the wedding
+  // exists and the database refuses the second row, so this caller is told
+  // 409 and never a 500 (docs/api-spec.md § POST /weddings).
+  const other: Wedding = {
+    id: 12,
+    weddingDate: '2026-10-10',
+    seats: [
+      { side: 'GROOM', name: '김신랑' },
+      { side: 'BRIDE', name: null },
+    ],
+  }
+  const stored: Wedding[] = []
+  server.use(
+    calls.me(signedIn),
+    calls.weddings(() => {
+      stored.push(other)
+      return problem(409, 'ALREADY_IN_A_WEDDING', 'Conflict')
+    }),
+    http.get(`${API}/weddings`, () => HttpResponse.json<Wedding[]>([...stored])),
+    guests(),
+    headcount(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm()
+  await submit()
+
+  /*
+   * THE RECOVERY IS NEITHER A RETRY NOR AN ERROR SCREEN. The spec's answer is
+   * to call `GET /weddings` and open the one that comes back, and to the couple
+   * that is not a failure at all — "이미 있으니 그걸 열었다"
+   * (docs/api-spec.md § POST /weddings).
+   */
+  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(screen.queryByText(/다시 시도해 주세요/)).not.toBeInTheDocument()
+  // Never retried: a second create is a second wedding the moment it succeeds.
+  expect(calls.created).toHaveLength(1)
+})
+
+it('says so when the list disagrees, rather than handing back the same form', async () => {
+  const calls = recording()
+  // The 409 says they hold a wedding and `GET /weddings` says they hold none —
+  // a replica read, a late cache. Rare, which is the argument FOR words: nobody
+  // who lands here can reproduce it or guess at it.
+  server.use(
+    calls.me(signedIn),
+    calls.weddings(() => problem(409, 'ALREADY_IN_A_WEDDING', 'Conflict')),
+    noWedding(),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm()
+  await submit()
+
+  // The same sentence 초대 수락 says, from the same code — one 409, one answer.
+  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeVisible()
+  expect(screen.getByRole('link', { name: '내 원장 열기' })).toBeVisible()
+  // 로그아웃 where it can be seen: on a shared phone, being signed in as the
+  // partner is one of the ways to arrive here, and then it is the recovery.
+  expect(screen.getByRole('button', { name: '로그아웃' })).toBeVisible()
+  // A form that can only be refused again is not left on screen.
+  expect(screen.queryByLabelText('예식일')).not.toBeInTheDocument()
+  expect(calls.created).toHaveLength(1)
 })

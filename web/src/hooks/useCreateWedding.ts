@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { answerAlreadyInAWedding } from '../lib/alreadyInAWedding'
 import { apiError, apiFetch } from '../lib/api'
 import type { paths } from '../lib/api-types.gen'
 import { setWedding, type Wedding } from './useWeddings'
@@ -47,6 +48,13 @@ export type CreateWeddingRequest =
  * went wrong" wherever it comes from, and the client answers it once for every
  * call in the app (`lib/queryClient.ts`). This hook answering it too was the
  * second of two answers to one status.
+ *
+ * 409 `ALREADY_IN_A_WEDDING` IS HANDED ON RATHER THAN DECIDED HERE. 초대 수락 is
+ * told the same thing by the same check, so the answer belongs to neither
+ * screen's hook and lives in one module (`lib/alreadyInAWedding.ts`). What it
+ * does is refetch `GET /weddings`, which is the spec's recovery: the guard this
+ * screen already has sends anybody holding a wedding to 원장, so a list that
+ * comes back holding one opens it.
  */
 export function useCreateWedding() {
   const queryClient = useQueryClient()
@@ -66,5 +74,6 @@ export function useCreateWedding() {
     onSuccess: (wedding) => {
       setWedding(queryClient, wedding)
     },
+    onError: (error) => answerAlreadyInAWedding(queryClient, error),
   })
 }

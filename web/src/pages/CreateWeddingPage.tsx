@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
+import { AlreadyInAWedding } from '../components/AlreadyInAWedding'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { Choice, type ChoiceOption } from '../components/Choice'
@@ -8,6 +9,7 @@ import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { type CreateWeddingRequest, useCreateWedding } from '../hooks/useCreateWedding'
 import { useWeddings } from '../hooks/useWeddings'
+import { wasAlreadyInAWedding } from '../lib/alreadyInAWedding'
 import { ApiError } from '../lib/api'
 import { nameError } from '../lib/name'
 import { ledgerPath } from '../lib/routes'
@@ -44,10 +46,11 @@ export function CreateWeddingPage() {
 
   /*
    * THE FORM IS REACHABLE ONLY WHILE THE LIST IS EMPTY — the mirror of 원장's
-   * redirect, and the guard the record already claimed was here. v1 has no
-   * wedding switcher and no delete, so a second wedding would take `[0]` and
-   * leave the first one with no route, no link and no way back: a 400-row
-   * ledger, unreachable. `create.isPending` cannot stand in for this, because
+   * redirect, and the guard the record already claimed was here. A person holds
+   * at most one wedding, ever, and the second create is refused by the database
+   * itself (`#158`), so this is the FAST PATH rather than the only thing
+   * standing there: it spends no round trip to tell somebody who already has a
+   * ledger to go and open it. `create.isPending` cannot stand in for it, because
    * it is one component's state and the way here is a bookmark, a typed URL, or
    * a second tab still parked on the form after the first one submitted.
    *
@@ -114,10 +117,10 @@ function CreateWeddingForm() {
     event.preventDefault()
     setSubmitted(true)
 
-    // The server does refuse a second wedding by the same person — 409
-    // ALREADY_IN_A_WEDDING, since `#158` — but the client has no path for that
-    // answer yet (`#164`), so this is what keeps a double press from becoming an
-    // error the couple has to read.
+    // The 409 the server answers a second create with now has a path of its own
+    // (below), so this guard is no longer what stands between a double press and
+    // an error — it is what keeps an ordinary double press from taking that
+    // detour at all.
     if (create.isPending) return
 
     // `side === null` is one of the errors below; naming it again is what
@@ -129,6 +132,23 @@ function CreateWeddingForm() {
       { onSuccess: () => navigate(ledgerPath, { replace: true }) },
     )
   }
+
+  /*
+   * THE ONE ANSWER THIS SCREEN DOES NOT WRITE ITSELF. 409 `ALREADY_IN_A_WEDDING`
+   * is what the loser of a race is told — two tabs, one 201 and one 409, never
+   * two weddings — and the recovery is to open the wedding they turn out to
+   * have. That happens above, through the guard: the mutation's own failure
+   * refetches `GET /weddings`, and a list that comes back holding one redirects
+   * to 원장 before this renders again (`lib/alreadyInAWedding.ts`).
+   *
+   * WHAT IS LEFT IS THE CASE WHERE THE LIST DISAGREES — a replica read, a late
+   * cache. It is rare, and that is the argument FOR saying something: whoever
+   * lands there cannot reproduce it, cannot guess at it, and would otherwise be
+   * handed back a form that can only be refused again. It is read as a
+   * remembered verdict rather than off `create.error`, so a second arrival at
+   * this screen says the same thing as the first.
+   */
+  if (wasAlreadyInAWedding()) return <AlreadyInAWedding />
 
   const failure = create.isError ? failureMessage(create.error) : null
 
