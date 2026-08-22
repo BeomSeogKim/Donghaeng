@@ -1,8 +1,6 @@
 package com.donghaeng.wedding
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Size
 import java.time.LocalDate
 
 /**
@@ -25,9 +23,10 @@ import java.time.LocalDate
  * building the ledger after the fact — and refusing one would be a domain policy no
  * record makes. [StorableDate] bounds it only where the column does.
  *
- * `@Size(max = 100)` is the `varchar(100)` the name lands in, and it measures the
- * value **as sent**, before [WeddingService.create] trims it; `@NotBlank` is what
- * refuses a name the trim would empty. All three types are non-null, so an omitted
+ * [SeatName] is the whole of the name rule — the `varchar(100)` it lands in, measured
+ * as sent and before [WeddingService.create] trims it, and a refusal of a name the
+ * trim would empty. It is one annotation rather than two written out here because
+ * three requests carry a seat name. All three types are non-null, so an omitted
  * member — or a [side] that is neither `GROOM` nor `BRIDE` — fails while the body is
  * read: a 400 `MALFORMED_REQUEST_BODY` rather than a 400 `VALIDATION_FAILED`, which
  * `docs/api-spec.md` states rather than smooths over.
@@ -38,8 +37,7 @@ data class CreateWeddingRequest(
     val weddingDate: LocalDate,
     @param:Schema(description = "Which seat the caller is taking — 신랑 or 신부. Never their partner's")
     val side: WeddingSide,
-    @field:NotBlank
-    @field:Size(max = 100)
-    @param:Schema(description = "The caller's own name, as it should read on the ledger", example = "김신랑")
+    @field:SeatName
+    @param:Schema(description = "The caller's own name, as it should read on the ledger", example = "김신랑", maxLength = 100)
     val name: String,
 )

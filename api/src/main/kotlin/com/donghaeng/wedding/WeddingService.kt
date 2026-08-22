@@ -294,6 +294,62 @@ internal class WeddingService(
         return row.toWeddingResponse(seatsOf(wedding.id))
     }
 
+    /**
+     * 본인 이름 수정 (`#187`, the backend half of `#175`) — **the caller's own seat, and
+     * the only row this endpoint can reach.**
+     *
+     * A name entered in exactly two places before this existed, `POST /weddings` and
+     * `POST /weddings/join`, and both are once-only — so a typo was permanent in a
+     * value the ledger header renders on every screen.
+     *
+     * **The seat is looked up by `(weddingId, callerId)`, which is what keeps 아무도
+     * 남의 이름을 대신 적지 않는다 total** (notes/2026-08-22-decision-the-couples-two-seats.md).
+     * The partner's row is not refused here; it cannot be named — the request carries
+     * no seat id and no `side`, so pre-filling an empty seat before its person arrives
+     * is unrepresentable rather than validated against
+     * (notes/2026-08-22-decision-the-seat-name-edit.md §2).
+     *
+     * Both rows are re-read rather than taken from the resolver, for the reason [read]
+     * gives: those are separate transactions, and a wedding deleted in between answers
+     * 404 exactly as the resolver would have a moment later. The wedding is checked as
+     * well as the seat because a soft-deleted wedding keeps its seats — the partial
+     * indexes filter the seat's own `deleted_at` only.
+     *
+     * **`updatedAt` moves only if the name actually changed**, the rule [update]
+     * follows: a row reported as touched when it was not is a lie an audit read would
+     * believe, and a form resubmitted unedited is the ordinary way that happens.
+     *
+     * Trimmed here, as the two write points that enter a name trim: to this schema
+     * `' 김신랑'` and `'김신랑'` are two different names.
+     *
+     * **No lock and no `@Version`**: the row is the caller's own, the payload is
+     * absolute, and `@DynamicUpdate` on [WeddingSeat] keeps the statement to the
+     * column that changed
+     * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md).
+     *
+     * **It answers the wedding and no aggregate.** 인원수 is a fold over the ledger and
+     * a seat's name is not in it, so there is no recomputed number — the same answer
+     * `POST /weddings/join` gives after writing this very column, and the reason this
+     * write stays in `wedding/` rather than being assembled in `guest/` the way
+     * `PATCH /weddings/{weddingId}` is.
+     */
+    @Transactional
+    fun renameSeat(
+        wedding: WeddingScope,
+        request: UpdateSeatNameRequest,
+    ): WeddingResponse {
+        val row = weddings.findByIdAndDeletedAtIsNull(wedding.id) ?: throw WeddingNotFoundException()
+        val seat =
+            seats.findByWeddingIdAndUserIdAndDeletedAtIsNull(wedding.id, wedding.callerId) ?: throw WeddingNotFoundException()
+
+        val name = request.name.trim()
+        if (seat.name != name) {
+            seat.name = name
+            seat.updatedAt = Instant.now()
+        }
+        return row.toWeddingResponse(seatsOf(wedding.id))
+    }
+
     private fun seatsOf(weddingId: Long): List<WeddingSeat> = seats.findAllByWeddingIdAndDeletedAtIsNull(weddingId)
 
     /**

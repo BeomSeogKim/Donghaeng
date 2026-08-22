@@ -83,6 +83,7 @@ class OpenApiDocumentTest {
                 "/weddings",
                 "/weddings/join",
                 "/weddings/{weddingId}",
+                "/weddings/{weddingId}/seats/me",
                 "/weddings/{weddingId}/invite",
                 "/weddings/{weddingId}/guests",
                 "/weddings/{weddingId}/headcount",

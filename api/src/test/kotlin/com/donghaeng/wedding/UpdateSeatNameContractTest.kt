@@ -109,7 +109,12 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
         // The member is non-null in Kotlin, so an omitted or null `name` never reaches
         // a validator — the same taxonomy `POST /weddings/join` publishes for its own
         // required members. `docs/api-spec.md` states it rather than smoothing it over.
-        listOf("""{}""", """{"name":null}""", """{"name":42}""").forEach { body ->
+        //
+        // **A JSON number is not in this list, because it is not refused**: Jackson
+        // coerces a scalar to a string API-wide, so `{"name":42}` renames the seat to
+        // `"42"`. Asserted where it is true rather than claimed where it is not — the
+        // spec entry says the same thing.
+        listOf("""{}""", """{"name":null}""", """{"name":[]}""", """{"name":{}}""").forEach { body ->
             val response = put("/weddings/$weddingId/seats/me", listOf(session), body)
 
             assertThat(response.statusCode()).describedAs("%s", body).isEqualTo(400)
@@ -221,5 +226,6 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
                 java.sql.Timestamp::class.java,
                 weddingId,
                 side,
-            )!!.toInstant()
+            )!!
+            .toInstant()
 }
