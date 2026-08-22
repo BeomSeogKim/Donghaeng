@@ -17,9 +17,10 @@ import { server } from '../test/server'
  * with only the network faked.
  *
  * THESE ARE MANDATORY TESTS, twice over: this is a mutation flow, and it
- * branches on the API's error `code` in four directions that mean four
- * different things to the person reading them
- * (notes/2026-08-08-decision-frontend-testing-methodology.md).
+ * branches on the API's error `code`, each answer a different sentence to the
+ * person reading it — which is the whole reason they are told apart
+ * (notes/2026-08-08-decision-frontend-testing-methodology.md). One case per
+ * code, so a new one arrives as a new test rather than as a recount here.
  *
  * WHAT IS ASSERTED IS WHERE THE TOKEN IS. It is bearer authority with a
  * one-day life (docs/api-spec.md § POST /weddings/{weddingId}/invite), so the
@@ -336,6 +337,36 @@ it('tells an expired link apart, because its recovery is a new link', async () =
   expect(await screen.findByText('파트너에게 새 링크를 요청하세요.')).toBeInTheDocument()
   // Nothing here can ever succeed, so the token is dropped rather than left to
   // divert the next screen this person opens.
+  expect(stored()).toBeNull()
+})
+
+it('points a superseded link at the newer one instead of at nothing', async () => {
+  const api = inviteApi()
+  // 재발급 killed this token, and the link that replaced it is on the other
+  // person's phone (docs/api-spec.md § POST /weddings/join).
+  server.use(...api.handlers(() => problem(404, 'INVITE_SUPERSEDED')))
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+  await accept('이신부')
+
+  expect(await screen.findByText('새 링크가 발급되었습니다')).toBeInTheDocument()
+  expect(screen.getByText('파트너에게 최신 링크를 요청하세요.')).toBeInTheDocument()
+  /*
+   * NOT 이 링크는 사용할 수 없습니다, which is what this used to say and what the
+   * whole change is against: it sends a person nowhere while a working link
+   * sits in the other person's chat room
+   * (notes/2026-08-22-decision-the-superseded-link-speaks.md).
+   */
+  expect(screen.queryByText('이 링크는 사용할 수 없습니다')).not.toBeInTheDocument()
+  // No 내 원장 열기 either — this person has no ledger of their own, which is
+  // the whole reason they were sent a link.
+  expect(screen.queryByRole('link', { name: '내 원장 열기' })).not.toBeInTheDocument()
+  // Settled: pressing again cannot change the answer, so the form goes.
+  expect(screen.queryByLabelText('내 이름')).not.toBeInTheDocument()
+  // And the dead token goes with it. Before `#201` this answer was
+  // `INVITE_NOT_FOUND` and the token was dropped; a token left behind diverts
+  // every empty ledger this person opens back to this screen (`lib/invite.ts`).
   expect(stored()).toBeNull()
 })
 

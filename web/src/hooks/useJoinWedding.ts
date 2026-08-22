@@ -43,8 +43,9 @@ export type JoinWeddingRequest =
  *
  * THE TOKEN IS DROPPED HERE RATHER THAN ON THE SCREEN, because it is a fact
  * about the token and not about a screen — and **it is decided by `code`, never
- * by status.** Three codes end a token's life: it was unknown, it was stale, or
- * the seat it pointed at is filled. Nothing else does.
+ * by status.** A token's life ends when it was unknown, when it went stale,
+ * when a 재발급 replaced it, or when the seat it pointed at got filled — the
+ * set below and nothing else.
  *
  * `ALREADY_IN_A_WEDDING` IS THE 409 THAT KEEPS ITS TOKEN, and the spec says so
  * in as many words: "**The token is not spent**, so the real partner can still
@@ -79,17 +80,26 @@ export type JoinWeddingRequest =
  * whatever `onSettled` returns before releasing the next mutation.
  */
 /**
- * The three answers that mean this token can never work again — read off `code`,
+ * The answers that mean this token can never work again — read off `code`,
  * which is the only member of a problem document anything may branch on.
  *
- * `INVITE_NOT_FOUND` already covers unknown, wrong, spent and replaced-by-a-
- * 재발급 as one answer; `INVITE_EXPIRED` is the day-old link; and
- * `PARTNER_ALREADY_JOINED` is the seat being filled by somebody else. Every
- * other refusal leaves a token that may still be good.
+ * `INVITE_NOT_FOUND` covers unknown, wrong and already spent as one answer;
+ * `INVITE_EXPIRED` is the day-old link; `INVITE_SUPERSEDED` is the one a
+ * 재발급 replaced; and `PARTNER_ALREADY_JOINED` is the seat being filled by
+ * somebody else. Every other refusal leaves a token that may still be good.
+ *
+ * **`INVITE_SUPERSEDED` IS HERE BECAUSE `INVITE_NOT_FOUND` STOPPED CARRYING
+ * IT.** A replaced token used to arrive as `INVITE_NOT_FOUND` and was dropped
+ * by this set; `#201` split it out so the person could be told a newer link
+ * exists (docs/api-spec.md § POST /weddings/join), and leaving it out here
+ * would have kept a token that can never work again — which diverts every empty
+ * ledger this person opens back into the accept screen (`lib/invite.ts`). A
+ * code told apart on screen is still the same death underneath.
  */
 const SPENT: ReadonlySet<string | null> = new Set([
   'INVITE_NOT_FOUND',
   'INVITE_EXPIRED',
+  'INVITE_SUPERSEDED',
   'PARTNER_ALREADY_JOINED',
 ])
 

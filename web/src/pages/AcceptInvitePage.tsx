@@ -300,11 +300,24 @@ type Refusal = {
  * - `INVITE_EXPIRED` is the **common** one, not an edge case: a link lives one
  *   day, so a partner who opens it the next evening lands exactly here — and
  *   the recovery is one tap in 설정, on the other person's phone.
+ * - `INVITE_SUPERSEDED` ends in the same sentence for the same reason, arrived
+ *   at from the other direction: a 재발급 killed this link and **the working one
+ *   is already on the other person's phone**. Since 발급 *is* 재발급 and a link
+ *   lives one day, reissuing is a daily action and a superseded link in
+ *   somebody's KakaoTalk is a daily state, not an edge case
+ *   (notes/2026-08-22-decision-the-superseded-link-speaks.md). It offers no
+ *   원장 either: this person has no ledger of their own, which is why they were
+ *   sent a link at all.
  * - `INVITE_NOT_FOUND` says nothing more, deliberately. It covers unknown,
- *   wrong, already spent and replaced-by-a-재발급 alike, and telling those apart
- *   is what somebody guessing tokens would want (docs/api-spec.md).
+ *   wrong and already spent alike, and telling those apart is what somebody
+ *   guessing tokens would want (docs/api-spec.md).
  * - `PARTNER_ALREADY_JOINED` is the seat being gone. There is no recovery to
  *   offer and inventing one would be a lie.
+ *
+ * SAYING `INVITE_EXPIRED` AND `INVITE_SUPERSEDED` IS SAFE ON ONE ARGUMENT, not
+ * two: both are reached only after the presented verifier matched, so neither is
+ * ever said to somebody guessing. That is what keeps them out of
+ * `INVITE_NOT_FOUND`'s silence.
  *
  * `ALREADY_IN_A_WEDDING` NEVER REACHES HERE — it is **not a failure**, it is
  * told to 웨딩 만들기 by the same check, and it is answered above by the one
@@ -338,6 +351,12 @@ function refusalFor(error: unknown): Refusal | null {
       return {
         title: '링크가 만료되었습니다',
         detail: '파트너에게 새 링크를 요청하세요.',
+        settled: true,
+      }
+    case 'INVITE_SUPERSEDED':
+      return {
+        title: '새 링크가 발급되었습니다',
+        detail: '파트너에게 최신 링크를 요청하세요.',
         settled: true,
       }
     case 'INVITE_NOT_FOUND':
