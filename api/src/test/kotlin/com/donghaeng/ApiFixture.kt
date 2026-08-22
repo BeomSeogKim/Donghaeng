@@ -124,6 +124,23 @@ internal abstract class ApiFixture {
         )
 
     /**
+     * The same rules as [post] and [patch] — a replacement is state-changing too, so
+     * it sends `application/json` and would not match the mapping without it.
+     */
+    protected fun put(
+        path: String,
+        cookies: List<HttpCookie> = emptyList(),
+        body: String? = null,
+    ): HttpResponse<String> =
+        send(
+            HttpRequest
+                .newBuilder(uri(path))
+                .PUT(body?.let(HttpRequest.BodyPublishers::ofString) ?: HttpRequest.BodyPublishers.noBody())
+                .header("Content-Type", "application/json"),
+            cookies,
+        )
+
+    /**
      * A whole login, from no cookie to the session cookie the server issued. The
      * decomposed version, for tests that need to interfere with a step, is in
      * `GoogleLoginFixture`.
