@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiError, apiFetch } from '../lib/api'
 import type { paths } from '../lib/api-types.gen'
 import { headcountQueryKey, setHeadcount } from './useHeadcount'
-import { type Wedding, weddingsQueryKey } from './useWeddings'
+import { setWedding, weddingsQueryKey } from './useWeddings'
 
 // Reached through `paths[...]` rather than through the schema name, so the path
 // and the status code are checked too. Response bodies are keyed `*/*` because
@@ -97,13 +97,7 @@ export function useUpdateWedding(weddingId: number) {
     },
     onSuccess: (updated) => {
       setHeadcount(queryClient, weddingId, updated.headcount)
-      queryClient.setQueryData(
-        weddingsQueryKey,
-        (weddings: readonly Wedding[] | undefined) =>
-          weddings?.map((wedding) =>
-            wedding.id === updated.wedding.id ? updated.wedding : wedding,
-          ),
-      )
+      setWedding(queryClient, updated.wedding)
     },
     onError: () => {
       void queryClient.invalidateQueries({ queryKey: headcountQueryKey(weddingId) })

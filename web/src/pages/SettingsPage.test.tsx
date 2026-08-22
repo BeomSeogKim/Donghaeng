@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import { App } from '../App'
 import { type Headcount, headcountQueryKey } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
-import type { Wedding } from '../hooks/useWeddings'
+import { type Wedding, weddingsQueryKey } from '../hooks/useWeddings'
 import type { paths } from '../lib/api-types.gen'
 import { renderWithProviders } from '../test/render'
 import { server } from '../test/server'
@@ -80,6 +80,20 @@ function weddingApi(
     /** What the last save asked the server to write. */
     lastSaved: () => saved[saved.length - 1],
     stored: () => ({ weddingDate, guaranteedHeadcount: guaranteed }),
+    /**
+     * The partner, editing the same wedding from their own device.
+     *
+     * TWO ACCOUNTS WITH THE SAME SCREEN OPEN IS THIS PRODUCT'S STANDING
+     * SCENARIO, not an exotic race — it is the sentence
+     * notes/2026-08-22-decision-partial-update-shape.md argues the whole partial
+     * update from. The double changes underneath the form exactly as the server
+     * would, so the next response the form is handed carries a member it never
+     * sent.
+     */
+    partner: (edit: { weddingDate?: string; guaranteedHeadcount?: number | null }) => {
+      if (edit.weddingDate !== undefined) weddingDate = edit.weddingDate
+      if (edit.guaranteedHeadcount !== undefined) guaranteed = edit.guaranteedHeadcount
+    },
     me: () =>
       http.get(`${API}/auth/me`, () =>
         HttpResponse.json<Session>({ id: 7, name: '김테스터' }),
@@ -584,4 +598,156 @@ it('keeps our own number off the screen the venue\u0027s number is typed into', 
   expect(screen.queryByText('128')).toBeNull()
   expect(screen.queryByTestId('guarantee-meter')).toBeNull()
   expect(screen.queryByText(/여유|초과/)).toBeNull()
+})
+
+it('never writes back a member the couple did not touch, however many times they save', async () => {
+  const api = weddingApi({ weddingDate: '2027-03-14' })
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  expect(fields.guaranteed).toHaveValue('')
+
+  // The partner agrees 200 with the venue on their own device, on a form that
+  // was prefilled before they did.
+  api.partner({ guaranteedHeadcount: 200 })
+
+  await fields.fill(fields.date, '2027-03-15')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+  expect(api.lastSaved()?.body).toEqual({ weddingDate: '2027-03-15' })
+
+  /*
+   * THE SECOND SAVE IS WHERE THIS BREAKS, and the first one is why: the response
+   * carried the partner's 200 for a member this form never sent. A baseline
+   * advanced from that response disagrees with an untouched empty box forever
+   * after, and an empty box is spelled `null` — **the one spelling of "clear"**.
+   * The partner's number would be gone, answered 200, with nothing to recover it
+   * from: v1 records no attribution at all (`#25`, `#179`).
+   */
+  await fields.fill(fields.date, '2027-03-16')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(2))
+  expect(api.lastSaved()?.body).toEqual({ weddingDate: '2027-03-16' })
+  expect(api.stored().guaranteedHeadcount).toBe(200)
+})
+
+it('does not revert a partner\u0027s newer 예식일 on a second save of the number', async () => {
+  const api = weddingApi({ weddingDate: '2026-10-10' })
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+
+  // The same shape on the other member: the partner moves the date after this
+  // form loaded it.
+  api.partner({ weddingDate: '2027-03-14' })
+
+  await fields.fill(fields.guaranteed, '150')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+
+  await fields.fill(fields.guaranteed, '160')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(2))
+  expect(api.lastSaved()?.body).toEqual({ guaranteedHeadcount: 160 })
+  expect(api.stored().weddingDate).toBe('2027-03-14')
+})
+
+it('says it saved even when the response carries a member the form never sent', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  api.partner({ guaranteedHeadcount: 200 })
+
+  await fields.fill(fields.date, '2027-03-15')
+  await fields.save()
+
+  /*
+   * A SUCCESSFUL SAVE THAT SAYS NOTHING IS WHAT INVITES THE SECOND PRESS. The
+   * confirmation is withheld while the screen still differs from what was
+   * written — so a baseline polluted by a member the form never sent makes a
+   * perfectly good save look like a failed one, and the couple presses again.
+   */
+  expect(await screen.findByText('저장했습니다.')).toBeVisible()
+})
+
+it('sends a touched member again when the couple moves it a second time', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+
+  await fields.fill(fields.guaranteed, '150')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+
+  await fields.fill(fields.guaranteed, '160')
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(2))
+  expect(api.lastSaved()?.body).toEqual({ guaranteedHeadcount: 160 })
+
+  // And a third save with nothing moved is the legal no-op again, which is what
+  // says the baseline DID advance for the member this form actually wrote.
+  await fields.save()
+  await waitFor(() => expect(api.saved).toHaveLength(3))
+  expect(api.lastSaved()?.body).toEqual({})
+})
+
+it('never lets a wedding read already in flight overwrite the date the save wrote', async () => {
+  const api = weddingApi({ weddingDate: '2026-10-10' })
+  let releaseStale = () => {}
+  const stale = new Promise<void>((resolve) => {
+    releaseStale = resolve
+  })
+  let reads = 0
+  server.use(
+    api.me(),
+    /*
+     * The second read is the one a couple tabbing back from KakaoTalk starts,
+     * and it was answered BEFORE the save — so it carries the old 예식일. The
+     * `onSettled` invalidation is no defence here: it dedupes into the fetch
+     * already in flight rather than starting a fresh one.
+     */
+    http.get(`${API}/weddings`, async () => {
+      reads += 1
+      if (reads === 2) {
+        await stale
+        return HttpResponse.json<Wedding[]>([
+          { id: 12, weddingDate: '2026-10-10', seats: SEATS },
+        ])
+      }
+      // Every other read answers honestly, the `onSettled` invalidation's
+      // included — it is the stale one landing late that this is about.
+      return HttpResponse.json<Wedding[]>([
+        { id: 12, weddingDate: api.stored().weddingDate, seats: SEATS },
+      ])
+    }),
+    api.headcount(),
+    api.update(),
+  )
+
+  const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+
+  void queryClient.refetchQueries({ queryKey: weddingsQueryKey, exact: true })
+  await waitFor(() => expect(reads).toBe(2))
+
+  await fields.fill(fields.date, '2027-03-14')
+  await fields.save()
+  expect(await screen.findByText('저장했습니다.')).toBeVisible()
+
+  releaseStale()
+  await act(async () => {
+    await new Promise((settle) => setTimeout(settle, 20))
+  })
+
+  // 저장했습니다 beside a header showing the date they just replaced is the
+  // failure this closes — the same one `setHeadcount` closes for the number.
+  expect(queryClient.getQueryData(weddingsQueryKey)).toEqual([
+    { id: 12, weddingDate: '2027-03-14', seats: SEATS },
+  ])
 })

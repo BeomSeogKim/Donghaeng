@@ -1,5 +1,9 @@
 import { type FormEvent, useState } from 'react'
-import { type UpdateWeddingRequest, useUpdateWedding } from '../hooks/useUpdateWedding'
+import {
+  type UpdateWeddingRequest,
+  useUpdateWedding,
+  type WeddingMutation,
+} from '../hooks/useUpdateWedding'
 import { ApiError } from '../lib/api'
 import { buttonClassName } from './Button'
 import { Field } from './Field'
@@ -40,16 +44,28 @@ export function WeddingInfoForm({
   const update = useUpdateWedding(weddingId)
 
   /*
-   * WHAT THE SERVER HOLDS, AND THE ONLY THING "CHANGED" CAN BE MEASURED
-   * AGAINST. It is state rather than the props themselves, because the props go
-   * on moving: `refetchOnWindowFocus` is deliberate, so a partner's edit can
-   * land under a form that is being typed into. Diffing against the live value
-   * would then call an untouched field "changed" and send the couple's stale
-   * copy back over their partner's edit — precisely the blind write a partial
-   * update exists to prevent. It advances on a successful save, from that
-   * response, so a second press has nothing left to send.
+   * WHAT EACH MEMBER LOOKED LIKE WHEN THE COUPLE LAST LEFT IT ALONE — and the
+   * only thing "moved" can be measured against.
+   *
+   * IT IS NOT "WHAT THE SERVER HOLDS", and that distinction is the whole of this
+   * file's correctness. It is state rather than the live props because the props
+   * go on moving: `refetchOnWindowFocus` and `staleTime: 0` are deliberate, and
+   * 두 사람이 같은 화면을 열어 둔다 is this product's standing case, so a
+   * partner's edit lands under a form that is being typed into. Diffing against
+   * the live value would call an untouched field "changed" and send this
+   * couple's stale copy back over their partner's — the blind write a partial
+   * update exists to prevent.
+   *
+   * AND IT ADVANCES ONLY FOR THE MEMBERS THE REQUEST ACTUALLY CARRIED (found in
+   * review of `#174`). The response reports the whole wedding, including members
+   * this form never sent, and taking those would put the baseline permanently
+   * out of step with an untouched input: an empty 보증인원 box beside a baseline
+   * of 200 reads as "moved to empty", and empty is spelled `null` — **the one
+   * spelling of "clear"**. The next save would erase a number this couple never
+   * touched, answered 200, with nothing to recover it from: v1 records no
+   * attribution at all (`#25`, `#179` are both post-v1).
    */
-  const [saved, setSaved] = useState<Saved>({ weddingDate, guaranteedHeadcount })
+  const [baseline, setBaseline] = useState<Baseline>({ weddingDate, guaranteedHeadcount })
   const [values, setValues] = useState<FormValues>({
     weddingDate,
     guaranteedHeadcount: guaranteedHeadcount === null ? '' : String(guaranteedHeadcount),
@@ -63,7 +79,7 @@ export function WeddingInfoForm({
   const [submitted, setSubmitted] = useState(false)
   const sending = trimmed(values)
   const errors = submitted ? validate(sending) : {}
-  const changes = changed(sending, saved)
+  const changes = changed(sending, baseline)
   /** Whether what is on screen still differs from what the server holds. */
   const edited = Object.keys(changes).length > 0
 
@@ -81,11 +97,7 @@ export function WeddingInfoForm({
 
     update.mutate(changes, {
       onSuccess: (response) =>
-        setSaved({
-          weddingDate: response.wedding.weddingDate,
-          // Absent, never null, once it is cleared — the two are one state.
-          guaranteedHeadcount: response.headcount.guaranteedHeadcount ?? null,
-        }),
+        setBaseline((current) => advanced(current, changes, response)),
     })
   }
 
@@ -164,10 +176,37 @@ export function WeddingInfoForm({
   )
 }
 
-/** What the server holds, as far as this form has been told. */
-type Saved = {
+/** What each member was worth when the couple last left it alone. */
+type Baseline = {
   weddingDate: string
   guaranteedHeadcount: number | null
+}
+
+/**
+ * The baseline after a successful save: **only what this request wrote.**
+ *
+ * A member the body did not carry keeps the value it was prefilled with, even
+ * though the response states a newer one for it. That is not staleness being
+ * tolerated — it is the definition of the baseline: an input the couple never
+ * touched has not moved, whatever anybody else did to the wedding meanwhile, and
+ * a member that has not moved is one this form may not write. The stale value is
+ * only ever shown, never sent; the next mount or focus refetch prefills a fresh
+ * form.
+ */
+function advanced(
+  baseline: Baseline,
+  sent: UpdateWeddingRequest,
+  response: WeddingMutation,
+): Baseline {
+  return {
+    weddingDate:
+      'weddingDate' in sent ? response.wedding.weddingDate : baseline.weddingDate,
+    // Absent, never null, once it is cleared — the two are one state.
+    guaranteedHeadcount:
+      'guaranteedHeadcount' in sent
+        ? (response.headcount.guaranteedHeadcount ?? null)
+        : baseline.guaranteedHeadcount,
+  }
 }
 
 /**
@@ -196,6 +235,13 @@ function trimmed(values: FormValues): FormValues {
  * answers 200 having written nothing. So the member is spread in only when it
  * moved, and it carries `null` when it moved to empty.
  *
+ * AND A THIRD SPELLING IS REFUSED HERE RATHER THAN UPSTREAM: `Number('백오십')`
+ * is `NaN`, which `JSON.stringify` renders as `null` — so a 보증인원 that cannot
+ * be read would leave this function as a CLEAR. `validate` refuses it before any
+ * save, so it was never live, but this function is called on every render and
+ * nothing says it may only be called on validated input. A member that cannot be
+ * read is not sent, full stop.
+ *
  * `weddingDate` HAS NO CLEARED FORM: a blank one is refused by `validate` below
  * rather than sent, because a wedding always has a date and `null` is a 400.
  *
@@ -203,19 +249,31 @@ function trimmed(values: FormValues): FormValues {
  * form saved with nothing edited needs no special case (docs/api-spec.md
  * § Partial updates).
  */
-function changed(values: FormValues, saved: Saved): UpdateWeddingRequest {
-  const guaranteed =
-    values.guaranteedHeadcount === '' ? null : Number(values.guaranteedHeadcount)
+function changed(values: FormValues, baseline: Baseline): UpdateWeddingRequest {
+  const guaranteed = readable(values.guaranteedHeadcount)
 
   return {
-    ...(values.weddingDate === saved.weddingDate
+    ...(values.weddingDate === baseline.weddingDate
       ? {}
       : { weddingDate: values.weddingDate }),
-    ...(guaranteed === saved.guaranteedHeadcount
+    ...(guaranteed === UNREADABLE || guaranteed === baseline.guaranteedHeadcount
       ? {}
       : { guaranteedHeadcount: guaranteed }),
   }
 }
+
+/** What is typed where a number belongs, when it is neither a number nor empty. */
+const UNREADABLE = Symbol('unreadable')
+
+/** `null` for an emptied box, the number for a legible one, and nothing else. */
+function readable(input: string): number | null | typeof UNREADABLE {
+  if (input === '') return null
+  if (!NUMERIC.test(input)) return UNREADABLE
+  return Number(input)
+}
+
+/** Digits and nothing else — the same test `validate` names the failure from. */
+const NUMERIC = /^\d+$/
 
 type FieldErrors = Partial<Record<keyof FormValues, string>>
 
@@ -232,7 +290,7 @@ function validate(values: FormValues): FieldErrors {
   const errors: FieldErrors = {}
   if (values.weddingDate === '') errors.weddingDate = '예식일을 입력해 주세요.'
   if (values.guaranteedHeadcount !== '') {
-    if (!/^\d+$/.test(values.guaranteedHeadcount))
+    if (!NUMERIC.test(values.guaranteedHeadcount))
       errors.guaranteedHeadcount = '보증인원은 숫자로 입력해 주세요.'
     else if (Number(values.guaranteedHeadcount) < 1)
       errors.guaranteedHeadcount = '보증인원은 1명 이상으로 입력해 주세요.'

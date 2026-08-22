@@ -33,12 +33,12 @@ import { createWeddingPath, ledgerPath } from '../lib/routes'
  */
 export function SettingsPage() {
   return (
-    <Screen>
+    <Frame>
       <Section title="웨딩 정보">
         <WeddingInfo />
       </Section>
       {/* `#9` 파트너 초대 goes here, as a sibling. */}
-    </Screen>
+    </Frame>
   )
 }
 
@@ -96,12 +96,16 @@ function Prefilled({ wedding }: { wedding: Wedding }) {
 /**
  * The screen around the sections: a title, and the way back to 원장.
  *
+ * `Frame`, NOT `Screen`: `components/Screen` is the centered single-column shell
+ * the login and 웨딩 만들기 screens wear, and it means that specific thing. 원장
+ * named its own frame the same way for the same reason.
+ *
  * THE WAY BACK IS ON THE SCREEN, not left to the browser's Back button — this
  * is the only route in the app a couple arrives at by choice and has to leave
  * again, and on a phone installed to the home screen there is no Back button at
  * all.
  */
-function Screen({ children }: { children: ReactNode }) {
+function Frame({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-[100dvh] bg-ground text-ink">
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-ground px-4 py-3 md:px-6">

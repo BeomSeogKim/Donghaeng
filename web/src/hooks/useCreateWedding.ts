@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiError, apiFetch } from '../lib/api'
 import type { paths } from '../lib/api-types.gen'
-import { type Wedding, weddingsQueryKey } from './useWeddings'
+import { setWedding, type Wedding } from './useWeddings'
 
 // Reached through `paths[...]` rather than through the schema name, so the path
 // and the status code are checked too. Response bodies are keyed `*/*` because
@@ -39,7 +39,9 @@ export type CreateWeddingRequest =
  * says the person has no wedding, so without this write the couple would be
  * bounced straight back to the form they just submitted, for as long as the
  * refetch takes. It is prepended because the list is newest first, and that
- * order is contract (docs/api-spec.md § GET /weddings).
+ * order is contract (docs/api-spec.md § GET /weddings). `setWedding` is what
+ * prepends it, and it is shared with the wedding's edit so that neither call
+ * site can forget to cancel a read already in flight (`#174`).
  *
  * A 401 IS NOT HANDLED HERE. It means "log in again" rather than "something
  * went wrong" wherever it comes from, and the client answers it once for every
@@ -62,10 +64,7 @@ export function useCreateWedding() {
       return (await response.json()) as Wedding
     },
     onSuccess: (wedding) => {
-      queryClient.setQueryData(
-        weddingsQueryKey,
-        (weddings: readonly Wedding[] | undefined) => [wedding, ...(weddings ?? [])],
-      )
+      setWedding(queryClient, wedding)
     },
   })
 }
