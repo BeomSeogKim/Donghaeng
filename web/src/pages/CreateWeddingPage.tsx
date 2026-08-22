@@ -139,6 +139,23 @@ function CreateWeddingForm() {
         <p className="text-body leading-body text-ink-muted">
           예식일과 본인 이름만 있으면 시작할 수 있습니다. 상대방 이름은 적지 않습니다.
         </p>
+        {/*
+         * THE ONE SENTENCE THAT SAVES AN INVITED PARTNER, and the reason it is
+         * on this screen rather than on theirs: if the Google round trip left
+         * the browser their KakaoTalk link opened in — which is what KakaoTalk's
+         * webview does — the tab that comes back is not the tab that stashed
+         * their token, and an empty `GET /weddings` sends them here
+         * (notes/2026-08-22-decision-the-invite-link.md §3). Filling this form
+         * in is what makes that dead end permanent (`#158`); reopening the link
+         * is what makes it nothing, for the rest of the day.
+         *
+         * It is one muted line and not a block, because every couple sees this
+         * screen and almost all of them should just fill the form in.
+         */}
+        <p className="text-body leading-body text-ink-muted">
+          파트너에게 초대 링크를 받았다면 여기서 만들지 말고 그 링크를 다시 열어 주세요.
+          링크는 만든 지 하루 동안 쓸 수 있습니다.
+        </p>
       </div>
 
       <form className="flex w-full flex-col gap-5" onSubmit={handleSubmit}>

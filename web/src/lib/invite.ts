@@ -61,11 +61,17 @@ export function pendingInvite(): string | null {
 }
 
 /**
- * Drop it — spent, refused for good, or signed out from under.
+ * Drop it — spent, or refused in a way that can never become a yes.
  *
  * A TOKEN THAT CAN NEVER WORK AGAIN MUST NOT SURVIVE, because while it is here
  * it diverts every empty ledger this person opens into a screen that can only
  * refuse them again.
+ *
+ * SIGNING OUT IS NOT ONE OF THOSE CASES, and that is a decision rather than an
+ * omission: "I used the wrong Google account" is a real way to arrive at an
+ * invite, and its recovery is to sign out and sign back in — which only works
+ * if the token is still here when they do. It is tab-scoped, and accepting is a
+ * form somebody has to fill in, so the alternative buys little.
  */
 export function forgetInvite(): void {
   sessionStorage.removeItem(INVITE_STORAGE_KEY)

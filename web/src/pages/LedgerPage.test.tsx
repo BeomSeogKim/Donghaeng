@@ -7,6 +7,7 @@ import { type Guest, guestsQueryKey, ledgerQueryKey } from '../hooks/useGuests'
 import { type Headcount, headcountQueryKey } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
+import { INVITE_STORAGE_KEY } from '../lib/invite'
 import { renderWithProviders } from '../test/render'
 import { server } from '../test/server'
 
@@ -412,6 +413,30 @@ it('sends a person with no wedding to 웨딩 만들기 instead of an empty ledge
   // is the branch 최초 1회 exists for — not an error and not an empty ledger.
   expect(await screen.findByRole('heading', { name: '웨딩 만들기' })).toBeVisible()
   expect(calls.ledgerRequests).toHaveLength(0)
+})
+
+it('sends a partner holding an invite to 수락, never to 웨딩 만들기', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(() => HttpResponse.json<Wedding[]>([])),
+  )
+  // The tab came back from Google still holding what it stashed before it left
+  // (lib/invite.ts).
+  sessionStorage.setItem(INVITE_STORAGE_KEY, 'sel3ct0r.v3r1f13r')
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+
+  /*
+   * A PARTNER WHO HAS NOT ACCEPTED YET *IS* AN EMPTY `GET /weddings`, which is
+   * why this check has to stand in front of the empty-list branch and not
+   * beside it. 웨딩 만들기 is where an empty list otherwise sends people, and
+   * creating there closes their partner's ledger to them permanently — one
+   * person, one wedding, forever (`#158`,
+   * notes/2026-08-22-decision-the-invite-link.md §3).
+   */
+  expect(await screen.findByRole('heading', { name: '초대 수락' })).toBeVisible()
+  expect(screen.queryByRole('heading', { name: '웨딩 만들기' })).not.toBeInTheDocument()
 })
 
 /*
