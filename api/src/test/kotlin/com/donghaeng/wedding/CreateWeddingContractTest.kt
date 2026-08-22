@@ -188,7 +188,13 @@ internal class CreateWeddingContractTest : ApiFixture() {
         // character is refused by Postgres, i.e. as a masked 500
         // (notes/2026-08-17-decision-log-masking-mechanism.md).
         val tooLong = "가".repeat(101)
-        val rejected = listOf(body(name = ""), body(name = "   "), body(name = tooLong))
+        // **전각 공백 is in this list because it fell between two trims** (`#187`):
+        // `@NotBlank` judged with Java's `String.trim()`, which stops at U+0020, while
+        // the service trims with Kotlin's, which does not — so `"　"` validated,
+        // emptied, and was stored as `''`. It is an ordinary key on a Korean IME, and
+        // `wedding_party.name` has no CHECK behind it. `@SeatName` now measures the
+        // trimmed value, which is why this endpoint is covered without being touched.
+        val rejected = listOf(body(name = ""), body(name = "   "), body(name = "　"), body(name = "　 "), body(name = tooLong))
 
         rejected.forEach { body ->
             val response = create(session, body)

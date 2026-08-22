@@ -276,9 +276,12 @@ internal class AcceptInviteContractTest : ApiFixture() {
         val token = tokenFor(weddingId)
         val partner = loginAs("the-partner")
 
-        // The same three refusals `POST /weddings` makes of the same column, measured
-        // the same way — one client-side rule covers both screens.
-        listOf("", "   ", "가".repeat(101)).forEach { name ->
+        // The same refusals `POST /weddings` makes of the same column, measured the same
+        // way — one client-side rule covers both screens, and since `#187` that is
+        // literally one annotation rather than two matching copies. `"　"` is here
+        // because it fell between `@NotBlank`'s Java trim and the service's Kotlin one
+        // and was stored as `''`; see `CreateWeddingContractTest` for the full note.
+        listOf("", "   ", "　", "　 ", "가".repeat(101)).forEach { name ->
             val response = join(partner, body(token, name))
             assertThat(response.statusCode()).describedAs(name).isEqualTo(400)
             assertThat(response.json()["code"].asText()).describedAs(name).isEqualTo("VALIDATION_FAILED")

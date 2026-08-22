@@ -735,14 +735,18 @@ wedding is created empty — no guests, no meal types — so there is no headcou
 carry. The client's next screen is the ledger, which reads it.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than
-  100 characters; or a `weddingDate` outside the range the database can store
-  (before 4713 BC or after 5874897 AD).
-- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of the wrong
-  type (an unparseable `weddingDate` and **a `side` that is neither `GROOM` nor
-  `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
+- 400 `VALIDATION_FAILED` — a `name` that is empty once trimmed (**including one made
+  only of `"　"` U+3000, U+00A0 or U+2000–U+200A**) or longer than 100 characters as
+  sent; or a `weddingDate` outside the range the database can store (before 4713 BC or
+  after 5874897 AD).
+- 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of a type that
+  cannot be read (an unparseable `weddingDate` and **a `side` that is neither `GROOM`
+  nor `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
   wrong. They differ because one failure happens while the body is being read and the
-  other after; do not build different UI for them.
+  other after; do not build different UI for them. **A JSON number sent for `name` is
+  not among them**: scalars coerce to strings API-wide, so `{"name":42}` creates the
+  wedding with the name `"42"` (corrected 2026-08-22 with `#187`, which asserted the
+  coercion; narrowing it is `#189`).
 - 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused
   **before the body is looked at**, so an anonymous request with an invalid body is
   a 401 and never a 400.
@@ -1062,11 +1066,19 @@ Request
 { "name": "김신랑" }
 ```
 
-`name` is **required**, and it is **the caller's own** name. 1–100 characters, not
-whitespace-only, measured **as sent** and **trimmed before it is stored** — `"  김신랑  "`
-is stored as `"김신랑"`. It is validated by exactly the rule `POST /weddings` and
-`POST /weddings/join` validate the same column with; one client-side rule covers all
-three screens.
+`name` is **required**, and it is **the caller's own** name. It is **trimmed before it
+is stored** — `"  김신랑  "` is stored as `"김신랑"` — and the rule is applied to what
+will actually be stored: **what is left after trimming must not be empty**, and the
+value **as sent** must be at most 100 characters. It is validated by exactly the rule
+`POST /weddings` and `POST /weddings/join` validate the same column with; one
+client-side rule covers all three screens.
+
+**"Whitespace" here is wider than the space bar**, and this is worth one line of client
+code: `"　"` (U+3000, 전각 공백 — an ordinary key on a Korean IME), U+00A0 and
+U+2000–U+200A all trim away, so a name made of them is refused rather than stored as an
+empty string (fixed 2026-08-22 with `#187`, which found it accepted at all three write
+points). If a form disables its submit button on "blank", trim with the same generosity
+or the button will be live for a name the API refuses.
 
 **There is no partial-update semantics here and no `null` case**: the body has one
 member, it is required, and there is no state "leave the name alone" — that state is
@@ -1099,8 +1111,9 @@ answer `POST /weddings/join` gives after writing this very column, and the same 
 that does carry it**, because 보증인원 lives inside the headcount.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than 100
-  characters. Nothing is written.
+- 400 `VALIDATION_FAILED` — a `name` that is empty once trimmed (**including one made
+  only of `"　"` U+3000, U+00A0 or U+2000–U+200A**) or longer than 100 characters as
+  sent. Nothing is written.
 - 400 `MALFORMED_REQUEST_BODY` — `name` omitted, sent as `null`, sent as an object or an
   array, or a body that is not JSON. **Two codes, one meaning for the user**: the
   request was wrong. (A JSON *number* is not in this list: scalars coerce to strings
@@ -1242,9 +1255,10 @@ Carries the recomputed aggregate: **no.** Joining changes no 하객 and no 인�
 next screen is the ledger, which reads its own numbers.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only, or longer than
-  100 characters. **The token is not spent by this**, so correcting the name and
-  tapping again works.
+- 400 `VALIDATION_FAILED` — a `name` that is empty once trimmed (**including one made
+  only of `"　"` U+3000, U+00A0 or U+2000–U+200A**) or longer than 100 characters as
+  sent. **The token is not spent by this**, so correcting the name and tapping again
+  works.
 - 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or sent as an object
   or an array. **An empty-string `token` is not this** — it is a 404, see below, and
   neither is a JSON number: scalars coerce to strings API-wide, so `{"name":42}` writes
