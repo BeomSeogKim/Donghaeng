@@ -39,6 +39,10 @@ export interface paths {
     /** Mint the link that fills the wedding's empty seat, killing any previous one */
     post: operations["issueInvite"];
   };
+  "/weddings/{weddingId}/seats/me": {
+    /** Change the caller's own name on their seat */
+    put: operations["updateSeatName"];
+  };
   "/weddings/join": {
     /** Take the wedding's empty seat, using an invite token */
     post: operations["joinWedding"];
@@ -168,6 +172,13 @@ export interface components {
       readonly title?: string | null;
       /** Format: uri */
       readonly type?: string;
+    };
+    readonly UpdateSeatNameRequest: {
+      /**
+       * @description The caller's own name, as it should read on the ledger. Never their partner's
+       * @example 김신랑
+       */
+      readonly name: string;
     };
     readonly UpdateWeddingRequest: {
       /**
@@ -492,6 +503,45 @@ export interface operations {
       };
       /** @description Both seats are taken, so there is nobody left to invite. */
       409: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** Change the caller's own name on their seat */
+  updateSeatName: {
+    parameters: {
+      path: {
+        weddingId: number;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["UpdateSeatNameRequest"];
+      };
+    };
+    responses: {
+      /** @description The wedding and its two seats, with the caller's name as it now stands. */
+      200: {
+        content: {
+          readonly "*/*": components["schemas"]["WeddingResponse"];
+        };
+      };
+      /** @description A blank or over-long name, or a body that could not be read — an omitted or null `name` is this. */
+      400: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller holds no seat in it, and when it has been deleted. */
+      404: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];
         };
