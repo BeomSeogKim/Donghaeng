@@ -21,11 +21,10 @@ export const settingsPath = '/settings'
  * 마이페이지 — the account, and the one screen a signed-in person is parked on
  * with something to read.
  *
- * REACHED FROM 설정, NOT FROM THE LEDGER HEADER, and that is the whole reason it
- * is a route of its own rather than a section of 설정. An entry point in the
- * header puts back the third control the two-row split was invented to fit, and
- * 설정 argues in as many words that it is passed through rather than inhabited —
- * so 로그아웃 did not shift one screen sideways, a screen it belongs on was made
+ * REACHED FROM 설정, NOT FROM THE LEDGER HEADER. An entry point in the header
+ * puts back the third control the two-row split was invented to fit, and 설정
+ * argues in as many words that it is passed through rather than inhabited — so
+ * 로그아웃 did not shift one screen sideways, a screen it belongs on was made
  * (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
  *
  * IT IS `/me` BECAUSE `GET /auth/me` IS WHAT IT DRAWS. It is not under

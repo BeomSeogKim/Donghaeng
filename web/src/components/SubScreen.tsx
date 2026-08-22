@@ -6,10 +6,11 @@ import { buttonClassName } from './Button'
  * The frame for the screens a couple navigates TO and leaves again: 설정 and
  * 마이페이지.
  *
- * NOT `Screen`, WHICH MEANS SOMETHING ELSE — the centered single-column shell
- * login and 웨딩 만들기 wear — and not 원장's full-bleed frame either. 원장 is
- * home and everything frequent opens over it, so these are the rare trips a
- * couple makes and comes back from (notes/2026-08-07-design-screens-and-flow.md).
+ * NOT `Screen`, WHICH MEANS SOMETHING ELSE — see `components/Screen`, which
+ * says what it is and keeps its own list of who wears it — and not 원장's
+ * full-bleed frame either. 원장 is home and everything frequent opens over it, so
+ * these are the rare trips a couple makes and comes back from
+ * (notes/2026-08-07-design-screens-and-flow.md).
  *
  * IT IS SHARED BECAUSE THERE ARE TWO OF THEM NOW. 마이페이지 (`#159`) arrived
  * wearing 설정's header exactly — same sticky bar, same back link, same title —

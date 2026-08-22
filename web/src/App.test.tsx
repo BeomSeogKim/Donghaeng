@@ -63,11 +63,16 @@ function recording() {
 }
 
 /**
- * The reads 원장 and 설정 make on arrival. `/` is the ledger now (`#15`), so
- * every test that signs someone in at `/` needs them — an unhandled request is
- * an error in this suite, deliberately. 설정 is on the way to 마이페이지, which
- * is where 로그아웃 lives (notes/2026-08-22-decision-logout-leaves-the-ledger.md),
- * so its 보증인원 read is here too.
+ * The three reads 원장 makes on arrival. `/` is the ledger now (`#15`), so every
+ * test that signs someone in at `/` needs all three — an unhandled request is an
+ * error in this suite, deliberately.
+ *
+ * THE HEADCOUNT IS 원장'S OWN, and it was missing here until 2026-08-22. The
+ * ledger renders `<Headcount weddingId>` unconditionally on arrival, so every
+ * signed-in test in this file had been drawing 인원수를 불러오지 못했습니다 into
+ * the DOM and passing anyway — the assertions were all elsewhere. 설정 happens to
+ * read the same endpoint for 보증인원 on the way to 마이페이지, but that is a
+ * coincidence: deleting the 설정 leg of a test does not free this handler.
  */
 const ledger = () => [
   http.get(`${API}/weddings`, () =>

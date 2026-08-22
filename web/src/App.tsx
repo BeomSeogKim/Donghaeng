@@ -74,9 +74,8 @@ export function App() {
    * A screen only a signed-in person may see.
    *
    * IT HANDS THE PERSON DOWN, because one screen is *about* them: 마이페이지
-   * would otherwise re-read a session this function has already proved is
-   * there, and carry a signed-out branch for a state it just made unreachable.
-   * A screen that does not want the argument ignores it.
+   * would otherwise carry a signed-out branch for a state this function has
+   * just made unreachable. A screen that does not want the argument ignores it.
    */
   const signedIn = (screen: (person: Session) => ReactNode) =>
     person === null ? <Navigate replace to="/login" /> : screen(person)

@@ -66,8 +66,9 @@ it('names the account when the provider handed us no name at all', async () => {
   renderWithProviders(<App />, { initialEntries: ['/me'] })
 
   expect(await screen.findByText('이름 없음')).toBeVisible()
-  // The id is the identity, never display text.
-  expect(screen.queryByText('12')).not.toBeInTheDocument()
+  // The id is the identity, never display text — and a substring match, because
+  // `ID 12` would satisfy a whole-node one while putting it on screen anyway.
+  expect(screen.queryByText(/12/)).not.toBeInTheDocument()
 })
 
 it('offers no edit for a name the next login would overwrite', async () => {

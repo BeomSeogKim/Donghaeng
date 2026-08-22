@@ -566,6 +566,20 @@ it('is reached from 원장 and goes back to it', async () => {
   expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
 })
 
+it('is where 마이페이지 is reached from, rather than the ledger header', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  await userEvent.click(await screen.findByRole('link', { name: '마이페이지' }))
+
+  // An entry point in the ledger header would put back the third control the
+  // two-row split was invented to fit; two taps from 원장 is the depth this is
+  // worth (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
+  expect(await screen.findByRole('heading', { name: '마이페이지' })).toBeVisible()
+  expect(screen.getByText('김테스터')).toBeVisible()
+})
+
 it('sends a person with no wedding to 웨딩 만들기 instead of an empty form', async () => {
   const api = weddingApi()
   server.use(
@@ -845,17 +859,3 @@ async function settle() {
     await new Promise((done) => setTimeout(done, 20))
   })
 }
-
-it('is where 마이페이지 is reached from, rather than the ledger header', async () => {
-  const api = weddingApi()
-  server.use(api.me(), api.weddings(), api.headcount(), api.update())
-
-  renderWithProviders(<App />, { initialEntries: ['/settings'] })
-  await userEvent.click(await screen.findByRole('link', { name: '마이페이지' }))
-
-  // An entry point in the ledger header would put back the third control the
-  // two-row split was invented to fit; two taps from 원장 is the depth this is
-  // worth (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
-  expect(await screen.findByRole('heading', { name: '마이페이지' })).toBeVisible()
-  expect(screen.getByText('김테스터')).toBeVisible()
-})

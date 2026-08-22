@@ -29,16 +29,14 @@ import { createWeddingPath, ledgerPath, myPagePath } from '../lib/routes'
  * this is what their wedding has. What they share is the trip, and this is
  * where it starts.
  *
- * NO 로그아웃 HERE. It sits on the screens a signed-in person can be *parked*
- * on with no other exit (수락, 웨딩 만들기); this screen's exit is 원장, one tap
- * away at the top, and a second sign-out button is a second place to press for
- * one action.
+ * NO 로그아웃 HERE, because 설정 is passed through rather than inhabited: its
+ * exit is 원장, one tap away at the top. Which screens do carry it, and on what
+ * criterion, is `components/LogoutButton`'s own doc and is not restated here.
  *
- * THAT ARGUMENT IS WHY 마이페이지 EXISTS. When 로그아웃 left 원장's pinned header
- * (`#195`), the obvious landing spot was this screen — and this comment refused
- * it, because 설정 is passed through rather than inhabited. So it did not shift
- * one screen sideways: a screen a person can be parked on was made, and it went
- * there. 내 계정 below is the door to it
+ * THAT REFUSAL IS WHY 마이페이지 EXISTS. When 로그아웃 left 원장's pinned header
+ * (`#195`), this screen was the obvious landing spot and this comment turned it
+ * down — so it did not shift one screen sideways: a screen a person can be
+ * parked on was made, and it went there. 내 계정 below is the door
  * (notes/2026-08-22-decision-logout-leaves-the-ledger.md).
  */
 export function SettingsPage() {

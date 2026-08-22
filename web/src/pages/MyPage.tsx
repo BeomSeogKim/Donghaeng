@@ -42,8 +42,11 @@ export function MyPage({ person }: { person: Session }) {
         >
           {name ?? '이름 없음'}
         </p>
+        {/* NAMED, NOT "계정" — the heading above already spends that word on
+            ours. v1 signs in with Google alone (`#89` is post-v1), so this line
+            moves when a second provider does. */}
         <p className="mt-2 text-body leading-body text-ink-muted">
-          이름은 계정에서 가져옵니다. 다음 로그인에 다시 채워지므로 여기서는 바꿀 수
+          이름은 구글 계정에서 가져옵니다. 다음 로그인에 다시 채워지므로 여기서는 바꿀 수
           없습니다.
         </p>
 
