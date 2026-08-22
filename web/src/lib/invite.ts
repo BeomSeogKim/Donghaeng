@@ -11,6 +11,14 @@ import { invitePath } from './routes'
  * `sessionStorage` and nowhere else, for exactly as long as the Google round
  * trip needs; and it reaches us only in the body of the accept POST.
  *
+ * **THIS MODULE IS THE ONLY ONE THAT MAY TOUCH WEB STORAGE, and that is checked
+ * rather than asked for**: `npm run check:invite`, in `lint` and therefore in
+ * CI. It is a script and not a test because it is about files that do not exist
+ * yet — nothing in a suite notices a NEW module reaching for `localStorage` "so
+ * it survives the tab", which is how a tab-scoped one-day credential becomes a
+ * persistent one on a phone two people share. `inviteLink`'s own rule is a test
+ * instead (`invite.test.ts`), being one function's behaviour.
+ *
  * THE FRAGMENT IS WHAT MAKES A `returnTo` UNNECESSARY, and refusing to build
  * one is the same decision rather than a separate convenience: a `returnTo`
  * would be a second place a token-bearing URL could be logged

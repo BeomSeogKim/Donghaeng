@@ -163,6 +163,45 @@ function openedIn(userAgent: string) {
 }
 afterEach(() => openedIn(SYSTEM_BROWSER))
 
+it('clears the fragment before the session probe answers, not after', async () => {
+  const api = inviteApi({ signedIn: false })
+  let answer = () => {}
+  const probed = new Promise<void>((resolve) => {
+    answer = resolve
+  })
+  server.use(
+    // `GET /auth/me` still in flight — which is EVERY arrival from KakaoTalk,
+    // because tapping a link is always a cold load.
+    http.get(`${API}/auth/me`, async () => {
+      await probed
+      return problem(401, 'UNAUTHENTICATED')
+    }),
+    ...api.handlers().slice(1),
+  )
+
+  renderWithProviders(
+    <>
+      <App />
+      <Address />
+    </>,
+    { initialEntries: [`/invite#t=${TOKEN}`] },
+  )
+
+  /*
+   * THE TOKEN IS OUT OF THE ADDRESS BAR ALREADY, with the app still showing its
+   * loading screen and no route mounted. Read from the accept screen instead,
+   * this would sit in the address bar for the whole round trip — and forever
+   * behind 다시 시도 when the API is unreachable, because that branch never
+   * renders the route table at all (App.tsx).
+   */
+  await waitFor(() => expect(screen.getByTestId('address')).toHaveTextContent('/invite'))
+  expect(screen.getByTestId('address').textContent).toBe('/invite')
+  expect(stored()).toBe(TOKEN)
+
+  answer()
+  expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeInTheDocument()
+})
+
 it('warns before the tap that an in-app browser cannot finish the login', async () => {
   const api = inviteApi({ signedIn: false })
   server.use(...api.handlers())
@@ -302,11 +341,64 @@ it('treats a person who already has a ledger as having one, not as having failed
 
   expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeInTheDocument()
 
+  /*
+   * THE TOKEN SURVIVES THIS ONE, and it is the only 409 that keeps it: the spec
+   * says "the token is not spent, so the real partner can still use it". The
+   * person who typed the wrong account's login is not the person the link was
+   * meant for, and wiping it here would take the invite away from somebody who
+   * never touched it.
+   */
+  expect(stored()).toBe(TOKEN)
+
   // The spec's own recovery: open the wedding `GET /weddings` comes back with.
-  // The token is dropped first, or 원장 would send them straight back here.
-  expect(stored()).toBeNull()
+  // A held token cannot divert them back here — 원장 only reads it when the
+  // list is EMPTY, and this person's is not (LedgerPage.tsx).
   await userEvent.click(screen.getByRole('link', { name: '내 원장 열기' }))
   expect(await screen.findByRole('heading', { name: '원장' })).toBeInTheDocument()
+})
+
+it('keeps the invite alive for the person who signed in as the wrong account', async () => {
+  const api = inviteApi({
+    weddings: [{ id: 3, weddingDate: '2026-09-09', seats: SEATS }],
+  })
+  server.use(...api.handlers(() => problem(409, 'ALREADY_IN_A_WEDDING')))
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  const { unmount } = renderWithProviders(<App />, { initialEntries: ['/invite'] })
+  await accept('이신부')
+  await screen.findByText('이미 다른 웨딩에 속해 있습니다')
+
+  /*
+   * NOTHING ON THIS SCREEN NAMES THE SIGNED-IN ACCOUNT, so this 409 is the ONLY
+   * signal that the wrong Google account was used — and it is the one answer
+   * that must not wipe the token, because 로그아웃 → sign back in correctly →
+   * this same screen is the whole recovery. Wiping it lands the real partner on
+   * an empty `GET /weddings` instead: 웨딩 만들기, which they may never fill in
+   * (`#158`).
+   */
+  unmount()
+  const right = inviteApi()
+  server.use(...right.handlers())
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  await accept('이신부')
+  await waitFor(() => expect(right.joins).toHaveLength(1))
+  expect(right.joins[0].body).toEqual({ token: TOKEN, name: '이신부' })
+})
+
+it('keeps the token when a 404 did not come from the application', async () => {
+  const api = inviteApi()
+  // Not `application/problem+json`: a proxy or the servlet container answered,
+  // so `code` is `null` and this is no answer about the token at all
+  // (`lib/api.ts`). A load balancer must not be able to destroy a live invite.
+  server.use(...api.handlers(() => new HttpResponse('Not Found', { status: 404 })))
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+  await accept('이신부')
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('초대를 수락하지 못했습니다')
+  expect(stored()).toBe(TOKEN)
 })
 
 it('says the seat is gone when somebody else took it', async () => {

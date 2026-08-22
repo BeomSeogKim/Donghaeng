@@ -6,7 +6,6 @@ import { Field } from '../components/Field'
 import { GoogleLoginLink } from '../components/GoogleLoginLink'
 import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
-import { useInviteToken } from '../hooks/useInviteToken'
 import { useJoinWedding } from '../hooks/useJoinWedding'
 import { useSession } from '../hooks/useSession'
 import { ApiError } from '../lib/api'
@@ -35,19 +34,18 @@ import { ledgerPath } from '../lib/routes'
  * "you already have a ledger" is not a failure at all
  * (docs/api-spec.md § POST /weddings/join).
  */
-export function AcceptInvitePage() {
-  const token = useInviteToken()
+export function AcceptInvitePage({ token }: { token: string | null }) {
   const session = useSession()
 
-  // The session is resolved above the route table, so this is what App is
-  // already showing rather than a second spinner (App.tsx).
-  if (session.isPending || session.isError) {
-    return (
-      <Screen>
-        <BrandMark />
-      </Screen>
-    )
-  }
+  /*
+   * THE TOKEN IS A PROP, READ BY `App` ABOVE THE SESSION GATE. This screen does
+   * not mount until `GET /auth/me` has answered, so reading the fragment here
+   * would leave it in the address bar for that whole round trip — and forever
+   * when the read fails, since that branch never renders the route table
+   * (`hooks/useInviteToken.ts`). There is no session branch here either, for
+   * the same reason: `App` has already answered it, and a second copy would be
+   * unreachable code claiming to handle something.
+   */
 
   /*
    * THE DEAD END KakaoTalk'S WEBVIEW CAN STILL PRODUCE, and the one place it
@@ -289,9 +287,17 @@ type Refusal = {
  * - `PARTNER_ALREADY_JOINED` is the seat being gone. There is no recovery to
  *   offer and inventing one would be a lie.
  *
- * EVERY OTHER 404 OR 409 IS SETTLED TOO, with generic words: an unrecognised
- * `code` is handled as a generic failure of its status (`lib/api.ts`), and on
- * this endpoint that status means the attempt is over either way.
+ * AN UNRECOGNISED `code` IS STILL SETTLED, with generic words: a 404 or a 409
+ * from this endpoint means the attempt is over whatever it was called.
+ *
+ * BUT A `code` OF `null` IS NOT, and that is the distinction rather than a
+ * hedge. `apiError` reports `null` for a 4xx that is not a problem document —
+ * a proxy or the servlet container answered and the application never saw the
+ * request (`lib/api.ts`) — so nothing has been decided about this token. It is
+ * the retryable failure, which is also what keeps the screen honest with
+ * `useJoinWedding`: that hook keeps the token in exactly this case, and a form
+ * taken away from somebody still holding a good invite would be a dead end we
+ * invented.
  *
  * A 401 PRODUCES NOTHING AT ALL: the session was written to `null`, the login
  * screen is replacing this one, and the token is deliberately still in
@@ -302,6 +308,7 @@ function refusalFor(error: unknown): Refusal | null {
   if (error.status === 401) return null
   if (error.status === 400) return { title: '이름을 다시 확인해 주세요.', settled: false }
   if (error.status !== 404 && error.status !== 409) return UNAVAILABLE
+  if (error.code === null) return UNAVAILABLE
 
   switch (error.code) {
     case 'INVITE_EXPIRED':

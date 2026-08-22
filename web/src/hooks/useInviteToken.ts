@@ -6,6 +6,16 @@ import { pendingInvite, readInviteToken, rememberInvite } from '../lib/invite'
  * The invite token this tab is holding, however it got here — and `null` when
  * there is none to hold.
  *
+ * IT IS CALLED ABOVE THE SESSION GATE, IN `App`, AND THAT PLACEMENT IS THE
+ * WHOLE POINT (moved there in review of `#182`). An arrival from KakaoTalk is
+ * always a cold load, so `GET /auth/me` has not answered yet — and while it has
+ * not, `App` renders the brand mark instead of the route table. Reading the
+ * fragment from the accept screen therefore left `#t=<token>` in the address
+ * bar for a whole network round trip, and **indefinitely** behind 다시 시도 when
+ * the API is unreachable, because that branch never renders the route table at
+ * all. A one-day bearer credential must not sit in the address bar waiting on a
+ * server: that is Back, the share sheet and any screenshot.
+ *
  * TWO ARRIVALS, ONE ANSWER. A partner tapping a KakaoTalk link arrives with the
  * token in the URL fragment; the same partner coming back from Google arrives
  * with nothing in the URL at all, because the round trip returns to the
@@ -22,13 +32,12 @@ import { pendingInvite, readInviteToken, rememberInvite } from '../lib/invite'
  *
  * THE FRAGMENT IS CLEARED THE MOMENT IT IS READ, and that is a decision rather
  * than tidiness — it takes the token out of Back and out of the browser's share
- * sheet, which is where a one-day bearer credential must not be left sitting.
- * `state` is carried through the replace for the same reason `useLoginFailure`
- * carries it: a navigation's state is not this hook's to drop.
+ * sheet. `state` is carried through the replace for the same reason
+ * `useLoginFailure` carries it: a navigation's state is not this hook's to drop.
  *
  * THE CODE IS LATCHED, NOT READ ONCE AT MOUNT. A fragment can arrive at a
- * screen that is already mounted — a Back to a history entry that still carries
- * one — and clearing it must not destroy what it carried.
+ * component that is already mounted — a Back to a history entry that still
+ * carries one — and clearing it must not destroy what it carried.
  */
 export function useInviteToken(): string | null {
   const { hash, pathname, search, state } = useLocation()
