@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { type IssuedInvite, useIssueInvite } from '../hooks/useIssueInvite'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
 import { ApiError } from '../lib/api'
@@ -29,41 +29,79 @@ export function PartnerInvite() {
   const weddings = useWeddings()
 
   /*
+   * THE ISSUED LINK LIVES ABOVE EVERY BRANCH BELOW IT, and that placement is
+   * the whole correctness of this file (found in review of `#182`).
+   *
+   * IT IS THE ONE VALUE ON THIS SCREEN NO READ CAN RECONSTRUCT. The server kept
+   * only a hash, so there is no endpoint that returns it and never will be —
+   * which means a component that unmounts loses it PERMANENTLY, and the couple's
+   * only recovery is 재발급, killing the link they may already have pasted into
+   * KakaoTalk.
+   *
+   * IT USED TO HANG OFF THE SHARED `GET /weddings` SUCCEEDING, and that read
+   * fails in the ordinary course of using this screen: the couple switches to
+   * KakaoTalk to paste the link and comes back, which is exactly when
+   * `refetchOnWindowFocus` fires — and `staleTime: 0` means it really
+   * refetches. One 5xx on that refetch put this query into `error` while
+   * keeping its data, unmounting the subtree the token lived in. The screen
+   * says "이 화면을 벗어나면 링크를 다시 볼 수 없습니다" — and the couple had
+   * not left the screen.
+   *
+   * So the rule is narrow and structural: **nothing that can be re-fetched may
+   * sit between this state and the render.**
+   */
+  const [issued, setIssued] = useState<IssuedInvite | null>(null)
+  const link = issued === null ? null : <IssuedLink issued={issued} key={issued.token} />
+
+  /*
    * NEITHER STATE CARRIES A RETRY BUTTON, and that is deliberate: this section
    * and 웨딩 정보 above it read the same `GET /weddings`, so one failed read
    * would otherwise put two failure blocks and two 다시 시도 buttons on one
    * screen for one thing that went wrong. The section above owns the retry.
+   *
+   * EACH ONE STILL RENDERS THE LINK. A read that is pending, failed, or empty
+   * says nothing about a token this couple is holding in their hand.
    */
   if (weddings.isPending) {
-    return <p className="text-body leading-body text-ink-muted">불러오는 중입니다</p>
+    return (
+      <div className="flex flex-col gap-4">
+        {link}
+        <p className="text-body leading-body text-ink-muted">불러오는 중입니다</p>
+      </div>
+    )
   }
   if (weddings.isError) {
     return (
-      <p className="text-body leading-body text-ink-muted">
-        웨딩 정보를 불러오지 못했습니다
-      </p>
+      <div className="flex flex-col gap-4">
+        {link}
+        <p className="text-body leading-body text-ink-muted">
+          웨딩 정보를 불러오지 못했습니다
+        </p>
+      </div>
     )
   }
 
   // An empty list means there is no wedding to invite anybody into, and 웨딩
   // 정보 above has already sent this person to 웨딩 만들기.
   const wedding = weddings.data[0]
-  if (wedding === undefined) return null
+  if (wedding === undefined) return link
 
-  return <Invite wedding={wedding} />
+  return <Invite issued={issued} link={link} onIssued={setIssued} wedding={wedding} />
 }
 
-function Invite({ wedding }: { wedding: Wedding }) {
+function Invite({
+  issued,
+  link,
+  onIssued,
+  wedding,
+}: {
+  issued: IssuedInvite | null
+  /** Rendered by the parent, so it survives every branch above this one. */
+  link: ReactNode
+  onIssued: (invite: IssuedInvite) => void
+  wedding: Wedding
+}) {
   const issue = useIssueInvite(wedding.id)
-
-  /*
-   * THE ONLY COPY OF THE LINK THERE WILL EVER BE, which is why it is `useState`
-   * and not the query cache: it is not a client-side copy of something the API
-   * owns, because the API does not own it after the response — it kept a hash.
-   * A reload loses it, and that is the API's shape rather than a bug to work
-   * around (`hooks/useIssueInvite.ts`).
-   */
-  const [issued, setIssued] = useState<IssuedInvite | null>(null)
 
   // The seat that has nobody in it. `name` is optional AND nullable in the
   // document because springdoc leaves a nullable Kotlin property out of
@@ -74,6 +112,7 @@ function Invite({ wedding }: { wedding: Wedding }) {
   if (!waiting) {
     return (
       <div className="flex flex-col gap-2">
+        {link}
         <p className="text-body leading-body text-ink">두 사람 모두 참여했습니다</p>
         <p className="text-body leading-body text-ink-muted">
           초대할 자리가 남아 있지 않습니다.
@@ -89,7 +128,7 @@ function Invite({ wedding }: { wedding: Wedding }) {
         있고, 새로 만들면 이전 링크는 바로 쓸 수 없게 됩니다.
       </p>
 
-      {issued !== null && <IssuedLink issued={issued} />}
+      {link}
 
       <button
         className={`${buttonClassName(issued === null ? 'primary' : 'secondary')} self-start`}
@@ -101,18 +140,18 @@ function Invite({ wedding }: { wedding: Wedding }) {
          */
         disabled={issue.isPending}
         onClick={() =>
-          issue.mutate(undefined, { onSuccess: (invite) => setIssued(invite) })
+          issue.mutate(undefined, { onSuccess: (invite) => onIssued(invite) })
         }
         type="button"
       >
         {issued === null ? '초대 링크 만들기' : '새 링크 만들기'}
       </button>
 
-      {issue.isError && failureMessage(issue.error) !== null && (
+      {issue.isError && failureMessage(issue.error, waiting) !== null && (
         // Announced: it appears away from the button that was just pressed, and
         // nothing else on the screen changes to say so.
         <p className="text-body leading-body text-danger" role="alert">
-          {failureMessage(issue.error)}
+          {failureMessage(issue.error, waiting)}
         </p>
       )}
     </div>
@@ -189,18 +228,39 @@ function expires(expiresAt: string): string {
 /**
  * What a refused mint says.
  *
- * `PARTNER_ALREADY_JOINED` SAYS NOTHING, and that is the decision here. It is
- * not a failure — it means the seat this couple was inviting somebody into is
- * filled, which is what they wanted — and the hook has already re-read the
- * wedding, so the section is about to render 두 사람 모두 참여했습니다 instead.
- * A red line beside that would be us calling good news an error.
+ * IT BRANCHES ON `code`, NEVER ON STATUS, and that distinction is the finding
+ * rather than a preference (review of `#182`). `PARTNER_ALREADY_JOINED` is the
+ * one refusal that says nothing: it is not a failure — the seat this couple was
+ * inviting somebody into is filled, which is what they wanted — and the hook
+ * has re-read the wedding, so 두 사람 모두 참여했습니다 is about to replace this
+ * section. A red line beside that would be us calling good news an error.
+ *
+ * **BUT SILENCE ON THE WHOLE STATUS SWALLOWED TWO REAL FAILURES.** A future or
+ * unrecognised 409 produced no alert, no state change and an enabled button —
+ * the couple taps and the screen does not move. And a `PARTNER_ALREADY_JOINED`
+ * whose refetch comes back still showing an open seat (a replica that has not
+ * caught up) was silent with nothing arriving to explain it. An unrecognised
+ * `code` is handled as a generic failure of its status, here as everywhere.
+ *
+ * WHEN THE REFETCH DOES NOT CONFIRM, THE SCREEN STILL SAYS IT. The caller
+ * passes `seatWaiting`, so the one case that stays silent is the one where the
+ * good news is actually on screen.
  *
  * A 404 IS NOT TOLD APART either: no such wedding, not the caller's, and
  * deleted are one answer on the server, deliberately. A 401 produces nothing —
  * the login screen is already replacing this one (`lib/queryClient.ts`).
  */
-function failureMessage(error: unknown): string | null {
-  if (error instanceof ApiError && (error.status === 401 || error.status === 409))
-    return null
-  return '초대 링크를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'
+function failureMessage(error: unknown, seatWaiting: boolean): string | null {
+  if (!(error instanceof ApiError)) return GENERIC_FAILURE
+  if (error.status === 401) return null
+  if (error.code === 'PARTNER_ALREADY_JOINED') {
+    // Silent only when the couple can SEE why. Otherwise the seat still reads
+    // as open and nothing on screen accounts for the tap.
+    return seatWaiting
+      ? '초대할 자리가 남아 있지 않습니다. 잠시 후 다시 확인해 주세요.'
+      : null
+  }
+  return GENERIC_FAILURE
 }
+
+const GENERIC_FAILURE = '초대 링크를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'

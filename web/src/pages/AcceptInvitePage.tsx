@@ -181,8 +181,18 @@ function AcceptForm({ token }: { token: string }) {
 
   const refusal = join.isError ? refusalFor(join.error) : null
 
-  // A settled refusal takes the form away rather than leaving a button that can
-  // only be refused again. The token is already gone (`useJoinWedding`).
+  /*
+   * A settled refusal takes the form away rather than leaving a button that can
+   * only be refused again.
+   *
+   * "SETTLED" IS ABOUT THE ATTEMPT, NOT ABOUT THE TOKEN, and the two came apart
+   * on 2026-08-22. `ALREADY_IN_A_WEDDING` is settled for THIS person — pressing
+   * 수락 again cannot make them belong to two weddings — while the token itself
+   * stays alive, because the spec says it is not spent and the real partner can
+   * still use it (`useJoinWedding`). Which invites are dropped is that hook's
+   * business and is decided by `code`; this branch only decides whether there
+   * is anything left to press.
+   */
   if (refusal?.settled === true) {
     return (
       <Notice signedIn title={refusal.title}>

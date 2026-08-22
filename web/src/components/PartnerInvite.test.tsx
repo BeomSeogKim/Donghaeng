@@ -27,6 +27,11 @@ import { server } from '../test/server'
 
 const API = 'http://localhost:8080'
 const TOKEN = 'sel3ct0r.v3r1f13r'
+/** The instant the API published. Rendered in whatever zone the reader is in. */
+const EXPIRES_AT = '2026-08-23T09:00:00Z'
+
+/** So a formatted date can be matched literally, dots and all. */
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 type IssueInvite = paths['/weddings/{weddingId}/invite']['post']
 /** `{token, expiresAt}` — published exactly once and never readable again. */
@@ -64,22 +69,39 @@ function inviteApi({
     release = resolve
   })
 
+  /** Set while `GET /weddings` should fail — a 5xx, then recovery. */
+  let weddingsFail = false
+  let weddingReads = 0
+
   return {
     issued,
     release,
+    /** How many times the shared read has been answered — a focus refetch is async. */
+    weddingReads: () => weddingReads,
     /** The partner, accepting from their own phone while this screen is open. */
     partnerJoins: () => {
       taken = SEATED
+    },
+    /**
+     * The shared read failing and recovering. `staleTime: 0` and
+     * `refetchOnWindowFocus` are both deliberate, so a refetch firing while the
+     * couple is on this screen is the ordinary case, not an exotic one.
+     */
+    weddingsFail: (failing: boolean) => {
+      weddingsFail = failing
     },
     handlers: (respond?: () => Response) => [
       http.get(`${API}/auth/me`, () =>
         HttpResponse.json<Session>({ id: 7, name: '김신랑' }),
       ),
-      http.get(`${API}/weddings`, () =>
-        HttpResponse.json<Wedding[]>([
-          { id: 12, weddingDate: '2026-10-10', seats: taken },
-        ]),
-      ),
+      http.get(`${API}/weddings`, () => {
+        weddingReads += 1
+        return weddingsFail
+          ? HttpResponse.json({}, { status: 500 })
+          : HttpResponse.json<Wedding[]>([
+              { id: 12, weddingDate: '2026-10-10', seats: taken },
+            ])
+      }),
       http.get(`${API}/weddings/:weddingId/headcount`, () =>
         HttpResponse.json<Headcount>({ mealHeadcount: 0 }),
       ),
@@ -87,8 +109,14 @@ function inviteApi({
         issued.push({ contentType: request.headers.get('Content-Type') })
         if (hold) await answering
         if (respond !== undefined) return respond()
+        // A DISTINCT TOKEN PER MINT, because 재발급 kills the previous one: a
+        // double that answered one constant could not tell a stale link from a
+        // live one, which is the whole of what this screen gets wrong.
         return HttpResponse.json<IssuedInvite>(
-          { token: TOKEN, expiresAt: '2026-08-23T09:00:00Z' },
+          {
+            token: issued.length === 1 ? TOKEN : `${TOKEN}-${issued.length}`,
+            expiresAt: EXPIRES_AT,
+          },
           { status: 201 },
         )
       }),
@@ -136,8 +164,21 @@ it('says what a link costs: one day, and one at a time', async () => {
 
   await issue()
 
-  // `expiresAt` is what is rendered — never a duration computed here.
-  expect(await screen.findByText(/2026년 8월 23일/)).toBeInTheDocument()
+  /*
+   * `expiresAt` is what is rendered — never a duration computed here.
+   *
+   * THE INSTANT IS PINNED, NOT THE RENDERED DATE. `2026-08-23T09:00:00Z` falls
+   * on 8월 23일 under CI's UTC and under KST, but on 8월 22일 west of UTC-9 —
+   * so asserting the date made this test pass because of where it ran. What is
+   * actually being checked is that the server's instant reaches the screen, so
+   * the expectation is computed from that instant in the same zone the browser
+   * is in.
+   */
+  const expected = new Intl.DateTimeFormat('ko-KR', {
+    dateStyle: 'long',
+    timeStyle: 'short',
+  }).format(new Date(EXPIRES_AT))
+  expect(await screen.findByText(new RegExp(escapeRegExp(expected)))).toBeInTheDocument()
   // And it can never be read back: only a hash is stored, so leaving this
   // screen loses the link for good (docs/api-spec.md § POST .../invite).
   expect(
@@ -217,6 +258,192 @@ it('mints one link for a double press', async () => {
     await screen.findByText(`${window.location.origin}/invite#t=${TOKEN}`),
   ).toBeInTheDocument()
   expect(api.issued).toHaveLength(1)
+})
+
+it('holds the link through a failed refetch of the wedding', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers())
+
+  settings()
+  await issue()
+  const link = `${window.location.origin}/invite#t=${TOKEN}`
+  expect(await screen.findByText(link)).toBeInTheDocument()
+  const before = api.weddingReads()
+
+  /*
+   * THE REFETCH IS FIRED BY A FOCUS EVENT, NOT BY `refetchQueries`, and that is
+   * load-bearing rather than incidental — measured, not assumed. A refetch
+   * driven by `refetchQueries` leaves `status: 'success'` when the cache
+   * already holds data, so it CANNOT reproduce this at all; a focus refetch
+   * sets `status: 'error'` while keeping `data`. Written the other way this
+   * test passes against the broken screen.
+   *
+   * AND THE FOCUS EVENT IS THE ORDINARY CASE, not a contrived one: the couple
+   * switches to KakaoTalk to paste the link and comes back, which is exactly
+   * what `refetchOnWindowFocus` listens for — and `staleTime: 0` means it
+   * really refetches (lib/queryClient.ts, both deliberate).
+   *
+   * ONLY A HASH IS STORED SERVER-SIDE, so there is no way back: the link would
+   * be gone for good and the couple must 재발급, killing the link they may have
+   * already pasted. It is the one value on this screen no read can reconstruct,
+   * so it may not hang off a read's success.
+   */
+  api.weddingsFail(true)
+  window.dispatchEvent(new Event('visibilitychange'))
+  window.dispatchEvent(new Event('focus'))
+  await waitFor(() => expect(api.weddingReads()).toBeGreaterThan(before))
+
+  // And the screen said 이 화면을 벗어나면 — the couple did not leave it.
+  await waitFor(() => expect(screen.getByText(link)).toBeInTheDocument())
+
+  /*
+   * AND IT IS STILL THERE ONCE THE READ RECOVERS. 다시 시도 belongs to 웨딩 정보
+   * above — this section deliberately has no retry of its own, so one failed
+   * read does not put two retry buttons on one screen — and the recovery is
+   * what re-renders the branch this section was in.
+   */
+  api.weddingsFail(false)
+  await userEvent.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+  expect(
+    await screen.findByRole('button', { name: '새 링크 만들기' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText(link)).toBeInTheDocument()
+})
+
+it('says so when a 409 does not turn out to be the seat being filled', async () => {
+  const api = inviteApi()
+  // `PARTNER_ALREADY_JOINED`, but the refetch still shows an open seat — a
+  // replica read that has not caught up. The silence was justified by the
+  // refetch confirming, and nothing checked that it did.
+  server.use(...api.handlers(() => problem(409, 'PARTNER_ALREADY_JOINED')))
+
+  settings()
+  await issue()
+
+  /*
+   * WITHOUT THIS THE SCREEN DOES NOT MOVE: no alert, no link, the button still
+   * enabled, and 두 사람 모두 참여했습니다 never arriving either. A couple taps
+   * and nothing happens, which is the one thing an instrument may not do.
+   */
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '초대할 자리가 남아 있지 않습니다',
+  )
+})
+
+it('stays silent only for the 409 that is actually good news', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers(() => problem(409, 'PARTNER_ALREADY_JOINED')))
+
+  settings()
+  const button = await screen.findByRole('button', { name: '초대 링크 만들기' })
+  // The refetch DOES confirm this time: the partner really did join.
+  api.partnerJoins()
+  await userEvent.click(button)
+
+  // Not a failure — the seat this couple was inviting somebody into is filled,
+  // which is what they wanted. A red line beside that is us calling good news
+  // an error.
+  expect(await screen.findByText('두 사람 모두 참여했습니다')).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+it('speaks up for a 409 it does not recognise', async () => {
+  const api = inviteApi()
+  // A future or unrecognised `code` on the same status. Branching on the status
+  // swallowed it: an unrecognised code is a generic failure, never a silence.
+  server.use(...api.handlers(() => problem(409, 'SOME_FUTURE_CONFLICT')))
+
+  settings()
+  await issue()
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '초대 링크를 만들지 못했습니다',
+  )
+})
+
+it('does not let 복사했습니다 vouch for a link that was just replaced', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers())
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText },
+    configurable: true,
+  })
+
+  settings()
+  await issue()
+  await userEvent.click(await screen.findByRole('button', { name: '링크 복사' }))
+  expect(await screen.findByText('복사했습니다')).toBeInTheDocument()
+
+  // 재발급 kills the previous token, so the clipboard now holds a DEAD link
+  // while the screen still says it was copied. The couple pastes the one they
+  // were told was safe.
+  await issue('새 링크 만들기')
+
+  expect(
+    await screen.findByText(`${window.location.origin}/invite#t=${TOKEN}-2`),
+  ).toBeInTheDocument()
+  expect(screen.queryByText('복사했습니다')).not.toBeInTheDocument()
+  expect(writeText).toHaveBeenCalledTimes(1)
+})
+
+it('names the way out when the clipboard refuses', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers())
+  // A real phone with no clipboard permission, which is what this branch is
+  // for — and the copy is the couple's only fallback.
+  const writeText = vi.fn().mockRejectedValue(new Error('denied'))
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText },
+    configurable: true,
+  })
+
+  settings()
+  await issue()
+  await userEvent.click(await screen.findByRole('button', { name: '링크 복사' }))
+
+  expect(
+    await screen.findByText('복사하지 못했습니다. 길게 눌러 복사해 주세요.'),
+  ).toBeInTheDocument()
+  // The link is on screen either way, so it is still selectable by hand.
+  expect(
+    screen.getByText(`${window.location.origin}/invite#t=${TOKEN}`),
+  ).toBeInTheDocument()
+})
+
+it('re-reads the wedding only for the 409, never for an ordinary failure', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers(() => HttpResponse.json({}, { status: 500 })))
+
+  settings()
+  // After the screen has settled, so the mount's own read is not counted.
+  await screen.findByRole('button', { name: '초대 링크 만들기' })
+  const before = api.weddingReads()
+  await issue()
+  await screen.findByRole('alert')
+
+  /*
+   * A 409 IS THE ONLY ANSWER THAT TEACHES US ANYTHING — it means our copy of
+   * `seats` is stale, because the partner accepted from their own phone. A 5xx
+   * says nothing about the seats, and re-reading on every failure would put a
+   * full round trip behind a button the couple is about to press again.
+   */
+  expect(api.weddingReads()).toBe(before)
+})
+
+it('re-reads the wedding when the seat turns out to be taken', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers(() => problem(409, 'PARTNER_ALREADY_JOINED')))
+
+  settings()
+  const before = await screen.findByRole('button', { name: '초대 링크 만들기' })
+  const reads = api.weddingReads()
+  api.partnerJoins()
+  await userEvent.click(before)
+
+  await waitFor(() => expect(api.weddingReads()).toBeGreaterThan(reads))
+  expect(await screen.findByText('두 사람 모두 참여했습니다')).toBeInTheDocument()
 })
 
 it('says a failed mint failed, and leaves the button pressable', async () => {
