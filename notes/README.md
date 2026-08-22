@@ -21,6 +21,7 @@ see that file's `Rules` section for the admission test.
 | `2026-08-22-decision-the-couples-two-seats.md` | 웨딩엔 자리가 둘 — `membership`과 이름 두 컬럼은 한 개념이었다; 초대는 빈 자리를 채운다; 부모·플래너는 지원자지 주체가 아니다 |
 | `2026-08-22-decision-entitlement-belongs-to-the-wedding.md` | 권리는 웨딩에, 결제 주체만 사람에; 구독 행은 상태가 아니라 텀이다; 웨딩당 활성 1건은 인덱스가 지킨다 |
 | `2026-08-22-decision-the-invite-link.md` | 초대 링크는 하루 살고 재발급된다; 토큰은 URL 프래그먼트로만 다니고 서버 로그에 남지 않는다; `sessionStorage`가 OAuth 왕복을 건너므로 `returnTo`를 만들지 않는다 |
+| `2026-08-22-decision-the-invite-links-residuals.md` | 카톡 인앱은 안전하게 실패하지 않는다 — 구글이 임베디드 웹뷰를 거부하므로 아예 안 돌아온다; 로그아웃 후에도 탭에 남는 자격증명·클립보드·적대적 인바운드 프래그먼트 |
 | `2026-08-22-decision-the-audit-trail-waits.md` | v1은 변경 주체를 기록하지 않는다 (`#25`·`#179` post-v1); `guest_change`는 테이블만 있고 아무것도 쓰지 않았다 — 세 문서가 기댄 전제가 거짓이었다; 런칭 기간은 영원히 귀속 불가 |
 | `2026-08-22-decision-deploy-comes-after-feature-complete.md` | 배포는 기능이 대강 끝난 뒤에; 도메인은 처음부터 블로커가 아니었다 — 레지스트리·서버·Pages 프로젝트가 없는 것이었다; 첫 배포가 런칭에 붙는 값 |
 | `2026-08-21-decision-two-accounts-and-the-v1-recut.md` | 커플은 두 계정이고 한 사람은 웨딩 하나에만 속한다; 초대는 링크; 유아식은 `#9`와 맞바꿔 `post-v1`로 |
