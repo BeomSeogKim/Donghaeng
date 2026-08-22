@@ -23,12 +23,13 @@ the name alone" to express — that is not sending the request — so a `PATCH` 
 either publish a `PATCH` whose member is required, contradicting the rule at the top of
 the file for every other endpoint, or accept `{}` as a no-op nobody asked for.
 
-**And `Patch<String>` would cost the protection the wrapper's own record warns about.**
-`jackson-module-kotlin` null-checks the constructor parameter, the parameter is a
-`Patch`, and the type argument is erased — so `{"name":""}` would arrive as
-`Set(null)`, where a plain `val name: String` makes it a 400 with nothing written. Two
-hand-written validators against `Patch` would have to be paid to get back what the
-plain type gives for free, and one of them would be a second spelling of the name rule.
+A first draft of this record argued a second point — that `Patch<String>` would let
+`{"name":""}` through as `Set(null)` — and **it was wrong**: `PatchDeserializer` refuses
+a payload that reads as null, which `#173`'s own record states in bold. It is struck
+rather than quietly dropped, because the paragraph above does not need it and a record
+`#12`–`#14` will read must not carry a false reason beside a true one. What a `Patch`
+would still cost here is real and smaller: two validators written against the wrapper,
+one of them a second spelling of the name rule.
 
 **The general rule this leaves behind**: a body with a single required member is a
 `PUT`; a body whose members are independently optional is a `PATCH`. Not a preference —
@@ -91,11 +92,23 @@ pair, and `WeddingResponse` is the shape every screen already holds.
 `JoinWeddingRequest.name`. A third copy is how a name refused on the screen that creates
 it becomes a name accepted on the screen that fixes it.
 
-`@SeatName` composes both, and all three requests wear it. Composed rather than
-hand-validated so each half keeps its own message — 101 characters and a string of
-spaces are still told apart. The one cost is stated in its KDoc: the `maxLength` on the
-seam is declared to `@Schema` beside it, because a composed constraint is not something
-to assume springdoc walks.
+`@SeatName` carries both checks, and all three requests wear it. Two constraints rather
+than one so each keeps its own message — 101 characters and a string of spaces are still
+told apart.
+
+**And gathering them found a bug that had been sitting under all three write points.**
+`@NotBlank` is not the same function as the `trim()` the services call: Hibernate
+Validator trims with **Java**'s `String.trim()` (characters ≤ U+0020 only), while
+Kotlin's `trim()` also strips U+3000, U+00A0 and U+2000–U+200A. **U+3000 is an ordinary
+key on a Korean IME**, so `{"name":"　"}` passed validation, was emptied by the service's
+trim, and was stored as `''` — `wedding_party.name` has no CHECK. `@SeatName` therefore
+validates the **trimmed** value, with the same function the write points use, and one
+annotation fixes 웨딩 만들기, 초대 수락 and this edit at once. `@Size` stays composed and
+measures the value as sent, a bound the trim can only make slacker.
+
+That is the argument for gathering a rule into one place, stated as something that
+happened rather than as a principle: two copies were wrong in the same way and nobody
+could see it until they were one.
 
 ## What this does not decide
 

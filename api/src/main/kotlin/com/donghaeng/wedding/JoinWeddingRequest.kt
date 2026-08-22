@@ -26,11 +26,7 @@ data class JoinWeddingRequest(
     @param:Schema(description = "The invite token, read from the link's fragment. Never put it in a URL path")
     val token: String,
     @field:SeatName
-    @param:Schema(
-        description = "The accepting person's own name, as it should read on the ledger",
-        example = "이신부",
-        maxLength = 100,
-    )
+    @param:Schema(description = "The accepting person's own name, as it should read on the ledger", example = "이신부")
     val name: String,
 ) {
     /**

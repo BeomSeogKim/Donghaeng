@@ -92,7 +92,12 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
         val session = login()
         val weddingId = createWedding(session)
 
-        listOf("\"\"", "\"   \"", "\"" + "가".repeat(101) + "\"").forEach { name ->
+        // **U+3000 and U+00A0 are in this list because they were the hole.**
+        // `@NotBlank` trims with Java's `String.trim()`, which stops at U+0020, while
+        // the service trims with Kotlin's, which does not — so a 전각 공백 name passed
+        // validation and was stored as `''`. 전각 공백 is an ordinary key on a Korean
+        // IME, and the column has no CHECK behind it.
+        listOf("\"\"", "\"   \"", "\"\u3000\"", "\"\u3000\u00a0\"", "\"" + "가".repeat(101) + "\"").forEach { name ->
             val response = put("/weddings/$weddingId/seats/me", listOf(session), """{"name":$name}""")
 
             assertThat(response.statusCode()).describedAs("name=%s", name).isEqualTo(400)
@@ -111,9 +116,8 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
         // required members. `docs/api-spec.md` states it rather than smoothing it over.
         //
         // **A JSON number is not in this list, because it is not refused**: Jackson
-        // coerces a scalar to a string API-wide, so `{"name":42}` renames the seat to
-        // `"42"`. Asserted where it is true rather than claimed where it is not — the
-        // spec entry says the same thing.
+        // coerces a scalar to a string API-wide. That is asserted directly above rather
+        // than described here, so a later `CoercionConfig` goes red instead of quiet.
         listOf("""{}""", """{"name":null}""", """{"name":[]}""", """{"name":{}}""").forEach { body ->
             val response = put("/weddings/$weddingId/seats/me", listOf(session), body)
 
@@ -121,6 +125,32 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
             assertThat(response.json()["code"].asText()).describedAs("%s", body).isEqualTo("MALFORMED_REQUEST_BODY")
         }
         assertThat(nameOf(weddingId, "GROOM")).isEqualTo("김신랑")
+    }
+
+    @Test
+    fun `a name padded with 전각 공백 trims to what is left of it`() {
+        val session = login()
+        val weddingId = createWedding(session)
+
+        val response = put("/weddings/$weddingId/seats/me", listOf(session), "{\"name\":\"\u3000김신랑\u3000\"}")
+
+        assertThat(response.statusCode()).isEqualTo(200)
+        assertThat(nameOf(weddingId, "GROOM")).isEqualTo("김신랑")
+    }
+
+    @Test
+    fun `a JSON number is coerced to its digits rather than refused`() {
+        val session = login()
+        val weddingId = createWedding(session)
+
+        // Asserted rather than commented, because `docs/api-spec.md` publishes it in
+        // two entries: a `CoercionConfig` added later would turn both spec lines false
+        // with the whole suite green (`#189`).
+        val response = put("/weddings/$weddingId/seats/me", listOf(session), """{"name":42}""")
+
+        assertThat(response.statusCode()).isEqualTo(200)
+        assertThat(response.json()["seats"][0]["name"].asText()).isEqualTo("42")
+        assertThat(nameOf(weddingId, "GROOM")).isEqualTo("42")
     }
 
     @Test

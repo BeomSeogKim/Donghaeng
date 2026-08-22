@@ -14,11 +14,9 @@ import io.swagger.v3.oas.annotations.media.Schema
  * (notes/2026-08-22-decision-the-seat-name-edit.md §2).
  *
  * **PUT and not PATCH, so this is not a [com.donghaeng.json.Patch].** One member, and
- * it is required: there is no state "leave the name alone", because leaving it alone
- * is not sending the request. Wrapping the product's only single-member body in the
- * partial-update mechanism would buy an empty-body no-op nobody asked for and cost the
- * Kotlin null check every other request DTO has — `Patch`'s payload is erased, so
- * `{"name":""}` would arrive as `Set(null)` rather than as a 400
+ * it is required: there is no state "leave the name alone", because leaving it alone is
+ * not sending the request — and every clause of the partial-update contract is about a
+ * body with more than one member
  * (notes/2026-08-22-decision-partial-update-shape.md §1).
  *
  * [name] wears [SeatName], the one rule the two places a name already enters wear too.
@@ -28,10 +26,6 @@ import io.swagger.v3.oas.annotations.media.Schema
  */
 data class UpdateSeatNameRequest(
     @field:SeatName
-    @param:Schema(
-        description = "The caller's own name, as it should read on the ledger. Never their partner's",
-        example = "김신랑",
-        maxLength = 100,
-    )
+    @param:Schema(description = "The caller's own name, as it should read on the ledger. Never their partner's", example = "김신랑")
     val name: String,
 )

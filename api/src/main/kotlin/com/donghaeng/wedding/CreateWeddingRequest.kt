@@ -38,6 +38,6 @@ data class CreateWeddingRequest(
     @param:Schema(description = "Which seat the caller is taking — 신랑 or 신부. Never their partner's")
     val side: WeddingSide,
     @field:SeatName
-    @param:Schema(description = "The caller's own name, as it should read on the ledger", example = "김신랑", maxLength = 100)
+    @param:Schema(description = "The caller's own name, as it should read on the ledger", example = "김신랑")
     val name: String,
 )
