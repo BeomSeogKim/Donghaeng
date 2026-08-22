@@ -35,6 +35,14 @@ export interface paths {
     /** The wedding's 식대 인원, and its 보증인원 when one is set */
     get: operations["readHeadcount"];
   };
+  "/weddings/{weddingId}/invite": {
+    /** Mint the link that fills the wedding's empty seat, killing any previous one */
+    post: operations["issueInvite"];
+  };
+  "/weddings/join": {
+    /** Take the wedding's empty seat, using an invite token */
+    post: operations["joinWedding"];
+  };
 }
 
 export type webhooks = Record<string, never>;
@@ -123,6 +131,25 @@ export interface components {
       readonly guaranteedHeadcount?: number | null;
       /** Format: int32 */
       readonly mealHeadcount: number;
+    };
+    readonly IssuedInviteResponse: {
+      /**
+       * Format: date-time
+       * @description When the link stops working — at most one day out
+       * @example 2026-08-23T09:00:00Z
+       */
+      readonly expiresAt: string;
+      /** @description The invite token. Shown once, never retrievable — put it in the link's fragment */
+      readonly token: string;
+    };
+    readonly JoinWeddingRequest: {
+      /**
+       * @description The accepting person's own name, as it should read on the ledger
+       * @example 이신부
+       */
+      readonly name: string;
+      /** @description The invite token, read from the link's fragment. Never put it in a URL path */
+      readonly token: string;
     };
     readonly MeResponse: {
       /** Format: int64 */
@@ -431,6 +458,80 @@ export interface operations {
       };
       /** @description No such wedding — which is also the answer when it exists and the caller is not a member of it, and when it has been deleted. */
       404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** Mint the link that fills the wedding's empty seat, killing any previous one */
+  issueInvite: {
+    parameters: {
+      path: {
+        weddingId: number;
+      };
+    };
+    responses: {
+      /** @description A live invite. The token is published here and can never be read back. */
+      201: {
+        content: {
+          readonly "*/*": components["schemas"]["IssuedInviteResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No such wedding — which is also the answer when it exists and the caller holds no seat in it. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description Both seats are taken, so there is nobody left to invite. */
+      409: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** Take the wedding's empty seat, using an invite token */
+  joinWedding: {
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["JoinWeddingRequest"];
+      };
+    };
+    responses: {
+      /** @description The caller now holds the seat; the wedding they joined is the body. */
+      200: {
+        content: {
+          readonly "*/*": components["schemas"]["WeddingResponse"];
+        };
+      };
+      /** @description A blank or over-long name, or a body that could not be read. */
+      400: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description The token is not usable — unknown, wrong, already spent, replaced by a reissue, or expired. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description The caller already belongs to a wedding, or the seat was taken while they were deciding. */
+      409: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];
         };

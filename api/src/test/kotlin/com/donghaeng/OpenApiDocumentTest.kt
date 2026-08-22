@@ -81,7 +81,9 @@ class OpenApiDocumentTest {
         assertThat(pathsIn(generate()))
             .containsExactlyInAnyOrder(
                 "/weddings",
+                "/weddings/join",
                 "/weddings/{weddingId}",
+                "/weddings/{weddingId}/invite",
                 "/weddings/{weddingId}/guests",
                 "/weddings/{weddingId}/headcount",
                 "/auth/me",
