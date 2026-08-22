@@ -52,6 +52,8 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-22-decision-the-superseded-link-speaks.md` | 재발급에 밀린 토큰은 `INVITE_SUPERSEDED`를 받는다 — verifier를 맞힌 사람에게만 하는 말이라 추측자는 아무것도 못 배운다; 소비된 토큰과 경쟁에 진 토큰은 계속 `INVITE_NOT_FOUND` |
+| `2026-08-22-decision-v1-ships-no-app-rate-limit.md` | v1은 앱 레이트 리밋을 싣지 않는다 — 남은 표면이 전부 세션 뒤 한 웨딩 범위이고, 초대 수락은 카운터가 아니라 256비트 엔트로피가 지킨다; 뒤집는 트리거 셋 |
 | `2026-08-22-decision-the-seat-name-edit.md` | 필수 단일 필드는 `PATCH`가 아니라 `PUT`이다; 빈 자리는 미리 채울 수 없고 주소 자체가 없다; 숫자가 움직일 수 없는 뮤테이션은 집계를 싣지 않고 `wedding/`에 남는다; **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다** — 제품의 모든 이름 필드에 걸린다 |
 | `2026-08-22-decision-the-partner-invite.md` | 초대 토큰은 `selector.verifier`로 해시 저장된다 — 덤프로는 살아 있는 링크가 나오지 않는다; 초대 행은 자리를 가리키고 `wedding_id`를 갖지 않는다; 수락은 세 번째 비스코프 엔드포인트고, 자리 행 잠금 하나가 경쟁 넷을 다 막는다; 토큰은 딱 한 번만 보인다 |
 | `2026-08-22-decision-partial-update-shape.md` | 생략은 안 건드림, `null`은 지움; 보증인원은 다시 비울 수 있다; 집계를 싣는 뮤테이션은 `guest/`에서 조립된다; `WeddingResponse`는 보증인원을 싣지 않는다 |
@@ -83,7 +85,10 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
-| `2026-08-22-decision-guest-add-sheet.md` | 하객 추가는 원장 위의 시트다; 한 명 넣어도 닫히지 않고 측만 남는다; 숫자는 응답에서, 목록은 무효화에서 |
+| `2026-08-22-decision-the-sheet-carries-both.md` | 하객 추가 시트는 측과 그룹을 둘 다 이월한다 — 비대칭이 유일하게 변호 불가능했고, 부모님 명단은 블록으로 온다; `#12`가 v1이라는 전제가 하중을 받는다 |
+| `2026-08-22-decision-the-409-recovery-loop.md` | 409를 두 번째로 만나면 화면이 말한다 — 옳은 수정 둘이 만든 고리라 어느 쪽도 되돌리지 않는다; 표시는 로그아웃과 함께 죽고 토큰은 건드리지 않는다 |
+| `2026-08-22-decision-logout-leaves-the-ledger.md` | 로그아웃이 원장 고정 헤더를 떠나 마이페이지로 간다 (`#195`를 `#159`에 흡수); 수락 화면과 웨딩 만들기의 로그아웃은 출구라서 남는다 |
+| `2026-08-22-decision-guest-add-sheet.md` | 하객 추가는 원장 위의 시트다; 한 명 넣어도 닫히지 않는다 (이월은 `-the-sheet-carries-both`가 고쳐 씀); 숫자는 응답에서, 목록은 무효화에서 |
 | `2026-08-21-decision-ledger-screen.md` | 원장 is home; 이름 가나다순 is the client's order; one filter value per axis; the ledger's query keys |
 | `2026-08-21-decision-the-headcount-on-screen.md` | 세지 않은 숫자는 0으로 그리지 않는다; 보증인원이 없으면 화면은 그 얘기를 하지 않는다; 뮤테이션 숫자는 `setHeadcount`로 들어온다 |
 | `2026-08-21-decision-query-defaults-and-mutation-ordering.md` | The QueryClient's defaults; out-of-order mutation responses are prevented by serialising, not reconciled |
@@ -99,6 +104,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-22-decision-the-envelope-rule-narrows.md` | 봉투는 인원수에 참여하는 리소스의 것이다 — 이음매 가산성이 지키는 건 언젠가 숫자를 실을 응답이므로; 서술이 아니라 열거로 적어야 안 흔들린다 |
 | `2026-08-13-decision-drop-the-stop-pipeline.md` | **No development ritual.** What was removed, and what it cost |
 | `2026-08-13-decision-static-front-and-content-type-gate.md` | The front ships static; no endpoint accepts a CORS-safelisted content type, and CI sweeps for it |
 | `2026-08-19-decision-openapi-artifact.md` | The seam's document is a test artifact at `api/build/openapi.json`; a test-source controller is a `@TestComponent` or it is published |

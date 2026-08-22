@@ -1,5 +1,10 @@
 # Decision — 하객 추가는 시트이고, 한 명 넣었다고 닫히지 않는다 (2026-08-22)
 
+> **Amended 2026-08-22** — the question left open at the foot of this record is
+> answered: the sheet carries **both** 측 and 그룹, and `#12` is confirmed in
+> `v1`, which is the premise. See
+> `2026-08-22-decision-the-sheet-carries-both.md` (`#194`).
+
 `#135`, the frontend half of `#11`. The backend half is merged and settled the
 request (`2026-08-20-decision-guest-entry-side-and-companions.md`,
 `docs/api-spec.md § POST /weddings/{weddingId}/guests`); this record settles what

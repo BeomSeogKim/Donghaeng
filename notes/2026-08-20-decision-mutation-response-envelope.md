@@ -1,5 +1,11 @@
 # Decision — a mutation response is `{resource, headcount}`, and the no-envelope rule narrows (2026-08-20)
 
+> **Amended 2026-08-22** — the rule below is stated too widely. A mutation
+> carries the envelope when its resource **participates in the headcount**,
+> which today means mutations under `/weddings/{id}/guests` and nothing else.
+> The seam-additivity argument here is untouched and is what fixes the
+> predicate — see `2026-08-22-decision-the-envelope-rule-narrows.md` (`#196`).
+
 `#134`. Two files were telling the same rule differently, which root `AGENTS.md`
 names as how rules drift. Settling it before a third endpoint copies either one.
 
