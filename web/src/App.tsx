@@ -4,10 +4,11 @@ import { BrandMark } from './components/BrandMark'
 import { Screen } from './components/Screen'
 import { SessionUnavailable } from './components/SessionUnavailable'
 import { useSession } from './hooks/useSession'
-import { createWeddingPath } from './lib/routes'
+import { createWeddingPath, settingsPath } from './lib/routes'
 import { CreateWeddingPage } from './pages/CreateWeddingPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { LoginPage } from './pages/LoginPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 /*
  * The route table, and the one place that decides whether a screen is reachable.
@@ -66,6 +67,9 @@ export function App() {
           back, so `/` is the ledger rather than a screen that links to it. */}
       <Route element={signedIn(() => <LedgerPage />)} path="/" />
       <Route element={signedIn(() => <CreateWeddingPage />)} path={createWeddingPath} />
+      {/* 설정 · 웨딩 정보 — the one screen a couple navigates to and back from,
+          and the shell `#9`'s 파트너 초대 joins. */}
+      <Route element={signedIn(() => <SettingsPage />)} path={settingsPath} />
       {/* The OAuth callback returns the browser to the configured frontend
           origin — the root — so there is no callback route to write. Anything
           else is a mistyped URL, and the root will sort out where it belongs. */}

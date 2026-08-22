@@ -18,10 +18,11 @@ import { weddingsQueryKey } from './useWeddings'
  * across a seam nothing checks (docs/api-spec.md § POST /weddings/{weddingId}/guests).
  *
  * `guaranteedHeadcount` IS ABSENT, NOT NULL, until the couple has a number from
- * their venue, and `#8` is the screen that will set it — so in v1 today it is
- * always absent. The generated type spells it `?: number | null` because
- * OpenAPI cannot say "omitted"; the server never sends `null`, so `== null` is
- * the one check to write and it means "no number yet"
+ * their venue — 설정 · 웨딩 정보 is where they enter it, and where they can empty
+ * it again. Cleared and never-set are one state and read the same way. The
+ * generated type spells it `?: number | null` because OpenAPI cannot say
+ * "omitted"; the server never sends `null`, so `== null` is the one check to
+ * write and it means "no number yet"
  * (docs/api-spec.md § GET /weddings/{weddingId}/headcount).
  */
 export type Headcount =
