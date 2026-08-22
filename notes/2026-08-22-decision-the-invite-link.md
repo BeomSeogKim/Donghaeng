@@ -1,5 +1,15 @@
 # Decision — the invite link lives one day, and its token never reaches the server in a URL (2026-08-22)
 
+> **Amended 2026-08-22 — §3's residual is stated wrongly.** That section says an
+> in-app browser losing `sessionStorage` fails safely, with the person landing
+> "signed in with nothing pending". **They never get signed in at all**: Google
+> refuses OAuth in embedded user agents (`disallowed_useragent`) and KakaoTalk's
+> browser is one, so the round trip stops at Google's error page where nothing of
+> ours can speak. The warning therefore has to be *pre-tap*. **Everything §1 and
+> §2 decide is unaffected.** Three risks this record never considered — logout
+> leaving a live credential in the tab, the clipboard, and a hostile *inbound*
+> fragment — are in `2026-08-22-decision-the-invite-links-residuals.md`.
+
 Closes `#69`, which was an `open-question` and therefore could only be closed by
 a record. `#9` (파트너 초대) is unblocked by it: `#69` decided the token's
 shape, and nothing about `#9`'s endpoints could be drawn until it did.
