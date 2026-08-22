@@ -11,8 +11,11 @@ import kotlin.reflect.KClass
 private const val MAX_LENGTH = 100
 
 /**
- * A person's own name as `wedding_party.name` can hold it: **not blank once trimmed**,
- * and at most 100 characters as sent.
+ * A person's own name as `wedding_party.name` can hold it: **it must contain a visible
+ * character**, and it may be at most 100 characters as sent.
+ *
+ * **This is the product's one name rule and `#191` copies it rather than re-deriving
+ * one** — 하객 이름 has the same defect and the same fix.
  *
  * **One rule, one place.** Three requests carry a seat name — 웨딩 만들기, 초대 수락 and
  * `#187`'s edit — and the same constraints had been written out twice before the third
@@ -20,21 +23,42 @@ private const val MAX_LENGTH = 100
  * that creates it but accepted on the screen that fixes it is a bug nothing else would
  * catch.
  *
- * **Blankness is decided on the trimmed value, with the same `trim()` the write points
- * call, and that is the whole reason this carries a validator of its own.** `@NotBlank`
- * looks blank-ish but is a different function: Hibernate Validator's `NotBlankValidator`
- * uses **Java**'s `String.trim()`, which strips only characters ≤ U+0020, while Kotlin's
- * `trim()` also strips U+3000, U+00A0 and U+2000–U+200A. **U+3000 (전각 공백) is an
- * ordinary key on a Korean IME**, so `{"name":"　"}` passed `@NotBlank`, was emptied by
- * the service's trim, and was stored as `''` — the column has no CHECK to catch it.
- * Measuring what will actually be stored is what closes that gap, and it closes it for
- * every request wearing this rather than at three write points.
+ * **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다** — the founder's rule
+ * (notes/2026-08-22-decision-the-seat-name-edit.md §5), and the reason this carries a
+ * validator of its own rather than `@NotBlank`. A name must contain **at least one
+ * visible character**: something that is neither whitespace nor in Unicode general
+ * category C (`Cc` control, `Cf` format, `Cs` surrogate, `Co` private use, `Cn`
+ * unassigned).
+ *
+ * **It replaces a trim comparison, and that is a change of question rather than a wider
+ * net.** The bug that started this was that `@NotBlank` and the services' `trim()` are
+ * different functions whose sets merely OVERLAP — Java's trims `c <= ' '`, Kotlin's
+ * trims `isWhitespace() || isSpaceChar()` — so each admitted names the other refused:
+ * `"　"` (U+3000, an ordinary key on a Korean IME) validated and stored as `''`, while a
+ * NUL survived a Kotlin-only predicate and reached PgJDBC, which refuses it in a text
+ * parameter as a masked 500. Asking "is there a visible character in it" answers both
+ * for a reason instead of by union, and it also answers what neither trim ever could:
+ * `"\u200b"`, `"\ufeff"` and `"\u00ad"` are stripped by no trim in either language and
+ * would have landed as a seat labelled with nothing.
+ *
+ * **It walks CODE POINTS, not `Char`s, and that is load-bearing rather than pedantic.**
+ * A supplementary-plane character is a surrogate PAIR, so a per-`Char` version reads two
+ * `Cs` and calls the whole name invisible: 🙂 and CJK Ext B hanja — which do appear in
+ * real names — were both refused by the first draft. Measured, not reasoned about.
+ * `Character.isSpaceChar` is here beside `isWhitespace` for the mirror-image reason: the
+ * `Character` predicate excludes U+00A0 where Kotlin's `Char.isWhitespace()` includes
+ * it, so without it a name of one NBSP passes.
+ *
+ * **`Co` (private use) is refused deliberately.** Nothing guarantees it renders, and it
+ * is not a character a couple types; a name we cannot draw is not a name they can read
+ * on their own ledger.
  *
  * **[Size] stays a composed constraint and measures the value AS SENT**, which is a
- * bound the trim can only make slacker: trimming shortens, so a value that passes here
- * still fits the column. It is also what publishes `maxLength` to springdoc, which does
- * walk a composition — verified by deleting a hand-written `@Schema(maxLength)` and
- * regenerating the document unchanged.
+ * bound the write point's `trim()` can only make slacker: trimming shortens, so a value
+ * that passes here still fits the column. It is also what publishes `maxLength` to
+ * springdoc, which does walk a composition — held by `OpenApiDocumentTest`, since
+ * `openapi-typescript` drops `maxLength` and so the `seam` job can never notice its
+ * loss.
  *
  * Two constraints and so two messages: somebody who sent 101 characters and somebody who
  * sent spaces are still told different things.
@@ -47,7 +71,7 @@ private const val MAX_LENGTH = 100
 @Constraint(validatedBy = [SeatNameValidator::class])
 @Size(max = MAX_LENGTH)
 annotation class SeatName(
-    val message: String = "must not be blank once trimmed",
+    val message: String = "must contain at least one visible character",
     val groups: Array<KClass<*>> = [],
     val payload: Array<KClass<out Payload>> = [],
 )
@@ -56,5 +80,22 @@ internal class SeatNameValidator : ConstraintValidator<SeatName, String> {
     override fun isValid(
         value: String?,
         context: ConstraintValidatorContext,
-    ): Boolean = value == null || value.trim().isNotEmpty()
+    ): Boolean = value == null || value.codePoints().anyMatch(::isVisible)
+
+    private fun isVisible(codePoint: Int): Boolean =
+        !Character.isWhitespace(codePoint) &&
+            !Character.isSpaceChar(codePoint) &&
+            Character.getType(codePoint) !in INVISIBLE_CATEGORIES
+
+    private companion object {
+        /** Unicode general category C, whole. A name drawn from these alone draws nothing. */
+        val INVISIBLE_CATEGORIES: Set<Int> =
+            setOf(
+                CharCategory.CONTROL,
+                CharCategory.FORMAT,
+                CharCategory.SURROGATE,
+                CharCategory.PRIVATE_USE,
+                CharCategory.UNASSIGNED,
+            ).map { it.value.toInt() }.toSet()
+    }
 }

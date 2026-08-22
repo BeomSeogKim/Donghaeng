@@ -92,6 +92,28 @@ class OpenApiDocumentTest {
             )
     }
 
+    @Test
+    fun `the seat name's length bound is published, on every request that carries one`() {
+        // **`seam` cannot hold this and never will.** `openapi-typescript` drops
+        // `maxLength`, so `web/src/lib/api-types.gen.ts` is byte-identical whether the
+        // bound is in the document or not — verified by deleting it and regenerating.
+        // The path-set assertion above does not reach schema members either. So the one
+        // thing standing between `@SeatName`'s `@Size` and a published contract that
+        // silently loses its length bound is this assertion.
+        //
+        // It matters because `#187` deleted three hand-written `@Schema(maxLength = 100)`
+        // — correctly, since nothing kept them in step with the constant — on the
+        // strength of springdoc walking the composed `@Size`. That is a mechanism, and a
+        // mechanism nothing tests is a mechanism that leaves quietly.
+        val schemas = objectMapper.readTree(generate())["components"]["schemas"]
+
+        listOf("CreateWeddingRequest", "JoinWeddingRequest", "UpdateSeatNameRequest").forEach { schema ->
+            assertThat(schemas[schema]["properties"]["name"]["maxLength"].asInt())
+                .describedAs("%s.name must publish the varchar(100) bound `@SeatName` composes", schema)
+                .isEqualTo(100)
+        }
+    }
+
     /** Writes the document as a side effect: this test is what produces the artifact. */
     private fun generate(): String {
         val document =

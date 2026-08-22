@@ -92,18 +92,56 @@ internal class UpdateSeatNameContractTest : ApiFixture() {
         val session = login()
         val weddingId = createWedding(session)
 
-        // **U+3000 and U+00A0 are in this list because they were the hole.**
-        // `@NotBlank` trims with Java's `String.trim()`, which stops at U+0020, while
-        // the service trims with Kotlin's, which does not — so a 전각 공백 name passed
-        // validation and was stored as `''`. 전각 공백 is an ordinary key on a Korean
-        // IME, and the column has no CHECK behind it.
-        listOf("\"\"", "\"   \"", "\"\u3000\"", "\"\u3000\u00a0\"", "\"" + "가".repeat(101) + "\"").forEach { name ->
+        // **보이지 않는 문자로만 된 이름은 이름으로 치지 않는다** — the founder's rule
+        // (`#187`), so this list is not "whitespace" but every way a name can carry no
+        // visible character. Each entry is a class the previous spellings missed:
+        //   U+3000 전각 공백 — an ordinary key on a Korean IME. It passed `@NotBlank`
+        //     (Java trims `c <= ' '` only), was emptied by the service's Kotlin trim,
+        //     and was stored as `''`.
+        //   U+0000, U+0007 — the mirror image. A Kotlin-only trim leaves them intact and
+        //     PgJDBC refuses NUL in a text parameter: a masked 500, not the 400 it is.
+        //   U+200B, U+FEFF, U+00AD — stripped by NO trim in either language. These are
+        //     why the rule asks "is there a visible character" rather than "does it trim
+        //     to empty".        //
+        // **U+0000 and U+0007 are sent as JSON ESCAPES, and that is not cosmetic.** A raw
+        // control character in a JSON string is invalid JSON (RFC 8259), so the parser
+        // refuses it as `MALFORMED_REQUEST_BODY` and the validator never runs. The escape
+        // is what actually parses to a one-NUL name and reaches the rule.
+        listOf(
+            "\"\"",
+            "\"   \"",
+            "\"\u3000\"",
+            "\"\u3000\u00a0\"",
+            "\"\\u0000\"",
+            "\"\\u0007\"",
+            "\"\u200b\"",
+            "\"\ufeff\u00ad\"",
+            "\"" + "가".repeat(101) + "\"",
+        ).forEach { name ->
             val response = put("/weddings/$weddingId/seats/me", listOf(session), """{"name":$name}""")
 
             assertThat(response.statusCode()).describedAs("name=%s", name).isEqualTo(400)
             assertThat(response.json()["code"].asText()).describedAs("name=%s", name).isEqualTo("VALIDATION_FAILED")
         }
         assertThat(nameOf(weddingId, "GROOM")).isEqualTo("김신랑")
+    }
+
+    @Test
+    fun `a name with one visible character is accepted, however it is spelled`() {
+        val session = login()
+        val weddingId = createWedding(session)
+
+        // The other half of the founder's rule, and the half a category list gets wrong
+        // by reaching too far. **보이지 않는** is about invisibility, not about being
+        // unusual: a supplementary-plane character is a surrogate PAIR, so a per-`Char`
+        // predicate reads two `Cs` and refuses the whole name — 🙂 and CJK Ext B hanja
+        // (which do appear in real names) were both refused by the first draft of this
+        // rule. `SeatNameValidator` walks code points, and this is what holds that.
+        listOf("김신랑", "Kim", "金", "\uD840\uDC00", "\uD83D\uDE42", "42", "Anne-Marie", "\u200b김\u200b").forEach { name ->
+            val response = put("/weddings/$weddingId/seats/me", listOf(session), """{"name":"$name"}""")
+
+            assertThat(response.statusCode()).describedAs("name=%s", name).isEqualTo(200)
+        }
     }
 
     @Test
