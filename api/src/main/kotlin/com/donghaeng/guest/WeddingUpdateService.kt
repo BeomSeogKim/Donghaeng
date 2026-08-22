@@ -19,8 +19,10 @@ import org.springframework.transaction.annotation.Transactional
  * mutation response carries the recomputed aggregate (root `AGENTS.md`), and the
  * aggregate is a fold over the ledger — so **any** endpoint that mutates a
  * wedding-scoped resource and answers with the number is assembled on the ledger's
- * side of that arrow, whatever resource it writes. `#175`'s seat-name edit lands
- * here for the same reason.
+ * side of that arrow, whatever resource it writes. **`#175`'s seat-name edit does
+ * not**, and that is the same rule rather than an exception to it: a seat's name is
+ * not an input to the 인원수, so there is nothing to recompute and the write stays in
+ * `wedding/` with the row (notes/2026-08-22-decision-the-seat-name-edit.md §3).
  *
  * What stays in `wedding/` is the write itself, [WeddingService.update] — the row,
  * its invariants and its clock belong to the package that owns the row.
