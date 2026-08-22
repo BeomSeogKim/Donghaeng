@@ -4,6 +4,7 @@ import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { Field } from '../components/Field'
 import { GoogleLoginLink } from '../components/GoogleLoginLink'
+import { LogoutButton } from '../components/LogoutButton'
 import { Screen } from '../components/Screen'
 import { useInviteToken } from '../hooks/useInviteToken'
 import { useJoinWedding } from '../hooks/useJoinWedding'
@@ -61,7 +62,7 @@ export function AcceptInvitePage() {
    */
   if (token === null) {
     return (
-      <Notice title="초대 정보가 없습니다">
+      <Notice signedIn={session.data !== null} title="초대 정보가 없습니다">
         <p className="text-body leading-body text-ink-muted">
           받은 초대 링크를 다시 열어 주세요. 링크는 만든 지 하루 동안 쓸 수 있습니다.
         </p>
@@ -186,7 +187,7 @@ function AcceptForm({ token }: { token: string }) {
   // only be refused again. The token is already gone (`useJoinWedding`).
   if (refusal?.settled === true) {
     return (
-      <Notice title={refusal.title}>
+      <Notice signedIn title={refusal.title}>
         {refusal.detail !== undefined && (
           <p className="text-body leading-body text-ink-muted">{refusal.detail}</p>
         )}
@@ -234,8 +235,27 @@ function AcceptForm({ token }: { token: string }) {
           수락
         </button>
       </form>
+
+      <Exit />
     </Screen>
   )
+}
+
+/**
+ * THE EXIT THIS SCREEN WOULD OTHERWISE NOT HAVE, and it is not decoration.
+ *
+ * A signed-in person here holds no wedding — that is what sent them here — so
+ * 원장 sends them straight back, and 웨딩 만들기 is the one screen they must not
+ * be handed. Without this they are parked with exactly one thing to press and
+ * no way to be anybody else.
+ *
+ * AND "I SIGNED IN WITH THE WRONG GOOGLE ACCOUNT" IS THE CASE IT SERVES. The
+ * token deliberately survives a sign-out (`lib/invite.ts`), so signing out here
+ * and back in as the right account lands on this same screen with the same
+ * invite still waiting — which only works if there is a way to sign out.
+ */
+function Exit() {
+  return <LogoutButton className="flex flex-col items-center gap-2 text-center" />
 }
 
 /**
@@ -320,14 +340,29 @@ const UNAVAILABLE: Refusal = {
   settled: false,
 }
 
-/** The EmptyState part — a bordered block on surface, never a floating card. */
-function Notice({ children, title }: { children?: ReactNode; title: string }) {
+/**
+ * The EmptyState part — a bordered block on surface, never a floating card, and
+ * never an illustration: a tool has no reason to be cheerful about a refusal.
+ *
+ * The exit sits OUTSIDE the block, the way 웨딩 만들기 holds it: it is a way off
+ * the screen rather than one of the screen's answers.
+ */
+function Notice({
+  children,
+  signedIn,
+  title,
+}: {
+  children?: ReactNode
+  signedIn: boolean
+  title: string
+}) {
   return (
     <Screen>
       <div className="flex w-full flex-col items-start gap-3 border border-line bg-surface px-6 py-8">
         <h1 className="text-lead font-semibold leading-snug">{title}</h1>
         {children}
       </div>
+      {signedIn && <Exit />}
     </Screen>
   )
 }

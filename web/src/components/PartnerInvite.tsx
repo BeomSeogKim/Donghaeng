@@ -89,7 +89,7 @@ function Invite({ wedding }: { wedding: Wedding }) {
         있고, 새로 만들면 이전 링크는 바로 쓸 수 없게 됩니다.
       </p>
 
-      {issued !== null && <Link issued={issued} />}
+      {issued !== null && <IssuedLink issued={issued} />}
 
       <button
         className={`${buttonClassName(issued === null ? 'primary' : 'secondary')} self-start`}
@@ -100,7 +100,9 @@ function Invite({ wedding }: { wedding: Wedding }) {
          * (notes/2026-08-21-decision-query-defaults-and-mutation-ordering.md).
          */
         disabled={issue.isPending}
-        onClick={() => issue.mutate(undefined, { onSuccess: setIssued })}
+        onClick={() =>
+          issue.mutate(undefined, { onSuccess: (invite) => setIssued(invite) })
+        }
         type="button"
       >
         {issued === null ? '초대 링크 만들기' : '새 링크 만들기'}
@@ -126,7 +128,7 @@ function Invite({ wedding }: { wedding: Wedding }) {
  * pasted into KakaoTalk — selecting sixty characters of base64 with a thumb is
  * the difference between one tap and giving up.
  */
-function Link({ issued }: { issued: IssuedInvite }) {
+function IssuedLink({ issued }: { issued: IssuedInvite }) {
   const url = inviteLink(issued.token)
   const [copied, setCopied] = useState<'yes' | 'no' | null>(null)
 

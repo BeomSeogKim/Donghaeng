@@ -336,6 +336,31 @@ it('keeps the token when the name is what was refused', async () => {
   expect(stored()).toBe(TOKEN)
 })
 
+it('is a screen a signed-in person can leave, and one a signed-out person cannot log out of', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers())
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  const { unmount } = renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  /*
+   * A signed-in person here holds NO wedding — that is what sent them here — so
+   * 원장 sends them back and 웨딩 만들기 is the one screen they may not be
+   * handed. 로그아웃 is the only exit left, and it is the one "I used the wrong
+   * Google account" needs: the token survives a sign-out on purpose.
+   */
+  expect(await screen.findByRole('button', { name: '로그아웃' })).toBeInTheDocument()
+  unmount()
+
+  const signedOut = inviteApi({ signedIn: false })
+  server.use(...signedOut.handlers())
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  // Nothing to sign out of: the exit a signed-out person needs is the login.
+  await screen.findByRole('link', { name: '구글로 로그인' })
+  expect(screen.queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument()
+})
+
 it('tells a tab that came back without the token how to recover', async () => {
   const api = inviteApi()
   server.use(...api.handlers())
