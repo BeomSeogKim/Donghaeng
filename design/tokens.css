@@ -148,6 +148,11 @@
    * ──────────────────────────────────────────────────────────── */
   --dh-row-h-mobile: 3.75rem;   /* 60px — name line + meta line                */
   --dh-row-h-desktop: 2.75rem;  /* 44px — single-line table row                */
+  /* 38px — a party's member, one step under the row that carries it. Shorter
+   * than a table row on purpose: an expanded team must read as belonging to
+   * the line above it rather than as four more lines of the ledger. On a phone
+   * the tap floor overrules it, because a member's 참석 is a control there. */
+  --dh-row-h-member: 2.375rem;
   --dh-tap-min: 2.75rem;        /* 44px — floor for anything tappable          */
   --dh-gutter-mobile: var(--dh-space-4);
   --dh-gutter-desktop: var(--dh-space-6);

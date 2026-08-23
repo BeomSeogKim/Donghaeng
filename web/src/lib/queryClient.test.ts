@@ -33,16 +33,24 @@ type Ledger =
  */
 function created(name: string, nth: number): GuestMutation {
   return {
-    guest: {
+    party: {
       id: 41,
       name,
-      side: 'GROOM',
-      groupCategory: 'OTHER',
-      groupLabel: null,
-      contact: null,
-      accessibilityNote: null,
-      expectedAttending: true,
-      expectedPartySize: 1,
+      size: 1,
+      attendingCount: 1,
+      members: [
+        {
+          id: 41,
+          name,
+          side: 'GROOM',
+          groupCategory: 'OTHER',
+          groupLabel: null,
+          contact: null,
+          accessibilityNote: null,
+          expectedAttending: true,
+          companionOf: null,
+        },
+      ],
     },
     headcount: { mealHeadcount: nth },
   }
@@ -160,7 +168,7 @@ it('runs mutations one at a time, in the order they were fired', async () => {
     new QueryMutationObserver(client, {
       mutationFn: addGuest,
       onSuccess: (data) => {
-        settled.push(data.guest.name)
+        settled.push(data.party.name)
       },
     }).mutate(name)
 
@@ -204,7 +212,7 @@ it('would let the second response land first without that serialisation', async 
       scope: undefined,
       mutationFn: addGuest,
       onSuccess: (data) => {
-        settled.push(data.guest.name)
+        settled.push(data.party.name)
       },
     }).mutate(name)
 

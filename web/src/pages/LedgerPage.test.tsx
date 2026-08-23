@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
-import { type Guest, guestsQueryKey, ledgerQueryKey } from '../hooks/useGuests'
+import {
+  type Guest,
+  type GuestParty,
+  guestsQueryKey,
+  ledgerQueryKey,
+} from '../hooks/useGuests'
 import { type Headcount, headcountQueryKey } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
@@ -44,8 +49,8 @@ const HALF_SEATED: Wedding = {
   ],
 }
 
-/** A row as the API returns it, typed from the generated document. */
-function guest(id: number, name: string, overrides: Partial<Guest> = {}): Guest {
+/** One person, as the API returns one inside a party. */
+function person(id: number, name: string, overrides: Partial<Guest> = {}): Guest {
   return {
     id,
     name,
@@ -55,9 +60,56 @@ function guest(id: number, name: string, overrides: Partial<Guest> = {}): Guest 
     contact: null,
     accessibilityNote: null,
     expectedAttending: true,
-    expectedPartySize: 1,
+    companionOf: null,
     ...overrides,
   }
+}
+
+/**
+ * A party, folded exactly as the server folds it (docs/api-spec.md
+ * § GET /weddings/{weddingId}/guests).
+ *
+ * `size` AND `attendingCount` ARE COUNTED FROM THE MEMBERS HANDED IN, never
+ * passed separately. The server counts what it returned, and a double that
+ * could disagree with its own `members` would let a screen showing a wrong
+ * 참석 column stay green — on the product whose one claim is that its numbers
+ * are not wrong.
+ */
+function party(head: Guest, ...companions: readonly Guest[]): GuestParty {
+  const members = [head, ...companions]
+  return {
+    // The head's, always — even under a filter that excluded the head.
+    id: head.id,
+    name: head.name,
+    size: members.length,
+    attendingCount: members.filter((member) => member.expectedAttending).length,
+    members,
+  }
+}
+
+/**
+ * A 동반, named the way the server names one — `{대표자} 동반 N`, N from 1 —
+ * and carrying the head's 측 · 그룹 · 라벨 · 참석 as the defaults creation
+ * applies. Each of those is overridable, because after creation every one of
+ * them moves independently and that is the point of `#213`.
+ *
+ * The id is `head.id * 10 + N`, so a companion of head 1 cannot be mistaken for
+ * head 2 in a test that holds both.
+ */
+function companion(head: Guest, nth: number, overrides: Partial<Guest> = {}): Guest {
+  return person(head.id * 10 + nth, `${head.name} 동반 ${nth}`, {
+    side: head.side,
+    groupCategory: head.groupCategory,
+    groupLabel: head.groupLabel,
+    expectedAttending: head.expectedAttending,
+    ...overrides,
+    companionOf: head.id,
+  })
+}
+
+/** A party of one — one person, and the ordinary row of most ledgers. */
+function guest(id: number, name: string, overrides: Partial<Guest> = {}): GuestParty {
+  return party(person(id, name, overrides))
 }
 
 /**
@@ -135,7 +187,7 @@ it('renders the wedding it took from GET /weddings, in 이름 가나다순', asy
     calls.weddings(),
     // Entry order — the API's contract, and deliberately not 가나다순.
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([
+      HttpResponse.json<GuestParty[]>([
         guest(1, '한지우'),
         guest(2, '박지민'),
         guest(3, '김영수'),
@@ -162,7 +214,7 @@ it('offers 하객 추가 and 설정 in the header, and 로그아웃 nowhere on t
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(),
   )
 
@@ -183,7 +235,7 @@ it('names the empty seat rather than leaving a gap where a name would be', async
   server.use(
     calls.me(),
     calls.weddings(() => HttpResponse.json<Wedding[]>([HALF_SEATED])),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(),
   )
 
@@ -204,7 +256,7 @@ it('sends no filter parameter at all while both sides and both answers are wante
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(),
   )
 
@@ -220,7 +272,7 @@ it('narrows to one 측 with a single parameter, and never repeats it', async () 
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(),
   )
 
@@ -253,7 +305,7 @@ it('carries both axes at once, each exactly once', async () => {
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(),
   )
 
@@ -276,7 +328,7 @@ it('says the ledger is empty when nobody has been entered yet', async () => {
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(),
   )
 
@@ -293,7 +345,7 @@ it('never leaves a filter at a dead end', async () => {
     calls.me(),
     calls.weddings(),
     calls.guests((url) =>
-      HttpResponse.json<Guest[]>(
+      HttpResponse.json<GuestParty[]>(
         url.search === '' ? [guest(1, '김영수', { side: 'GROOM' })] : [],
       ),
     ),
@@ -320,19 +372,26 @@ it('never leaves a filter at a dead end', async () => {
   )
 })
 
+/** 혼주 손님 with one companion — the party this test reads the columns off. */
+const KIM = person(1, '김영수', {
+  side: 'GROOM',
+  groupCategory: 'PARENTS_GUEST',
+  groupLabel: '아버지 회사 동료',
+})
+
 it('shows each guest with the side, group and party size the ledger is read by', async () => {
   const calls = api()
   server.use(
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([
-        guest(1, '김영수', {
-          side: 'GROOM',
-          groupCategory: 'PARENTS_GUEST',
-          groupLabel: '아버지 회사 동료',
-          expectedPartySize: 2,
-        }),
+      HttpResponse.json<GuestParty[]>([
+        party(
+          KIM,
+          companion(KIM, 1),
+          // The 인원 column is the party's size, so it is the row's people and
+          // no longer a number somebody typed into a column.
+        ),
         guest(2, '윤채원', {
           side: 'BRIDE',
           groupCategory: 'FRIEND',
@@ -367,7 +426,7 @@ it('offers the failure again rather than explaining it away', async () => {
       attempt += 1
       return attempt === 1
         ? problem(500, 'INTERNAL_ERROR')
-        : HttpResponse.json<Guest[]>([guest(1, '김영수')])
+        : HttpResponse.json<GuestParty[]>([guest(1, '김영수')])
     }),
     calls.headcount(counted(1)),
   )
@@ -409,7 +468,7 @@ it('reads a failed wedding list as the same failure, and recovers from it', asyn
         ? problem(500, 'INTERNAL_ERROR')
         : HttpResponse.json<Wedding[]>([WEDDING])
     }),
-    calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([guest(1, '김영수')])),
     calls.headcount(counted(1)),
   )
 
@@ -483,9 +542,10 @@ it('does not say a filter matched nobody before the server has answered it', asy
     calls.weddings(),
     calls.guests(async (url) => {
       // 신부측 has twelve people and is slow; everything else has nobody.
-      if (url.searchParams.get('side') !== 'BRIDE') return HttpResponse.json<Guest[]>([])
+      if (url.searchParams.get('side') !== 'BRIDE')
+        return HttpResponse.json<GuestParty[]>([])
       await held
-      return HttpResponse.json<Guest[]>([guest(1, '윤채원', { side: 'BRIDE' })])
+      return HttpResponse.json<GuestParty[]>([guest(1, '윤채원', { side: 'BRIDE' })])
     }),
     calls.headcount(counted(1)),
   )
@@ -519,12 +579,12 @@ it('does not call the ledger empty while it is holding a filter\u0027s rows', as
     calls.me(),
     calls.weddings(),
     calls.guests(async (url) => {
-      if (url.search !== '') return HttpResponse.json<Guest[]>([])
+      if (url.search !== '') return HttpResponse.json<GuestParty[]>([])
       // The whole ledger, and it is slow — a reload after a filter that matched
       // nobody, which is the second half of the same bug: 400 people on file
       // and the screen announcing there is nobody at all.
       await held
-      return HttpResponse.json<Guest[]>([guest(1, '김영수')])
+      return HttpResponse.json<GuestParty[]>([guest(1, '김영수')])
     }),
     calls.headcount(counted(1)),
   )
@@ -566,7 +626,7 @@ it('refetches the filtered ledger when the wedding\u0027s ledger key is invalida
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([guest(1, '김영수')])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([guest(1, '김영수')])),
     calls.headcount(counted(1)),
   )
 
@@ -631,7 +691,7 @@ it('asks for the number beside the ledger rather than after it', async () => {
     calls.weddings(),
     calls.guests(async () => {
       await held
-      return HttpResponse.json<Guest[]>([guest(1, '김영수')])
+      return HttpResponse.json<GuestParty[]>([guest(1, '김영수')])
     }),
     calls.headcount(counted(1)),
   )
@@ -659,7 +719,7 @@ it('never draws a number it has not been given as 0', async () => {
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+      HttpResponse.json<GuestParty[]>([guest(1, '김영수'), guest(2, '박지민')]),
     ),
     calls.headcount(async () => {
       await held
@@ -687,7 +747,7 @@ it('says the number failed rather than showing one, and asks for it again', asyn
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+      HttpResponse.json<GuestParty[]>([guest(1, '김영수'), guest(2, '박지민')]),
     ),
     calls.headcount(() => {
       attempt += 1
@@ -718,7 +778,7 @@ it('drops the number rather than keeping a stale one when a refetch fails', asyn
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+      HttpResponse.json<GuestParty[]>([guest(1, '김영수'), guest(2, '박지민')]),
     ),
     calls.headcount(() => {
       attempt += 1
@@ -746,7 +806,7 @@ it('shows 0 for a ledger with nobody in it, because that 0 was counted', async (
   server.use(
     calls.me(),
     calls.weddings(),
-    calls.guests(() => HttpResponse.json<Guest[]>([])),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([])),
     calls.headcount(counted(0)),
   )
 
@@ -765,7 +825,7 @@ it('draws no comparison at all while the couple has no 보증인원', async () =
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+      HttpResponse.json<GuestParty[]>([guest(1, '김영수'), guest(2, '박지민')]),
     ),
     // The member is omitted, not null — and until `#8` there is no screen that
     // could set it, so this is every couple in v1.
@@ -790,7 +850,7 @@ it('subtracts the two numbers itself when the venue has given one', async () => 
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([guest(1, '김영수'), guest(2, '박지민')]),
+      HttpResponse.json<GuestParty[]>([guest(1, '김영수'), guest(2, '박지민')]),
     ),
     calls.headcount(counted(2, 3)),
   )
@@ -809,8 +869,9 @@ it('says 초과 rather than a negative 여유 when the ledger is over the 보증
     calls.me(),
     calls.weddings(),
     calls.guests(() =>
-      HttpResponse.json<Guest[]>([
-        guest(1, '김영수', { expectedPartySize: 2 }),
+      HttpResponse.json<GuestParty[]>([
+        // Four people over three rows: 식대 인원 counts records, not rows.
+        party(person(1, '김영수'), companion(person(1, '김영수'), 1)),
         guest(2, '박지민'),
         guest(3, '이서연'),
       ]),
@@ -828,7 +889,7 @@ it('says 초과 rather than a negative 여유 when the ledger is over the 보증
  * WHERE THE NUMBER COMES FROM AFTER A WRITE — asserted in
  * `components/AddGuestSheet.test.tsx` now, and no longer here.
  *
- * Every wedding-scoped mutation returns `{guest, headcount}`, recomputed inside
+ * Every wedding-scoped mutation returns `{party, headcount}`, recomputed inside
  * the same transaction as the write, and the number is taken from that response
  * in the mutation's own `onSuccess` — never from a request fired beside the
  * mutation, which lands outside the window mutations are serialised in and puts
@@ -840,3 +901,213 @@ it('says 초과 rather than a negative 여유 when the ledger is over the 보증
  * makes the same assertions through the screen the couple actually presses, and
  * two components named 하객 추가 on one ledger is one too many.
  */
+
+/*
+ * 접히는 원장 — 한 팀이 한 줄이고, 참석 열에는 세 번째 읽기가 있다 (`#213`,
+ * notes/2026-08-23-decision-companions-become-guests.md).
+ *
+ * Mandatory tests: this is the ledger display. What is asserted is what the
+ * screen SAYS about a party it was handed — including the one case where it is
+ * required to say nothing at all and give the decision back.
+ */
+
+/** The party rows only — a member row is a `listitem` too, once one is open. */
+function partyRows() {
+  return screen
+    .getAllByRole('listitem')
+    .filter((row) => within(row).queryAllByTestId('guest-name').length > 0)
+}
+
+/** The list a row's disclosure controls, or `null` while the row is folded. */
+function expansion(row: HTMLElement) {
+  const caret = within(row).getByRole('button', { name: /동반 인원$/ })
+  return document.getElementById(caret.getAttribute('aria-controls') ?? '')
+}
+
+/** Every person in an open party, as `이름 · 참석 여부`. */
+function membersOf(row: HTMLElement) {
+  const list = expansion(row)
+  if (list === null) return null
+  return within(list)
+    .getAllByRole('listitem')
+    .map((member) => (member.textContent ?? '').replace(/(참석|불참)$/, ' · $1'))
+}
+
+it('leaves a party of one with nothing to expand', async () => {
+  const calls = api()
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() => HttpResponse.json<GuestParty[]>([guest(1, '김영수')])),
+    calls.headcount(counted(1)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findByTestId('guest-name')
+
+  // A party of one IS a person, and the collapsed row is already that person.
+  // A disclosure over a row with nothing underneath is a control that lies.
+  expect(screen.queryByRole('button', { name: /동반 인원$/ })).not.toBeInTheDocument()
+})
+
+it('folds a party into its head and expands it into its people', async () => {
+  const calls = api()
+  const head = person(1, '박영희', { groupCategory: 'PARENTS_GUEST' })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<GuestParty[]>([
+        party(head, companion(head, 1), companion(head, 2)),
+      ]),
+    ),
+    calls.headcount(counted(3)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findByTestId('guest-name')
+
+  // Folded: one row, named after the head, carrying the party's 인원.
+  expect(renderedNames()).toEqual(['박영희'])
+  const row = partyRows()[0]
+  expect(within(row).getByText(reads('3명'))).toBeVisible()
+  expect(membersOf(row)).toBeNull()
+
+  await userEvent.click(within(row).getByRole('button', { name: '박영희 동반 인원' }))
+
+  // 이름은 저장된 것이지 만들어 낸 것이 아니다 — `{대표자} 동반 N`, exactly as
+  // the server wrote it once and will never write again.
+  expect(membersOf(row)).toEqual([
+    '박영희 · 참석',
+    '박영희 동반 1 · 참석',
+    '박영희 동반 2 · 참석',
+  ])
+  // The people rode along with the party, so expanding asked for nothing: one
+  // ledger read, and it is the one this screen opened with.
+  expect(calls.ledgerRequests).toHaveLength(1)
+
+  await userEvent.click(within(row).getByRole('button', { name: '박영희 동반 인원' }))
+  expect(membersOf(row)).toBeNull()
+})
+
+it('reads a mixed party as a count, and expands it rather than picking a side', async () => {
+  const calls = api()
+  const head = person(6, '박영희')
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<GuestParty[]>([
+        party(
+          head,
+          companion(head, 1),
+          companion(head, 2),
+          companion(head, 3, { expectedAttending: false }),
+        ),
+      ]),
+    ),
+    calls.headcount(counted(3)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findByTestId('guest-name')
+  const row = partyRows()[0]
+
+  /*
+   * A MIXED PARTY HAS NO ATTENDANCE. 참석 would be a lie about the one who
+   * cannot come and 불참 a lie about the three who can, so the column states
+   * the count it does know — 애매한 것은 추측하지 않는다, applied to a control
+   * instead of to an import.
+   */
+  expect(within(row).getByText('3 / 4')).toBeVisible()
+  expect(within(row).queryByText('참석')).not.toBeInTheDocument()
+  expect(within(row).queryByText('불참')).not.toBeInTheDocument()
+
+  await userEvent.click(within(row).getByRole('button', { name: /참석, 펼치기$/ }))
+
+  // Pressing it opens the row instead of answering for four people at once,
+  // and it writes nothing on the way.
+  expect(membersOf(row)).toEqual([
+    '박영희 · 참석',
+    '박영희 동반 1 · 참석',
+    '박영희 동반 2 · 참석',
+    '박영희 동반 3 · 불참',
+  ])
+  expect(calls.ledgerRequests).toHaveLength(1)
+})
+
+it('says 참석 or 불참 only when the whole party agrees', async () => {
+  const calls = api()
+  const all = person(1, '김영수')
+  const none = person(2, '윤채원', { expectedAttending: false })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests(() =>
+      HttpResponse.json<GuestParty[]>([
+        party(all, companion(all, 1)),
+        party(none, companion(none, 1)),
+      ]),
+    ),
+    calls.headcount(counted(2)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findAllByTestId('guest-name')
+  const rows = partyRows()
+
+  expect(within(rows[0]).getByText('참석')).toBeVisible()
+  // 불참 is neutral and stated as plainly as 참석: a guest who cannot come is a
+  // fact, not an error.
+  expect(within(rows[1]).getByText('불참')).toBeVisible()
+  // Neither is a control yet — tapping attendance is `#13`, and a button that
+  // does nothing is worse than a readout. The mixed reading is a button today
+  // only because it already has somewhere to go.
+  expect(within(rows[0]).queryByRole('button', { name: '참석' })).not.toBeInTheDocument()
+  expect(within(rows[1]).queryByRole('button', { name: '불참' })).not.toBeInTheDocument()
+})
+
+it('names a filtered party after its head even when the filter excluded the head', async () => {
+  const calls = api()
+  const head = person(1, '김영수', { expectedAttending: false })
+  const brought = companion(head, 1, { expectedAttending: true })
+  server.use(
+    calls.me(),
+    calls.weddings(),
+    calls.guests((url) =>
+      HttpResponse.json<GuestParty[]>([
+        url.searchParams.get('attendance') === 'ATTENDING'
+          ? // Filters select PEOPLE, and a party appears when any of its people
+            // matched — so under 참석 this is the head's party carrying only the
+            // companion, and `id`/`name` are still the head's.
+            { ...party(brought), id: head.id, name: head.name }
+          : party(head, brought),
+      ]),
+    ),
+    calls.headcount(counted(1)),
+  )
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  await screen.findByTestId('guest-name')
+
+  await userEvent.click(screen.getByRole('button', { name: '참석' }))
+
+  /*
+   * 대표자는 불참인데 동반은 참석인 팀, under the 참석 chip. The row is named
+   * after the head because that is how the couple recognises it, and the
+   * figures are the server's: `size` and `attendingCount` describe the members
+   * that MATCHED. Summing those over this filter is exactly 식대 인원, which is
+   * why folding `members` here would produce a second, disagreeing number.
+   */
+  await waitFor(() => expect(renderedNames()).toEqual(['김영수']))
+  const row = partyRows()[0]
+  expect(within(row).getByText(reads('1명'))).toBeVisible()
+  expect(within(row).getByText('참석')).toBeVisible()
+
+  // AND THERE IS NOTHING TO EXPAND, because under this filter the party is one
+  // person — the disclosure follows the `size` the server sent, not a party
+  // total the client has not been told.
+  expect(
+    within(row).queryByRole('button', { name: /동반 인원$/ }),
+  ).not.toBeInTheDocument()
+})

@@ -26,9 +26,9 @@ export interface paths {
     patch: operations["updateWedding"];
   };
   "/weddings/{weddingId}/guests": {
-    /** The wedding's ledger, filtered by side and attendance */
+    /** The wedding's ledger as parties, filtered by side and attendance */
     get: operations["listGuests"];
-    /** Add a guest to the ledger */
+    /** Add a guest — and their party — to the ledger */
     post: operations["createGuest"];
   };
   "/weddings/{weddingId}/headcount": {
@@ -46,6 +46,10 @@ export interface paths {
   "/weddings/join": {
     /** Take the wedding's empty seat, using an invite token */
     post: operations["joinWedding"];
+  };
+  "/weddings/join/preview": {
+    /** What an invite link opens — before taking the seat */
+    post: operations["previewInvite"];
   };
 }
 
@@ -68,7 +72,7 @@ export interface components {
       readonly expectedAttending?: boolean | null;
       /**
        * Format: int32
-       * @description 참석 인원, this guest included — not a companion count. Omitted, it is 1
+       * @description 참석 인원, this guest included — not a companion count. Each person becomes a 하객 record. Omitted, it is 1
        * @example 2
        */
       readonly expectedPartySize?: number | null;
@@ -110,17 +114,48 @@ export interface components {
        * @example 2026-10-10
        */
       readonly weddingDate: string;
+      /**
+       * @description 결혼식 이름 — the couple's own words, at most 100 characters. Omitted or null, the wedding has none
+       * @example 범석 희주의 가을
+       */
+      readonly weddingName?: string | null;
     };
     readonly GuestMutationResponse: {
-      readonly guest: components["schemas"]["GuestResponse"];
       readonly headcount: components["schemas"]["HeadcountResponse"];
+      readonly party: components["schemas"]["GuestPartyResponse"];
+    };
+    readonly GuestPartyResponse: {
+      /**
+       * Format: int32
+       * @description How many of them are 참석. Equal to `size`, zero, or something between
+       * @example 3
+       */
+      readonly attendingCount: number;
+      /**
+       * Format: int64
+       * @description The head guest's id — the party's identity, and what a client keys a row on
+       */
+      readonly id: number;
+      /** @description The people, in entry order, head first when it is here */
+      readonly members: readonly components["schemas"]["GuestResponse"][];
+      /**
+       * @description The head guest's name — what the collapsed row reads
+       * @example 김영수
+       */
+      readonly name: string;
+      /**
+       * Format: int32
+       * @description How many people this row carries: the members below, after any filter
+       * @example 4
+       */
+      readonly size: number;
     };
     readonly GuestResponse: {
       readonly accessibilityNote?: string | null;
+      /** Format: int64 */
+      readonly companionOf?: number | null;
       readonly contact?: string | null;
       readonly expectedAttending: boolean;
-      /** Format: int32 */
-      readonly expectedPartySize: number;
       /** @enum {string} */
       readonly groupCategory: "FAMILY" | "RELATIVE" | "COUSIN" | "PARENTS_GUEST" | "FRIEND" | "COWORKER" | "OTHER";
       readonly groupLabel?: string | null;
@@ -135,6 +170,25 @@ export interface components {
       readonly guaranteedHeadcount?: number | null;
       /** Format: int32 */
       readonly mealHeadcount: number;
+    };
+    readonly InvitePreviewRequest: {
+      /** @description The invite token, read from the link's fragment. Never put it in a URL path */
+      readonly token: string;
+    };
+    readonly InvitePreviewResponse: {
+      /** @description The partner who sent the link — the seat that is already taken */
+      readonly invitedBy: components["schemas"]["WeddingSeatResponse"];
+      /**
+       * Format: date
+       * @description 예식일
+       * @example 2026-10-10
+       */
+      readonly weddingDate: string;
+      /**
+       * @description 결혼식 이름, or null when the couple has not given their wedding one
+       * @example 범석 희주의 가을
+       */
+      readonly weddingName?: string | null;
     };
     readonly IssuedInviteResponse: {
       /**
@@ -193,6 +247,11 @@ export interface components {
        * @example 2026-10-10
        */
       readonly weddingDate?: string;
+      /**
+       * @description 결혼식 이름. Omit to leave it alone, send `null` to go back to having none
+       * @example 범석 희주의 가을
+       */
+      readonly weddingName?: string | null;
     };
     readonly WeddingMutationResponse: {
       readonly headcount: components["schemas"]["HeadcountResponse"];
@@ -204,6 +263,7 @@ export interface components {
       readonly seats: readonly components["schemas"]["WeddingSeatResponse"][];
       /** Format: date */
       readonly weddingDate: string;
+      readonly weddingName?: string | null;
     };
     readonly WeddingSeatResponse: {
       readonly name?: string | null;
@@ -368,7 +428,7 @@ export interface operations {
       };
     };
   };
-  /** The wedding's ledger, filtered by side and attendance */
+  /** The wedding's ledger as parties, filtered by side and attendance */
   listGuests: {
     parameters: {
       query?: {
@@ -382,10 +442,10 @@ export interface operations {
       };
     };
     responses: {
-      /** @description The whole ledger, oldest first — an empty array when the couple has entered nobody yet. */
+      /** @description The whole ledger folded into parties, oldest first — an empty array when the couple has entered nobody yet. */
       200: {
         content: {
-          readonly "*/*": readonly components["schemas"]["GuestResponse"][];
+          readonly "*/*": readonly components["schemas"]["GuestPartyResponse"][];
         };
       };
       /** @description A `side` or `attendance` value outside its set. */
@@ -408,7 +468,7 @@ export interface operations {
       };
     };
   };
-  /** Add a guest to the ledger */
+  /** Add a guest — and their party — to the ledger */
   createGuest: {
     parameters: {
       path: {
@@ -421,13 +481,13 @@ export interface operations {
       };
     };
     responses: {
-      /** @description The guest was added to this wedding's ledger. */
+      /** @description The party was added to this wedding's ledger — one 하객 record per person. */
       201: {
         content: {
           readonly "*/*": components["schemas"]["GuestMutationResponse"];
         };
       };
-      /** @description A blank or over-long name, a party size below 1, an over-long optional field, or a body that could not be read. */
+      /** @description A blank or over-long name, a party size below 1 or above 20, an over-long optional field, or a body that could not be read. */
       400: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];
@@ -581,6 +641,40 @@ export interface operations {
         };
       };
       /** @description The caller already belongs to a wedding, or the seat was taken while they were deciding. */
+      409: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+    };
+  };
+  /** What an invite link opens — before taking the seat */
+  previewInvite: {
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["InvitePreviewRequest"];
+      };
+    };
+    responses: {
+      /** @description The wedding the token would join, named but not identified. */
+      200: {
+        content: {
+          readonly "*/*": components["schemas"]["InvitePreviewResponse"];
+        };
+      };
+      /** @description No session, or an expired or revoked one. */
+      401: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description The token is not usable — unknown, wrong, already spent, replaced by a reissue, or expired. */
+      404: {
+        content: {
+          readonly "*/*": components["schemas"]["ProblemDetail"];
+        };
+      };
+      /** @description The caller already belongs to a wedding, or the seat has been taken. */
       409: {
         content: {
           readonly "*/*": components["schemas"]["ProblemDetail"];
