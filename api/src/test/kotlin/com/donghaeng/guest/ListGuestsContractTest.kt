@@ -35,7 +35,7 @@ import java.net.http.HttpResponse
 @Import(StubGoogleRegistration::class)
 internal class ListGuestsContractTest : GuestFixture() {
     @Test
-    fun `the ledger is a bare array of the same rows POST returns, oldest first`() {
+    fun `the ledger is a bare array of the same parties POST returns, oldest first`() {
         val session = login()
         val weddingId = createWedding(session)
         val first = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM"}""")
@@ -51,28 +51,136 @@ internal class ListGuestsContractTest : GuestFixture() {
         // a row that moves between reads is a row they tap by mistake.
         assertThat(ids(response)).containsExactly(first, second, third)
 
-        // The same `GuestResponse` the create returns — one type for both, so `web/`
-        // caches one shape. The confirmed slots are still absent, as
-        // `docs/api-spec.md` says: nothing writes them until `#13`.
-        val members =
-            response
-                .json()
+        // The same `GuestPartyResponse` the create returns under `party` — one type
+        // for both, so `web/` caches one shape (changed 2026-08-23, `#213`).
+        val row = response.json().first()
+        assertThat(row.fieldNames().asSequence().toList())
+            .containsExactlyInAnyOrder("id", "name", "size", "attendingCount", "members")
+
+        // And the member shape, where `expectedPartySize` was replaced by the
+        // reference that says whose companion this is. The confirmed slots are still
+        // absent, as `docs/api-spec.md` says: nothing writes them until `#13`.
+        assertThat(
+            row["members"]
                 .first()
                 .fieldNames()
                 .asSequence()
-                .toList()
-        assertThat(members)
-            .containsExactlyInAnyOrder(
-                "id",
-                "name",
-                "side",
-                "groupCategory",
-                "groupLabel",
-                "contact",
-                "accessibilityNote",
-                "expectedAttending",
-                "expectedPartySize",
+                .toList(),
+        ).containsExactlyInAnyOrder(
+            "id",
+            "name",
+            "side",
+            "groupCategory",
+            "groupLabel",
+            "contact",
+            "accessibilityNote",
+            "expectedAttending",
+            "companionOf",
+        )
+    }
+
+    @Test
+    fun `a party of three is one row carrying three people`() {
+        // **인원수 3은 하객 세 건이다** (`#213`,
+        // notes/2026-08-23-decision-companions-become-guests.md). The row the couple
+        // sees is still one row; what changed is that the people inside it exist.
+        val session = login()
+        val weddingId = createWedding(session)
+        val head =
+            addGuest(
+                session,
+                weddingId,
+                """{"name":"김영수","side":"GROOM","groupCategory":"FRIEND","groupLabel":"동아리","expectedPartySize":3}""",
             )
+
+        val party = list(session, weddingId, "").json().single()
+
+        assertThat(party["id"].asLong()).isEqualTo(head)
+        assertThat(party["name"].asText()).isEqualTo("김영수")
+        assertThat(party["size"].asInt()).isEqualTo(3)
+        assertThat(party["attendingCount"].asInt()).isEqualTo(3)
+
+        // **The generated name carries the 주체, and so does the reference** — a
+        // companion surfaced on its own still says whose it is. N starts at 1.
+        val members = party["members"]
+        assertThat(members.map { it["name"].asText() }).containsExactly("김영수", "김영수 동반 1", "김영수 동반 2")
+        assertThat(members.map { member -> member["companionOf"].takeUnless { it.isNull }?.asLong() })
+            .containsExactly(null, head, head)
+
+        // The two defaults applied at creation, and only at creation: the head's 측
+        // and its group. A contact is NOT inherited — it belongs to a person.
+        assertThat(members.map { it["side"].asText() }).containsOnly("GROOM")
+        assertThat(members.map { it["groupCategory"].asText() }).containsOnly("FRIEND")
+        assertThat(members.map { it["groupLabel"].asText() }).containsOnly("동아리")
+        assertThat(members.drop(1).map { it["contact"].isNull }).containsOnly(true)
+    }
+
+    @Test
+    fun `a mixed party states the count it knows, rather than picking an attendance`() {
+        // 애매한 것은 추측하지 않는다, applied to a control instead of to an import: a
+        // party where some are coming and some are not has NO attendance, so the row
+        // carries `3 / 4` and pressing it expands. The state the old model could not
+        // express at all is the one below — a head who cannot come while somebody they
+        // brought still can.
+        val session = login()
+        val weddingId = createWedding(session)
+        val head = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":4}""")
+        // `#12`/`#13` are what will move a single member; today only the database can.
+        jdbc.update("update guest set expected_attending = false where id = ?", head)
+
+        val party = list(session, weddingId, "").json().single()
+
+        assertThat(party["size"].asInt()).isEqualTo(4)
+        assertThat(party["attendingCount"].asInt()).isEqualTo(3)
+        assertThat(party["name"].asText()).isEqualTo("김영수")
+    }
+
+    @Test
+    fun `a filter selects people, and a party whose head it excluded still has a name`() {
+        // The case the fold could get wrong and nothing else would notice: under the
+        // 참석 chip, a party whose HEAD is 불참 still has attending members — so the row
+        // exists, its heading is the head's name, and its counts describe only what
+        // matched. That last part is what keeps 참석 chip과 식대 인원 the same number.
+        val session = login()
+        val weddingId = createWedding(session)
+        val head = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":3}""")
+        jdbc.update("update guest set expected_attending = false where id = ?", head)
+
+        val attending = list(session, weddingId, "?attendance=ATTENDING").json().single()
+
+        assertThat(attending["id"].asLong()).isEqualTo(head)
+        assertThat(attending["name"].asText()).isEqualTo("김영수")
+        assertThat(attending["size"].asInt()).isEqualTo(2)
+        assertThat(attending["attendingCount"].asInt()).isEqualTo(2)
+        assertThat(attending["members"].map { it["name"].asText() }).containsExactly("김영수 동반 1", "김영수 동반 2")
+
+        // And the other side of the same chip: the head alone, still named after
+        // itself because here it IS the row that matched.
+        val notAttending = list(session, weddingId, "?attendance=NOT_ATTENDING").json().single()
+        assertThat(notAttending["size"].asInt()).isEqualTo(1)
+        assertThat(notAttending["attendingCount"].asInt()).isZero()
+        assertThat(notAttending["members"].single()["id"].asLong()).isEqualTo(head)
+    }
+
+    @Test
+    fun `a companion moved to the other 측 splits the party across both filters`() {
+        // **What the count could not say**, and the first of the two things `#213` was
+        // asked for: a 신랑측 guest bringing somebody the couple reads as 신부측. After
+        // creation each guest moves on its own — no rule pulls the companion back.
+        val session = login()
+        val weddingId = createWedding(session)
+        val head = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":2}""")
+        jdbc.update("update guest set side = 'BRIDE'::wedding_side where companion_of = ?", head)
+
+        val groomSide = list(session, weddingId, "?side=GROOM").json().single()
+        val brideSide = list(session, weddingId, "?side=BRIDE").json().single()
+
+        assertThat(groomSide["members"].single()["id"].asLong()).isEqualTo(head)
+        assertThat(brideSide["id"].asLong()).isEqualTo(head)
+        assertThat(brideSide["members"].single()["name"].asText()).isEqualTo("김영수 동반 1")
+        // Unfiltered it is still ONE row of two people: the party did not split, the
+        // filter did.
+        assertThat(list(session, weddingId, "").json().single()["size"].asInt()).isEqualTo(2)
     }
 
     @Test
@@ -359,7 +467,7 @@ internal class ListGuestsContractTest : GuestFixture() {
         body: String,
     ): Long =
         post("/weddings/$weddingId/guests", listOf(session), body)
-            .json()["guest"]["id"]
+            .json()["party"]["id"]
             .asLong()
 
     /** What `#13` will do through the API, and what nothing else can do today. */
@@ -380,9 +488,9 @@ internal class ListGuestsContractTest : GuestFixture() {
     ): Long =
         jdbc.queryForObject(
             """
-            insert into guest (wedding_id, name, side, group_category, expected_attending, expected_party_size,
+            insert into guest (wedding_id, name, side, group_category, expected_attending,
                                created_by, created_at, updated_by, updated_at)
-            values (?, ?, 'GROOM'::wedding_side, 'OTHER', true, 1, ?, ?::timestamptz, ?, ?::timestamptz)
+            values (?, ?, 'GROOM'::wedding_side, 'OTHER', true, ?, ?::timestamptz, ?, ?::timestamptz)
             returning id
             """.trimIndent(),
             Long::class.java,

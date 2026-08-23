@@ -64,6 +64,14 @@ internal interface GuestRepository : Repository<Guest, Long> {
      * predicate here does not throw; it prints money
      * (notes/2026-08-21-decision-the-headcount-endpoint.md).
      *
+     * **It COUNTS rows and no longer sums party sizes** (changed 2026-08-23, `#213`).
+     * A party of three is three 하객 records now, so the sum it replaced would count
+     * each of them once for itself and once for the head. It is the same number for
+     * every party that agrees with itself and a truer one for every party that does
+     * not — a head who cannot come while their companion still can was not
+     * expressible at all before
+     * (notes/2026-08-23-decision-companions-become-guests.md).
+     *
      * Three conditions, and each one is a decision someone could undo without
      * noticing.
      *
@@ -80,7 +88,9 @@ internal interface GuestRepository : Repository<Guest, Long> {
      * **Attendance is read before party size**: 불참이면 party size가 몇이든 0이다
      * (notes/2026-08-20-decision-guest-entry-side-and-companions.md §3), which is
      * why this is a predicate rather than a `case`. It reads the SAME
-     * `coalesce(confirmed, expected)` [findLedger] filters on, and that is the whole
+     * `coalesce(confirmed, expected)` [findLedger] filters on — and the private
+     * `isAttending` in `GuestPartyResponse.kt` spells in Kotlin, for the folded row's
+     * own count — and that is the whole
      * point of the expression: 원장과 인원수는 한 화면이라 the chip and the number may
      * not disagree, and one axis read two ways is how they eventually would. Nothing
      * writes `confirmed_attending` in v1
@@ -91,18 +101,46 @@ internal interface GuestRepository : Repository<Guest, Long> {
      * no rows until `#10`/`#14`, and its `wedding_id` is an integrity column that
      * must never become a predicate — the natural native query counts a deleted
      * 하객's meals (api/AGENTS.md, Domain mechanisms). When `#14` lands, the rule is
-     * "the guest's rows if they have any, else the party size", and the join is on
-     * `guest`.
+     * "the guest's rows if they have any, else one", and the join is on `guest`.
      */
     @Query(
         """
-        select coalesce(sum(g.expectedPartySize), 0) from Guest g
+        select count(g) from Guest g
         where g.weddingId = :weddingId
           and g.deletedAt is null
           and coalesce(g.confirmedAttending, g.expectedAttending) = true
         """,
     )
-    fun sumAttendingPartySize(
+    fun countAttending(
         @Param("weddingId") weddingId: Long,
     ): Long
+
+    /**
+     * The heads of parties a FILTER split — [GuestService.list]'s second query, and it
+     * runs only when there was one.
+     *
+     * A folded row is named after the guest the couple entered, and a filter can
+     * exclude that guest while keeping somebody they brought: 대표자는 불참인데 동반은
+     * 참석인 팀 under `?attendance=ATTENDING` is the case the whole change exists for.
+     * Without this the row would have no name at all.
+     *
+     * **It takes the wedding with the ids**, which is this interface's standing rule
+     * and not caution here: the ids come from `companion_of` on rows already scoped to
+     * one wedding, so a stray one would be a bug rather than an attack — and the
+     * predicate costs nothing while making that bug unable to read across weddings.
+     * `deleted_at is null` is spelled out for the reason the two queries above spell it
+     * out.
+     */
+    @Query(
+        """
+        select g from Guest g
+        where g.weddingId = :weddingId
+          and g.deletedAt is null
+          and g.id in :ids
+        """,
+    )
+    fun findAllInWedding(
+        @Param("weddingId") weddingId: Long,
+        @Param("ids") ids: Set<Long>,
+    ): List<Guest>
 }

@@ -27,7 +27,7 @@ internal class HeadcountService(
      * here would make "sum a wedding the caller has no claim on" a compiling
      * mistake.
      *
-     * `sum` and 보증인원 are two reads and are deliberately not one join: the count
+     * The count and 보증인원 are two reads and are deliberately not one join: the count
      * belongs to `guest/` and the venue's number to `wedding/`, and this package may
      * not reach into `wedding/`'s rows
      * (notes/2026-08-21-decision-the-headcount-endpoint.md §3). Called inside
@@ -37,11 +37,13 @@ internal class HeadcountService(
     @Transactional(readOnly = true)
     fun of(wedding: WeddingScope): HeadcountResponse =
         HeadcountResponse(
-            // A Long from the database because `sum` widens; a headcount is an Int on
-            // the wire, and this narrowing is safe by four orders of magnitude — a
-            // real ledger is 200–800 rows
+            // 식대 인원 is the COUNT of attending 하객 records since 2026-08-23
+            // (`#213`): a party of three is three rows. A Long from the database
+            // because `count` widens; a headcount is an Int on the wire, and this
+            // narrowing is safe by four orders of magnitude — a real ledger is
+            // 200–800 rows
             // (notes/2026-08-20-decision-the-ledger-read-and-its-filters.md §1).
-            mealHeadcount = guests.sumAttendingPartySize(wedding.id).toInt(),
+            mealHeadcount = guests.countAttending(wedding.id).toInt(),
             guaranteedHeadcount = weddings.guaranteedHeadcountOf(wedding),
         )
 }

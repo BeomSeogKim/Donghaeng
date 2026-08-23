@@ -39,7 +39,13 @@ internal class CreateGuestContractTest : GuestFixture() {
         assertThat(response.statusCode()).isEqualTo(201)
         assertThat(response.headers().firstValue("Content-Type")).hasValue("application/json")
 
-        val guest = response.json()["guest"]
+        // A party of one: one member, and the row IS the party.
+        val party = response.json()["party"]
+        assertThat(party["size"].asInt()).isEqualTo(1)
+        assertThat(party["attendingCount"].asInt()).isEqualTo(1)
+        assertThat(party["name"].asText()).isEqualTo("김영수")
+        val guest = party["members"].single()
+        assertThat(party["id"].asLong()).isEqualTo(guest["id"].asLong())
         assertThat(guest["id"].asLong()).isPositive()
         assertThat(guest["name"].asText()).isEqualTo("김영수")
         assertThat(guest["side"].asText()).isEqualTo("GROOM")
@@ -49,7 +55,8 @@ internal class CreateGuestContractTest : GuestFixture() {
         // decision, so each is asserted rather than left to whatever the DTO happens
         // to do.
         assertThat(guest["expectedAttending"].asBoolean()).isTrue()
-        assertThat(guest["expectedPartySize"].asInt()).isEqualTo(1)
+        // A guest entered alone is nobody's companion — the head of its own party.
+        assertThat(guest["companionOf"].isNull).isTrue()
         assertThat(guest["groupCategory"].asText()).isEqualTo("OTHER")
         assertThat(guest["groupLabel"].isNull).isTrue()
         assertThat(guest["contact"].isNull).isTrue()
@@ -86,19 +93,22 @@ internal class CreateGuestContractTest : GuestFixture() {
             )
 
         assertThat(response.statusCode()).isEqualTo(201)
-        val guest = response.json()["guest"]
+        val guest = response.json()["party"]["members"].first()
         assertThat(guest["side"].asText()).isEqualTo("BRIDE")
         assertThat(guest["groupCategory"].asText()).isEqualTo("FRIEND")
         assertThat(guest["groupLabel"].asText()).isEqualTo("대학교 동아리 친구들")
         assertThat(guest["contact"].asText()).isEqualTo("010-1234-5678")
         assertThat(guest["accessibilityNote"].asText()).isEqualTo("휠체어 좌석")
 
-        // 불참 is spelled attendance false, never a party size of 0 — the column's
-        // CHECK refuses 0 and this is the row that proves the two are separate.
+        // 불참 is spelled attendance false, never a party size of 0 — a party of
+        // zero people is not a party, and this row proves the two are separate.
         assertThat(guest["expectedAttending"].asBoolean()).isFalse()
-        assertThat(guest["expectedPartySize"].asInt()).isEqualTo(3)
+        // 인원수 3 is three 하객 records, and a head entered 불참 brings its companions
+        // in 불참 (notes/2026-08-23-decision-companions-become-guests.md).
+        assertThat(response.json()["party"]["size"].asInt()).isEqualTo(3)
+        assertThat(response.json()["party"]["attendingCount"].asInt()).isZero()
 
-        assertThat(rows(weddingId).single()["side"].toString()).isEqualTo(WeddingSide.BRIDE.name)
+        assertThat(rows(weddingId).first()["side"].toString()).isEqualTo(WeddingSide.BRIDE.name)
     }
 
     @Test
@@ -121,10 +131,10 @@ internal class CreateGuestContractTest : GuestFixture() {
             )
 
         assertThat(response.statusCode()).isEqualTo(201)
-        val guest = response.json()["guest"]
+        val guest = response.json()["party"]["members"].single()
         assertThat(guest["groupCategory"].asText()).isEqualTo("OTHER")
         assertThat(guest["expectedAttending"].asBoolean()).isTrue()
-        assertThat(guest["expectedPartySize"].asInt()).isEqualTo(1)
+        assertThat(response.json()["party"]["size"].asInt()).isEqualTo(1)
     }
 
     @Test
@@ -143,7 +153,7 @@ internal class CreateGuestContractTest : GuestFixture() {
 
         val body = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":3}""").json()
 
-        assertThat(body.fieldNames().asSequence().toList()).containsExactlyInAnyOrder("guest", "headcount")
+        assertThat(body.fieldNames().asSequence().toList()).containsExactlyInAnyOrder("party", "headcount")
         assertThat(body["headcount"]["mealHeadcount"].asInt()).isEqualTo(3)
         // 보증인원 is the venue's number and nothing in v1 sets it, so the member is
         // absent — never a null, and never a zero.
@@ -295,7 +305,7 @@ internal class CreateGuestContractTest : GuestFixture() {
     }
 
     @Test
-    fun `a party of zero is not a party, and the upper bound is the column's own`() {
+    fun `a party of zero is not a party, and a party is bounded because it is now rows`() {
         val session = login()
         val weddingId = createWedding(session)
 
@@ -305,16 +315,22 @@ internal class CreateGuestContractTest : GuestFixture() {
             assertThat(response.json()["code"].asText()).describedAs("$size").isEqualTo("VALIDATION_FAILED")
         }
 
-        // The largest `integer` the column can hold is accepted, which is what stops
-        // a storage limit from silently becoming an unrecorded product rule: nobody
-        // has decided that a party of 500 is impossible, and inventing that bound
-        // here would refuse a real couple (the `@StorableDate` argument, `#123`).
+        // **The upper bound changed meaning on 2026-08-23 and this is the assertion
+        // that says so.** It used to be the `integer` column's, deliberately loose:
+        // nobody had decided a party of 500 was impossible. `#213` made the number a
+        // ROW COUNT, so one request now writes as many rows as it asks for — an
+        // unbounded member is an unbounded write, and 20 is past anything a couple
+        // types into a 인원수 field (`CreateGuestRequest`'s MAX_PARTY_SIZE).
         assertThat(
-            addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":2147483647}""").statusCode(),
+            addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":20}""").statusCode(),
         ).isEqualTo(201)
 
-        // One past it is a body that cannot be read, not a value that was refused —
-        // a different code for the same user-facing meaning, as the spec says.
+        val tooMany = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":21}""")
+        assertThat(tooMany.statusCode()).isEqualTo(400)
+        assertThat(tooMany.json()["code"].asText()).isEqualTo("VALIDATION_FAILED")
+
+        // Past what an `integer` holds is a body that cannot be read, not a value that
+        // was refused — a different code for the same user-facing meaning.
         val overflowed = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":2147483648}""")
         assertThat(overflowed.statusCode()).isEqualTo(400)
         assertThat(overflowed.json()["code"].asText()).isEqualTo("MALFORMED_REQUEST_BODY")
@@ -362,7 +378,7 @@ internal class CreateGuestContractTest : GuestFixture() {
                 """{"name":"  김영수 ","side":"GROOM","groupLabel":"  ","contact":" 010-1234-5678 ","accessibilityNote":""}""",
             )
 
-        val guest = response.json()["guest"]
+        val guest = response.json()["party"]["members"].single()
         assertThat(guest["name"].asText()).isEqualTo("김영수")
         assertThat(guest["contact"].asText()).isEqualTo("010-1234-5678")
         assertThat(guest["groupLabel"].isNull).isTrue()
@@ -371,6 +387,36 @@ internal class CreateGuestContractTest : GuestFixture() {
         val row = rows(weddingId).single()
         assertThat(row["name"]).isEqualTo("김영수")
         assertThat(row["group_label"]).isNull()
+    }
+
+    @Test
+    fun `a companion is given a name, once, and it fits the column even behind the longest head`() {
+        // **`{대표자 이름} 동반 N`, N from 1** — given so the row is addressable at all,
+        // and never regenerated afterwards
+        // (notes/2026-08-23-decision-companions-become-guests.md).
+        val session = login()
+        val weddingId = createWedding(session)
+
+        val party = addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":3}""").json()["party"]
+        assertThat(party["members"].map { it["name"].asText() }).containsExactly("김영수", "김영수 동반 1", "김영수 동반 2")
+
+        // **The generated name has to fit `varchar(100)` too**, and the head's own name
+        // is allowed to fill it — so the head is truncated to make room. Unhandled this
+        // is not a validation error, it is an INSERT the couple's own add sheet cannot
+        // avoid, arriving as a masked 500.
+        val longest = "가".repeat(96)
+        val behind =
+            addGuest(session, weddingId, """{"name":"$longest","side":"GROOM","expectedPartySize":2}""").json()["party"]
+        assertThat(behind["members"][1]["name"].asText()).isEqualTo("가".repeat(95) + " 동반 1")
+
+        // **And it truncates by CODE POINT, which is reachable rather than theoretical**:
+        // 92 hangul plus 4 emoji is 100 UTF-16 units — inside the `@Size` bound — and 96
+        // code points, so one code point is cut. A `substring(0, 95)` would cut BETWEEN
+        // the two halves of a surrogate pair and store a name ending in `\uFFFD`.
+        val astral = "가".repeat(92) + "🙂".repeat(4)
+        val emoji =
+            addGuest(session, weddingId, """{"name":"$astral","side":"GROOM","expectedPartySize":2}""").json()["party"]
+        assertThat(emoji["members"][1]["name"].asText()).isEqualTo("가".repeat(92) + "🙂".repeat(3) + " 동반 1")
     }
 
     @Test
@@ -387,7 +433,7 @@ internal class CreateGuestContractTest : GuestFixture() {
 
         assertThat(first.statusCode()).isEqualTo(201)
         assertThat(second.statusCode()).isEqualTo(201)
-        assertThat(first.json()["guest"]["id"].asLong()).isNotEqualTo(second.json()["guest"]["id"].asLong())
+        assertThat(first.json()["party"]["id"].asLong()).isNotEqualTo(second.json()["party"]["id"].asLong())
         assertThat(rows(weddingId)).hasSize(2)
     }
 

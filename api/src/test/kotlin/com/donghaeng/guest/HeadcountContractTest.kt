@@ -30,9 +30,10 @@ import java.net.http.HttpResponse
 @Import(StubGoogleRegistration::class)
 internal class HeadcountContractTest : GuestFixture() {
     @Test
-    fun `the number is the sum of the attending guests' party sizes`() {
-        // expected_party_size is 참석 인원 including the guest, not a companion count
-        // (V1__baseline_schema.sql), so a party of three adds three.
+    fun `the number is the count of attending 하객 records`() {
+        // 인원수 3 is three records (2026-08-23, `#213`), so a party of three still
+        // adds three — the same number for a party that agrees with itself, and a
+        // truer one for one that does not.
         val session = login()
         val weddingId = createWedding(session)
         addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":3}""")
@@ -61,7 +62,7 @@ internal class HeadcountContractTest : GuestFixture() {
     }
 
     @Test
-    fun `a soft-deleted guest contributes zero`() {
+    fun `a soft-deleted guest contributes zero, and a deleted head does not take its party`() {
         // The failure this issue exists to close, and stated as what it is: today
         // TWO things stop it — the predicate in the query and `@SQLRestriction`,
         // which reaches JPQL — so this test cannot fail by one of them being
@@ -78,8 +79,15 @@ internal class HeadcountContractTest : GuestFixture() {
         addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":2}""")
         val removed = addGuest(session, weddingId, """{"name":"이영희","side":"BRIDE","expectedPartySize":5}""")
 
+        // **Deleting the head deletes one PERSON, not the party** (2026-08-23, `#213`):
+        // its four companions are 하객 records of their own and go on being counted.
+        // Whether a delete should offer to take them is a real question and it is not
+        // this issue's — **no endpoint deletes a 하객 in v1 at all**, so there is
+        // nowhere for that answer to live yet.
         jdbc.update("update guest set deleted_at = now() where id = ?", removed)
+        assertThat(mealHeadcount(session, weddingId)).isEqualTo(6)
 
+        jdbc.update("update guest set deleted_at = now() where companion_of = ?", removed)
         assertThat(mealHeadcount(session, weddingId)).isEqualTo(2)
     }
 
@@ -162,6 +170,10 @@ internal class HeadcountContractTest : GuestFixture() {
         // is written through JDBC, as the ledger's own filter test writes it. Read
         // `expected_attending` alone and the chip and the number disagree here by
         // four people, with both endpoints answering 200.
+        // Since `#213` the parties are what the chip returns, so the total is a sum of
+        // `attendingCount` — and that member is folded in KOTLIN while the number is
+        // counted in SQL. **This assertion is the only thing holding those two
+        // spellings of `coalesce(confirmed, expected)` together.**
         val session = login()
         val weddingId = createWedding(session)
         addGuest(session, weddingId, """{"name":"김영수","side":"GROOM","expectedPartySize":2}""")
@@ -172,10 +184,15 @@ internal class HeadcountContractTest : GuestFixture() {
         jdbc.update("update guest set confirmed_attending = true where id = ?", confirmedYes)
 
         val attending = get("/weddings/$weddingId/guests?attendance=ATTENDING", listOf(session))
-        val chipTotal = attending.json().sumOf { it["expectedPartySize"].asInt() }
+        val chipTotal = attending.json().sumOf { it["attendingCount"].asInt() }
 
-        assertThat(chipTotal).isEqualTo(6)
+        // 김영수's two, 이영희's two companions (only the head was confirmed 불참), and
+        // 박민수 alone (only the head was confirmed 참석).
+        assertThat(chipTotal).isEqualTo(5)
         assertThat(mealHeadcount(session, weddingId)).isEqualTo(chipTotal)
+        // Every party the chip returns states the same count it was filtered by, which
+        // is what stops a mixed party from putting a 불참 하객 inside the 참석 total.
+        assertThat(attending.json().map { it["size"].asInt() }).isEqualTo(attending.json().map { it["attendingCount"].asInt() })
     }
 
     @Test
@@ -242,6 +259,6 @@ internal class HeadcountContractTest : GuestFixture() {
         body: String,
     ): Long =
         post("/weddings/$weddingId/guests", listOf(session), body)
-            .json()["guest"]["id"]
+            .json()["party"]["id"]
             .asLong()
 }

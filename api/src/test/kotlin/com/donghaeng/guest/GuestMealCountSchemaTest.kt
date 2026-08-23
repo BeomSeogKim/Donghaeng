@@ -125,8 +125,8 @@ internal class GuestMealCountSchemaTest : BaselineSchemaFixture() {
     ): Long =
         insertReturningId(
             "insert into guest (wedding_id, name, side, group_category, expected_attending, " +
-                "expected_party_size, created_by, created_at, updated_by, updated_at, deleted_at) " +
-                "values ($weddingId, '$name', 'GROOM', 'FRIEND', true, 1, " +
+                "created_by, created_at, updated_by, updated_at, deleted_at) " +
+                "values ($weddingId, '$name', 'GROOM', 'FRIEND', true, " +
                 "$createdBy, now(), $createdBy, now(), ${if (deleted) "now()" else "null"})",
         )
 
