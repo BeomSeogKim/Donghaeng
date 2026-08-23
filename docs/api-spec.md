@@ -601,21 +601,27 @@ response. **`GET /weddings` is the one to reach for after a page load** — a st
 is a guess about a seat that may since have been released, while the list is that
 seat, answered fresh.
 
-**`GET /weddings`, `POST /weddings` and `POST /weddings/join` are the only three
-endpoints in the product that are not scoped to a wedding** (the third added
-2026-08-22, `#181`), and that is a closed set rather than a pattern to copy. Anything
-that reads or writes a wedding's *contents* puts the id in the path, where the seat
-walk above checks it.
+**`GET /weddings`, `POST /weddings`, `POST /weddings/join` and
+`POST /weddings/join/preview` are the only four endpoints in the product that are not
+scoped to a wedding** (the third added 2026-08-22, `#181`; the fourth 2026-08-23,
+`#214`), and that is a closed set rather than a pattern to copy. Anything that reads
+or writes a wedding's *contents* puts the id in the path, where the seat walk above
+checks it.
 
 The first two answer from the session alone, because neither has a wedding in mind
-yet. **`POST /weddings/join` is the different one and it is worth reading twice**: it
-does have a wedding in mind, and the caller cannot be scoped to it because the whole
-point of the request is that they are not in it yet. What stands in for the seat walk
-is the **invite token** — 256 bits of CSPRNG, single use, valid one day, compared
-against a stored hash. It names the seat rather than being handed one, so a caller
-cannot address a wedding they were not invited to, and every way the token can fail
-answers one document. Nothing else in the product may take a wedding from a body;
-this endpoint takes a *credential* that resolves to one.
+yet. **The two `join` endpoints are the different ones and they are worth reading
+twice**: they do have a wedding in mind, and the caller cannot be scoped to it because
+the whole point of the request is that they are not in it yet. What stands in for the
+seat walk is the **invite token** — 256 bits of CSPRNG, single use, valid one day,
+compared against a stored hash. It names the seat rather than being handed one, so a
+caller cannot address a wedding they were not invited to, and every way the token can
+fail answers one document. Nothing else in the product may take a wedding from a body;
+these endpoints take a *credential* that resolves to one.
+
+**The preview is the only place the API names a wedding to somebody who is not in
+it**, and the bound on that is deliberate: it publishes 결혼식 이름, 예식일 and the
+inviting seat's name, and **no `weddingId`** — so nothing it answers can be carried
+back to a scoped endpoint.
 
 ## Partial updates
 
@@ -672,9 +678,11 @@ every endpoint below._
 ### `POST /weddings`
 
 Status: active (added 2026-08-17, `#123`; **request and response shape changed
-2026-08-22, `#166`**)
-Auth: session cookie — **and nothing more.** One of the two endpoints in the product
-that are not scoped to a wedding (changed 2026-08-20: `GET /weddings` is the other).
+2026-08-22, `#166`**; `weddingName` added 2026-08-23, `#214`)
+Auth: session cookie — **and nothing more.** One of the two endpoints that answer from
+the session ALONE, `GET /weddings` being the other (changed 2026-08-20); the two under
+`/weddings/join` are unscoped as well, but a token is what stands in for the scope
+there.
 
 웨딩 만들기, the screen a couple sees once, between logging in and the ledger
 (`notes/2026-08-07-design-screens-and-flow.md`). It creates the wedding, **both of
@@ -697,12 +705,29 @@ ledger nobody can open, and this endpoint is where a person's first seat comes f
 
 Request
 ```json
-{ "weddingDate": "2026-10-10", "side": "GROOM", "name": "김신랑" }
+{
+  "weddingDate": "2026-10-10",
+  "side": "GROOM",
+  "name": "김신랑",
+  "weddingName": "범석 희주의 가을"
+}
 ```
 
-All three members are **required**. `weddingDate` is a plain calendar date
-(`YYYY-MM-DD`), no time and no timezone — a wedding date is a date. `side` is
-`GROOM` or `BRIDE`, and `name` is at most 100 characters.
+`weddingDate`, `side` and `name` are **required**; `weddingName` is not.
+`weddingDate` is a plain calendar date (`YYYY-MM-DD`), no time and no timezone — a
+wedding date is a date. `side` is `GROOM` or `BRIDE`, and `name` is at most 100
+characters.
+
+**`weddingName` is 결혼식 이름 — the WEDDING's name, not either person's** (added
+2026-08-23, `#214`). Free text the couple writes, at most 100 characters, and
+**optional**: omitting it and sending `null` mean exactly the same thing, and a
+wedding created without one is an ordinary wedding. It is not composed from the two
+seats' names and never will be — v1 does not know the partner's name until they
+accept, so a composed name would be half a name for the whole span the couple uses
+the ledger most (`notes/2026-08-23-decision-the-wedding-has-a-name.md`). It obeys the
+same name rule the seat's `name` does, stated in full under
+`PUT /weddings/{weddingId}/seats/me`, and it is editable afterwards in 설정 by
+`PATCH /weddings/{weddingId}`.
 
 **`side` and `name` describe the caller and never their partner.** There is no way to
 send the partner's name here and that is the point: their seat is created empty and
@@ -712,6 +737,7 @@ Response 201
 ```json
 {
   "id": 12,
+  "weddingName": "범석 희주의 가을",
   "weddingDate": "2026-10-10",
   "seats": [
     { "side": "GROOM", "name": "김신랑" },
@@ -720,8 +746,10 @@ Response 201
 }
 ```
 
-`id` is what the client did not have; the name is echoed back **as stored**, which is
-not always what was sent — see the trimming rule below. There is no `Location`
+`id` is what the client did not have; both names are echoed back **as stored**, which
+is not always what was sent — see the trimming rule below. **`weddingName` is `null`
+when the couple did not give one**, which is what the header renders around rather
+than an error. There is no `Location`
 header (changed 2026-08-19: `GET /weddings/{weddingId}` now exists, but the id in
 the body is what the client uses, so a header repeating it buys nothing). **Keep the
 `id`** — it is the only place a client learns one.
@@ -736,11 +764,12 @@ wedding is created empty — no guests, no meal types — so there is no headcou
 carry. The client's next screen is the ledger, which reads it.
 
 Errors
-- 400 `VALIDATION_FAILED` — a `name` with **no visible character** in it (`""`, spaces,
-  `"　"` U+3000, a control character, or the zero-width family — see
-  `PUT /weddings/{weddingId}/seats/me` for the rule in full) or longer than 100
-  characters as sent; or a `weddingDate` outside the range the database can store
-  (before 4713 BC or after 5874897 AD).
+- 400 `VALIDATION_FAILED` — a `name` **or a `weddingName`** with **no visible
+  character** in it (`""`, spaces, `"　"` U+3000, a control character, or the
+  zero-width family — see `PUT /weddings/{weddingId}/seats/me` for the rule in full)
+  or longer than 100 characters as sent; or a `weddingDate` outside the range the
+  database can store (before 4713 BC or after 5874897 AD). **An omitted or `null`
+  `weddingName` is not this** — it is the ordinary way to have none.
 - 400 `MALFORMED_REQUEST_BODY` — a member omitted, sent as `null`, or of a type that
   cannot be read (an unparseable `weddingDate` and **a `side` that is neither `GROOM`
   nor `BRIDE`** among them). **Two codes, one meaning for the user**: the request was
@@ -802,9 +831,9 @@ Eight things are decided here rather than left to the caller to infer.
   exactly one wedding**, created or joined; `web/` guards the route as well (`#148`),
   and this is the half of that guard a `curl` cannot walk around. The refusal is
   total — the second request leaves no wedding, no seat and no term behind either.
-- **The name is stored trimmed.** Leading and trailing whitespace is removed before
-  the row is written, which is why the response echoes the stored value. A name
-  that is *only* whitespace is a 400, not an empty name.
+- **Both names are stored trimmed.** Leading and trailing whitespace is removed
+  before the row is written, which is why the response echoes the stored value. A
+  name that is *only* whitespace is a 400, not an empty name.
 - **100 characters is the limit on the name**, and it is measured **on what you
   send, before that trim** — so 100 characters plus a trailing space is a 400 even
   though it would have been stored as 100. Trim in the client and the two agree.
@@ -814,9 +843,9 @@ Eight things are decided here rather than left to the caller to infer.
 ### `GET /weddings`
 
 Status: active (added 2026-08-20, `#132`; **response shape changed 2026-08-22,
-`#166`**)
+`#166`**; `weddingName` added 2026-08-23, `#214`)
 Auth: session cookie — **and nothing more.** Together with `POST /weddings` this is
-one of the two endpoints not scoped to a wedding; see "Being scoped to a wedding".
+one of the two that answer from the session alone; see "Being scoped to a wedding".
 
 **The weddings the caller holds a seat in**, which is the question a client has before
 it has a `weddingId`. Two screens ask it:
@@ -832,6 +861,7 @@ Response 200
 [
   {
     "id": 12,
+    "weddingName": "범석 희주의 가을",
     "weddingDate": "2026-10-10",
     "seats": [
       { "side": "GROOM", "name": "김신랑" },
@@ -881,18 +911,25 @@ Two things it does not do:
 
 ### `GET /weddings/{weddingId}`
 
-Status: active (added 2026-08-19, `#5`; **response shape changed 2026-08-22, `#166`**)
+Status: active (added 2026-08-19, `#5`; **response shape changed 2026-08-22, `#166`**;
+`weddingName` added 2026-08-23, `#214`)
 Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above, which is what this endpoint is the first to be governed by.
 
-The wedding itself: the date, and the couple as a pair of seats. The ledger screen
-reads it to render its header, and it is the call that answers "is this wedding
+The wedding itself: its name, the date, and the couple as a pair of seats. The ledger
+screen reads it to render its header, and it is the call that answers "is this wedding
 still mine?" after an app resume or a shared link.
+
+**`weddingName` is the screen's title** (added 2026-08-23, `#214`) — 범석 희주의 가을,
+the couple's own words — and it is `null` for a wedding that has none. What the header
+renders in that case is the frontend's decision; the API has no copy for it, exactly as
+it has none for an empty seat. `PATCH /weddings/{weddingId}` sets it and clears it.
 
 Response 200
 ```json
 {
   "id": 12,
+  "weddingName": "범석 희주의 가을",
   "weddingDate": "2026-10-10",
   "seats": [
     { "side": "GROOM", "name": "김신랑" },
@@ -944,7 +981,8 @@ Two things this endpoint does **not** do, stated so nobody waits for them:
 
 ### `PATCH /weddings/{weddingId}`
 
-Status: active (added 2026-08-22, `#173` — the backend half of `#8`)
+Status: active (added 2026-08-22, `#173` — the backend half of `#8`; `weddingName`
+added 2026-08-23, `#214`)
 Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
 
@@ -958,13 +996,27 @@ optional, an omitted member is not written, and `null` means *clear*.
 
 Request
 ```json
-{ "weddingDate": "2027-03-14", "guaranteedHeadcount": 150 }
+{ "weddingName": "범석 희주의 가을", "weddingDate": "2027-03-14", "guaranteedHeadcount": 150 }
 ```
 
 | Member | Type | Omitted | `null` |
 |---|---|---|---|
+| `weddingName` | string, 1–100 chars | left alone | **clears it** — back to having no name |
 | `weddingDate` | `YYYY-MM-DD` | left alone | **400** — a wedding always has a date |
 | `guaranteedHeadcount` | integer ≥ 1 | left alone | **clears it** — back to not having one |
+
+**결혼식 이름 can be set, changed and cleared** (added 2026-08-23, `#214`). It is
+optional at creation and it stays optional: a couple who named their wedding and then
+would rather not have can send `null` and go back to having none. It is stored
+trimmed, must be at most 100 characters **as sent**, and must contain a visible
+character — the product's one name rule, stated in full under
+`PUT /weddings/{weddingId}/seats/me`.
+
+**`""` is not how you clear the name.** It is a value the server can read and then
+refuses: **400 `VALIDATION_FAILED`**, not `MALFORMED_REQUEST_BODY` and not a clear.
+The general rule in "Partial updates" is unchanged — `null` is the only spelling of
+"clear" — and this is the one member where an empty string gets as far as validation,
+because a string is a readable value where a number or a date is not.
 
 **보증인원 can be set, changed and cleared — and `null` is how you clear it**, never
 `0` and never `""`. 미설정 is a real state and a couple can
@@ -975,14 +1027,17 @@ the wrong box. Cleared and never-set are the same state and read the same way �
 **We store the number we are given.** No rounding, no buffer, no recommendation, no
 adjustment for 유아 — 보증인원 is the venue's number, never ours.
 
-**The couple's names are not editable here.** A name belongs to a seat and not to the
-wedding (changed 2026-08-22, `#166`); editing one is `#175` and is not this endpoint.
+**The COUPLE's names are not editable here — the WEDDING's is.** A person's name
+belongs to a seat (changed 2026-08-22, `#166`); editing one is
+`PUT /weddings/{weddingId}/seats/me` and is not this endpoint. 결혼식 이름 belongs to the
+wedding row, so it is here.
 
 Response 200
 ```json
 {
   "wedding": {
     "id": 12,
+    "weddingName": "범석 희주의 가을",
     "weddingDate": "2027-03-14",
     "seats": [
       { "side": "GROOM", "name": "김신랑" },
@@ -997,7 +1052,7 @@ And with 보증인원 cleared — **the member is gone, not `null` and not `0`**
 
 ```json
 {
-  "wedding": { "id": 12, "weddingDate": "2027-03-14", "seats": [ … ] },
+  "wedding": { "id": 12, "weddingName": "범석 희주의 가을", "weddingDate": "2027-03-14", "seats": [ … ] },
   "headcount": { "mealHeadcount": 128 }
 }
 ```
@@ -1015,9 +1070,10 @@ this response already holds the number, including the 보증인원 just written.
 
 Errors
 - 400 `VALIDATION_FAILED` — a `guaranteedHeadcount` below 1, a `weddingDate` outside
-  the range the database can store (before 4713 BC or after 5874897 AD), or a
-  `weddingDate` sent as `null`. Nothing in the body is applied when any member is
-  refused.
+  the range the database can store (before 4713 BC or after 5874897 AD), a
+  `weddingDate` sent as `null`, or a `weddingName` that is over 100 characters or has
+  no visible character in it (`""` included). Nothing in the body is applied when any
+  member is refused.
 - 400 `MALFORMED_REQUEST_BODY` — a member of the wrong type, an unparseable
   `weddingDate`, a body that is not JSON, or **a member sent as `""`, `"  "` or `[]`**
   — see "Partial updates" above: those are not ways to clear a member, and
@@ -1108,6 +1164,7 @@ Response 200
 ```json
 {
   "id": 12,
+  "weddingName": "범석 희주의 가을",
   "weddingDate": "2026-10-10",
   "seats": [
     { "side": "GROOM", "name": "김신랑" },
@@ -1117,7 +1174,8 @@ Response 200
 ```
 
 The same `WeddingResponse` the three wedding reads and `POST /weddings/join` return —
-**the whole wedding and both seats, not the one seat that changed**, because the 원장
+**the whole wedding and both seats, not the one seat that changed**, `weddingName`
+included, because the 원장
 header renders the pair and this is the shape every screen already holds. Re-sending a
 name the seat already has is a legal 200 that changes nothing and does **not** mark the
 row as updated.
@@ -1231,11 +1289,100 @@ Six things are decided here rather than left to the caller to infer.
   do not log it, do not put it in analytics, and do not persist it anywhere but the
   `sessionStorage` hand-off the OAuth round trip needs.
 
+### `POST /weddings/join/preview`
+
+Status: active (added 2026-08-23, `#214`)
+Auth: session cookie — **and an invite token in the body.** The **fourth endpoint in
+the product that is not scoped to a wedding**, and it is `POST /weddings/join`'s
+exemption one step earlier: the caller holds no seat yet, so there is nothing to
+resolve, and the token stands in for the scope.
+
+**초대 수락 화면이 무엇을 수락하는지 보여주는 읽기.** 결혼식 이름 · 예식일 · 초대한 사람,
+and nothing else. Call it when the accept screen has a token and a session, before the
+person taps 수락 — **it writes nothing and spends nothing**, so it may be called twice
+and the same token still joins afterwards.
+
+**Why this exists, since the API otherwise says nothing about a wedding you are not
+in.** The person about to accept is making the one irreversible choice in the product:
+a seat, once taken, cannot be released, and a person belongs to exactly one wedding.
+Showing them whose wedding it is beforehand is what makes that choice an informed one.
+**What makes it safe is the token, not the session** — holding one already entitles the
+holder to take the seat, so naming the wedding it opens tells them strictly less than
+accepting would.
+
+**A POST that reads.** The method is the token's doing rather than the operation's: the
+token may not travel in a path or a query string, ours or anyone's, so it travels in a
+body — and a body means POST, with the standard `Content-Type: application/json`.
+
+Request
+```json
+{ "token": "K3mZ8p..." }
+```
+
+`token` is **required** and is the same value `POST /weddings/join` takes. Read it from
+the URL fragment. There is no `name` here: nothing is being written.
+
+Response 200
+```json
+{
+  "weddingName": "범석 희주의 가을",
+  "weddingDate": "2026-10-10",
+  "invitedBy": { "side": "GROOM", "name": "김신랑" }
+}
+```
+
+| Member | Meaning |
+|---|---|
+| `weddingName` | 결혼식 이름, or `null` when the couple has not given their wedding one |
+| `weddingDate` | 예식일 |
+| `invitedBy` | The seat that is **already taken** — the partner who sent the link |
+
+`invitedBy` is the same seat shape `seats[]` carries: `side` and `name`, nothing else.
+It is never the empty seat this token would fill, so `side` is the OTHER side from the
+one the accepting person will take.
+
+**There is no `weddingId` here, and there will not be one.** Nothing this endpoint
+answers can be carried to a wedding-scoped endpoint; the caller learns whose wedding
+this is and not which one to ask about. Do not build a client that expects to pre-fetch
+the ledger from a preview.
+
+Carries the recomputed aggregate: **no** — it is a read, and the caller is not in the
+wedding whose numbers it would be.
+
+Errors — **the same set, in the same order, as `POST /weddings/join`**, so the screen
+can state the outcome the tap would have had:
+- 401 `UNAUTHENTICATED` — no session, or an expired or revoked one. Refused **before
+  the body is looked at**, so an anonymous request learns nothing about the token it
+  sent. Sign the person in first, exactly as the accept requires.
+- 404 `INVITE_NOT_FOUND` — the token is not usable: malformed, unknown,
+  ours-with-a-wrong-verifier, already accepted, or pointing at a seat or a wedding that
+  is gone. **One answer for all of them, identical in every member.**
+- 404 `INVITE_EXPIRED` — the token was ours and the link is more than a day old.
+- 404 `INVITE_SUPERSEDED` — the token was ours and a 재발급 replaced it. Say that a
+  newer link exists and to ask the partner for it.
+- 409 `ALREADY_IN_A_WEDDING` — the caller already belongs to a wedding. **Checked
+  first, before the token is looked at**, so somebody who could never use this link is
+  told about their own account rather than shown a wedding. Same code, same recovery as
+  everywhere: call `GET /weddings` and open the one that comes back.
+- 409 `PARTNER_ALREADY_JOINED` — the seat has been taken.
+- 415 `UNSUPPORTED_MEDIA_TYPE` — the standing content-type rule.
+
+Three things this endpoint does **not** do:
+
+- **It does not accept.** Nothing is written, no token is spent, and no seat changes
+  hands. `POST /weddings/join` is the write, and a person who previews and walks away
+  leaves the link exactly as they found it.
+- **It does not need to be called before joining.** The accept endpoint validates the
+  token itself, on every request; this is for the screen, not for the flow.
+- **It does not tell an anonymous visitor anything.** A person who has not signed in
+  gets 401 whatever they send, so the accept screen shows what the link opens only
+  after the Google round trip — which is also the moment the person can act on it.
+
 ### `POST /weddings/join`
 
 Status: active (added 2026-08-22, `#181` — the backend half of `#9`)
-Auth: session cookie — **and an invite token in the body.** The **third endpoint in
-the product that is not scoped to a wedding**, and the only one that could not be: the
+Auth: session cookie — **and an invite token in the body.** One of the endpoints in
+the product **not scoped to a wedding**, and the first that could not be: the
 caller holds no seat yet, so `user → seat → wedding` has nothing to resolve. See
 "Being scoped to a wedding" for what the token stands in for.
 
@@ -1261,6 +1408,7 @@ Response 200
 ```json
 {
   "id": 12,
+  "weddingName": "범석 희주의 가을",
   "weddingDate": "2026-10-10",
   "seats": [
     { "side": "GROOM", "name": "김신랑" },

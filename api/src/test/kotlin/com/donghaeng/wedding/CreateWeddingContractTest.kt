@@ -378,6 +378,55 @@ internal class CreateWeddingContractTest : ApiFixture() {
     }
 
     @Test
+    fun `결혼식 이름 is optional, and a wedding created without one simply has none`() {
+        // The ordinary case, and the reason the member is nullable AND defaulted:
+        // omitting it and sending `null` are the same request. A wedding with no name is
+        // not an error state — 설정 adds one later
+        // (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+        val session = login()
+
+        val omitted = create(session, body()).json()
+        assertThat(omitted["weddingName"].isNull).isTrue()
+
+        clean()
+        val explicitNull = create(session, body(extra = ",\"weddingName\":null")).json()
+        assertThat(explicitNull["weddingName"].isNull).isTrue()
+    }
+
+    @Test
+    fun `결혼식 이름 is stored trimmed, and comes back as stored`() {
+        // The wedding's own name follows the seat name's write rule, at the same one
+        // write point: to this schema `' 범석 희주의 가을'` and `'범석 희주의 가을'` are two
+        // different names.
+        val response = create(login(), body(extra = ",\"weddingName\":\"  범석 희주의 가을 \""))
+
+        assertThat(response.statusCode()).isEqualTo(201)
+        assertThat(response.json()["weddingName"].asText()).isEqualTo("범석 희주의 가을")
+        assertThat(weddings.findAll().single().name).isEqualTo("범석 희주의 가을")
+    }
+
+    @Test
+    fun `a 결혼식 이름 with no visible character is refused, and so is an over-long one`() {
+        // **The same rule as the seat's name, out of the same predicate**
+        // ([VisibleCharacters]) — a wedding named with one zero-width character is a
+        // header rendering nothing, which is the identical failure `#187` found on
+        // `wedding_party.name`. `@WeddingName` is a SECOND annotation only because `#8`'s
+        // PATCH carries this member inside a `Patch`, which a composed `@Size` cannot
+        // read; the rule itself has one implementation.
+        val session = login()
+        val rejected = listOf("", "   ", "　", "\\u0000", "​", "가".repeat(101))
+
+        rejected.forEach { name ->
+            val response = create(session, body(extra = ",\"weddingName\":\"$name\""))
+            assertThat(response.statusCode()).describedAs(name).isEqualTo(400)
+            assertThat(response.json()["code"].asText()).describedAs(name).isEqualTo("VALIDATION_FAILED")
+        }
+
+        // One character shorter is a real name, so the bound above is the column's.
+        assertThat(create(session, body(extra = ",\"weddingName\":\"${"가".repeat(100)}\"")).statusCode()).isEqualTo(201)
+    }
+
+    @Test
     fun `the name is stored trimmed`() {
         // To this schema `' 김신랑'` and `'김신랑'` are two different names, and every
         // later screen and the import matcher read what was stored.

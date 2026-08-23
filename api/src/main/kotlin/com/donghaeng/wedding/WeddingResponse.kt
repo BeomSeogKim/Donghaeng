@@ -12,6 +12,15 @@ import java.time.LocalDate
  * account that person logs in with; the seat is the concept both were fragments of,
  * so the header the ledger renders now reads the pair rather than two columns.
  *
+ * **[weddingName] is the wedding's own name and is nullable** (added 2026-08-23,
+ * `#214`): it is what the ledger's header renders in place of the product word, and
+ * `null` — the state a wedding is created in unless the couple typed one — is
+ * ordinary rather than an error. It is spelled `weddingName` and not `name` because
+ * the create request already carries a `name`, which is the caller's own; one
+ * spelling everywhere beats two that differ per shape, and it reads beside
+ * [weddingDate] the way it is stored beside it
+ * (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+ *
  * **Always two entries, 신랑 먼저.** A wedding has exactly two seats from the moment
  * it exists, so a client may index the array — but reading `side` is what makes that
  * correct rather than lucky, and it is one field either way.
@@ -28,6 +37,7 @@ import java.time.LocalDate
  */
 data class WeddingResponse(
     val id: Long,
+    val weddingName: String?,
     val weddingDate: LocalDate,
     val seats: List<WeddingSeatResponse>,
 )
@@ -41,6 +51,7 @@ data class WeddingResponse(
 internal fun Wedding.toWeddingResponse(seats: List<WeddingSeat>) =
     WeddingResponse(
         id = id,
+        weddingName = name,
         weddingDate = weddingDate,
         seats = WeddingSide.entries.mapNotNull { side -> seats.firstOrNull { it.side == side }?.toWeddingSeatResponse() },
     )

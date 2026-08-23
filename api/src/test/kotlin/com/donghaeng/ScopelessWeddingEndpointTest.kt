@@ -152,7 +152,17 @@ internal class ScopelessWeddingEndpointTest {
          *   refusal answers the same document, and the only row it writes is the seat
          *   that token identifies. `AcceptInviteContractTest` is what holds that.
          *
-         * A fourth entry is a design change, not a line: any endpoint that reads or
+         * - `WeddingInviteController.preview` is `#214`'s pre-accept read, and it is
+         *   the join's own exemption seen from one step earlier: the caller is not a
+         *   member yet, and **the token is what stands in for the scope** — the same
+         *   token, parsed and compared by the same code, refused in the same order.
+         *   It writes nothing and spends nothing, and it publishes 결혼식 이름, 예식일
+         *   and the inviting seat's name — **no wedding id**, so nothing it answers
+         *   can be carried to a scoped endpoint
+         *   (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+         *   `PreviewInviteContractTest` is what holds that.
+         *
+         * A fifth entry is a design change, not a line: any endpoint that reads or
          * writes a wedding's CONTENTS has a wedding in mind, and the id belongs in
          * the path where the resolver can check it.
          */
@@ -161,6 +171,7 @@ internal class ScopelessWeddingEndpointTest {
                 "WeddingController.create",
                 "WeddingController.list",
                 "WeddingInviteController.join",
+                "WeddingInviteController.preview",
             )
 
         val productionClassNames: Set<String> =

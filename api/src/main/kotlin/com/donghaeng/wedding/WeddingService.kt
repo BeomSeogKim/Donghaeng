@@ -44,8 +44,9 @@ internal class WeddingService(
      * belongs to exactly one wedding, created or joined
      * (notes/2026-08-21-decision-one-wedding-per-person.md).
      *
-     * The name is trimmed at this one write point: to this schema `' 김신랑'` and
-     * `'김신랑'` are two different names.
+     * Both names — the caller's own and the wedding's, if they typed one — are
+     * trimmed at this one write point: to this schema `' 김신랑'` and `'김신랑'` are two
+     * different names.
      */
     @Transactional
     fun create(
@@ -60,6 +61,10 @@ internal class WeddingService(
             weddings.save(
                 Wedding(
                     weddingDate = request.weddingDate,
+                    // Trimmed at this one write point, as the seat's name is: to this
+                    // schema `' 범석 희주의 가을'` and `'범석 희주의 가을'` are two
+                    // different names.
+                    name = request.weddingName?.trim(),
                     createdBy = userId,
                     createdAt = now,
                     updatedAt = now,
@@ -222,9 +227,12 @@ internal class WeddingService(
         weddings.findByIdAndDeletedAtIsNull(weddingId)?.toWeddingResponse(seatsOf(weddingId)) ?: throw WeddingNotFoundException()
 
     /**
-     * 웨딩 정보 수정 (`#173`, the backend half of `#8`) — 예식일 and 보증인원, the two
-     * things the wedding row holds that a couple can change. **The names are not
-     * here**: after 2026-08-22 a name belongs to a seat, and `#175` edits one.
+     * 웨딩 정보 수정 (`#173`, the backend half of `#8`) — 결혼식 이름, 예식일 and
+     * 보증인원, the three things the wedding row holds that a couple can change.
+     * **A PERSON's name is not here**: after 2026-08-22 that belongs to a seat, and
+     * `#175` edits one. 결혼식 이름 joined this endpoint on 2026-08-23 (`#214`), and it
+     * is clearable for the reason 보증인원 is — a wedding with no name is an ordinary
+     * wedding (notes/2026-08-23-decision-the-wedding-has-a-name.md).
      *
      * **A member the caller did not send is not written**, which is the whole of
      * [UpdateWeddingRequest]'s [Patch] and is what makes this an edit rather than a
@@ -258,6 +266,24 @@ internal class WeddingService(
         val row = weddings.findByIdAndDeletedAtIsNull(wedding.id) ?: throw WeddingNotFoundException()
         var written = false
 
+        when (val name = request.weddingName) {
+            // Trimmed here as it is on the create, and compared after the trim: a
+            // resubmitted form that only added a space changed nothing.
+            is Patch.Set ->
+                if (row.name != name.value.trim()) {
+                    row.name = name.value.trim()
+                    written = true
+                }
+            // 이름 없이 시작한 웨딩이 정상이고, 붙였다 떼는 것도 정상이다 — the couple's
+            // own words are theirs to withdraw, and the header renders something else
+            // in their place. Clearing a name that is already NULL is not a change.
+            Patch.Cleared ->
+                if (row.name != null) {
+                    row.name = null
+                    written = true
+                }
+            Patch.Absent -> Unit
+        }
         when (val date = request.weddingDate) {
             // Compared, not just assigned: a member resent unchanged is a member
             // nothing happened to, and `updatedAt` below is the only thing that would

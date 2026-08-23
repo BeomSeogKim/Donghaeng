@@ -80,6 +80,9 @@ class PatchMemberSweepTest {
          */
         val CLEARABLE =
             mapOf(
+                "UpdateWeddingRequest.weddingName" to
+                    "이름 없이 만들어진 웨딩이 정상 상태다: 선택 항목이고, 붙였다 떼는 것도 커플의 몫이다. " +
+                    "이름이 없는 화면이 무엇을 그릴지는 web/의 결정이고, API는 없음을 없음으로 답한다.",
                 "UpdateWeddingRequest.guaranteedHeadcount" to
                     "보증인원 미설정은 실제 상태다: 예식장과 계약하기 전이거나, 계약이 깨져 다시 그 상태로 " +
                     "돌아간 커플이 있다. 예식장의 숫자를 우리가 대신 들고 있을 수는 없다.",

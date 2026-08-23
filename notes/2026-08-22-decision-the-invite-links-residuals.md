@@ -37,6 +37,17 @@ This is inherent, not a defect — the link exists to be pasted into KakaoTalk. 
 
 ## 3. A hostile inbound fragment binds a victim permanently
 
+> **AMENDED 2026-08-23 by `#214`.** The last paragraph of this section — "the accept
+> screen cannot name the wedding it is joining" — no longer holds. The founder asked
+> for 결혼식 이름 · 예식일 · 초대한 사람 on the accept screen
+> (`2026-08-23-decision-the-wedding-has-a-name.md`), and it ships as
+> `POST /weddings/join/preview`: authenticated, token in the body, **no `weddingId` in
+> the answer**. The oracle argument does not reach it — the reader is holding a
+> 256-bit token that already entitles them to the seat, so naming the wedding tells
+> them strictly less than accepting would. **The irreversibility below is unchanged**,
+> and the preview makes the choice informed rather than reversible: a self-service seat
+> release is still unbuilt and still the founder's call.
+
 **The threat model ran outward only.** It reasoned about our token leaking to others and never about someone else's token being pushed at us.
 
 An attacker issues an invite for **their own** wedding and sends `https://<app>/invite#t=<theirs>`. A victim who accepts is bound to the attacker's wedding — and `2026-08-21-decision-one-wedding-per-person.md` makes that binding total, while **no endpoint deletes a wedding or releases a seat.** There is no un-join.
