@@ -11,11 +11,17 @@ import { type CreateWeddingRequest, useCreateWedding } from '../hooks/useCreateW
 import { useWeddings } from '../hooks/useWeddings'
 import { wasAlreadyInAWedding } from '../lib/alreadyInAWedding'
 import { ApiError } from '../lib/api'
-import { nameError } from '../lib/name'
+import { nameError, weddingNameError } from '../lib/name'
 import { ledgerPath } from '../lib/routes'
 
 /*
- * 웨딩 만들기 — 최초 1회. 예식일과 내가 누구인지, 그 이상은 묻지 않는다.
+ * 웨딩 만들기 — 최초 1회. 예식일과 내가 누구인지, 그리고 이 결혼식을 뭐라고
+ * 부를지. 그 이상은 묻지 않는다.
+ *
+ * 결혼식 이름만 선택이고 나머지는 아니다 (`#212`). A wedding with no name is an
+ * ordinary wedding — the ledger works completely without one and 설정 can give
+ * it one later — so the field is offered and never required
+ * (notes/2026-08-23-decision-the-wedding-has-a-name.md).
  *
  * NOBODY TYPES THEIR PARTNER'S NAME HERE (changed 2026-08-22,
  * notes/2026-08-22-decision-the-couples-two-seats.md). 신랑 이름과 신부 이름은
@@ -96,6 +102,7 @@ function CreateWeddingForm() {
   const navigate = useNavigate()
   const create = useCreateWedding()
   const [values, setValues] = useState<FormValues>({
+    weddingName: '',
     weddingDate: '',
     side: null,
     name: '',
@@ -128,7 +135,20 @@ function CreateWeddingForm() {
     if (Object.keys(validate(sending)).length > 0 || sending.side === null) return
 
     create.mutate(
-      { weddingDate: sending.weddingDate, side: sending.side, name: sending.name },
+      {
+        weddingDate: sending.weddingDate,
+        side: sending.side,
+        name: sending.name,
+        /*
+         * THE ONE MEMBER THAT MAY BE ABSENT, and absent is how an unanswered
+         * optional field is spelled. Omitting it and sending `null` mean
+         * exactly the same thing to this endpoint, so the request says nothing
+         * rather than saying "no name" — and `""`, which is what an untouched
+         * input would otherwise serialise to, is a 400 (docs/api-spec.md
+         * § POST /weddings).
+         */
+        ...(sending.weddingName === '' ? {} : { weddingName: sending.weddingName }),
+      },
       { onSuccess: () => navigate(ledgerPath, { replace: true }) },
     )
   }
@@ -191,6 +211,35 @@ function CreateWeddingForm() {
       </div>
 
       <form className="flex w-full flex-col gap-5" onSubmit={handleSubmit}>
+        {/*
+         * 결혼식 이름 — the only optional answer on this form, and it is FIRST
+         * because it is the one thing on the screen that is about their wedding
+         * rather than about filling a seat.
+         *
+         * IT IS NOT COMPOSED FROM THE TWO NAMES, and it never will be: v1 does
+         * not know the partner's name until they accept, so an auto-composed
+         * name would be half a name for the whole span the couple uses the
+         * ledger most (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+         */}
+        <div className="flex flex-col gap-2">
+          <Field
+            error={errors.weddingName}
+            id="wedding-name"
+            label="결혼식 이름"
+            onChange={(event) =>
+              setValues({ ...values, weddingName: event.target.value })
+            }
+            placeholder="예: 범석 희주의 가을"
+            type="text"
+            value={values.weddingName}
+          />
+          {/* 15px, not the artboard's 13px: 13px is for metadata fragments and
+              never for sentences (design/AGENTS.md § Typography), and this is
+              the same hint 설정 wears under the same field. */}
+          <p className="text-body leading-body text-ink-muted">
+            두 사람이 부르고 싶은 대로 적으면 됩니다. 나중에 설정에서 바꿀 수 있습니다.
+          </p>
+        </div>
         <Field
           error={errors.weddingDate}
           id="wedding-date"
@@ -255,6 +304,7 @@ type Side = CreateWeddingRequest['side']
  * default it has to invent.
  */
 type FormValues = {
+  weddingName: string
   weddingDate: string
   side: Side | null
   name: string
@@ -272,7 +322,13 @@ type FormValues = {
  * The date is passed through untouched. It is already `YYYY-MM-DD`.
  */
 function trimmed(values: FormValues): FormValues {
-  return { ...values, name: values.name.trim() }
+  return {
+    ...values,
+    name: values.name.trim(),
+    // 결혼식 이름 is measured the same way and trims to `''` when the couple
+    // typed only spaces — which is not a refusal here, it is "no name".
+    weddingName: values.weddingName.trim(),
+  }
 }
 
 type FieldErrors = Partial<Record<keyof FormValues, string>>
@@ -295,6 +351,10 @@ function validate(values: FormValues): FieldErrors {
   // covers both screens (docs/api-spec.md § POST /weddings/join).
   const name = nameError(values.name)
   if (name !== undefined) errors.name = name
+  // 결혼식 이름 is optional, so the only thing that can be wrong with it is its
+  // length — and the limit is the same column's (`lib/name.ts`).
+  const weddingName = weddingNameError(values.weddingName)
+  if (weddingName !== undefined) errors.weddingName = weddingName
   return errors
 }
 

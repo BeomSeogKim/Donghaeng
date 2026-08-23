@@ -1,3 +1,4 @@
+import { ApiError } from './api'
 import { invitePath } from './routes'
 
 /*
@@ -83,4 +84,55 @@ export function pendingInvite(): string | null {
  */
 export function forgetInvite(): void {
   sessionStorage.removeItem(INVITE_STORAGE_KEY)
+}
+
+/**
+ * The answers that mean this token can never work again — read off `code`,
+ * which is the only member of a problem document anything may branch on.
+ *
+ * `INVITE_NOT_FOUND` covers unknown, wrong and already spent as one answer;
+ * `INVITE_EXPIRED` is the day-old link; `INVITE_SUPERSEDED` is the one a 재발급
+ * replaced; and `PARTNER_ALREADY_JOINED` is the seat being filled by somebody
+ * else. Every other refusal leaves a token that may still be good.
+ *
+ * **`INVITE_SUPERSEDED` IS HERE BECAUSE `INVITE_NOT_FOUND` STOPPED CARRYING
+ * IT.** A replaced token used to arrive as `INVITE_NOT_FOUND`; `#201` split it
+ * out so the person could be told a newer link exists (docs/api-spec.md
+ * § POST /weddings/join), and leaving it out here would have kept a token that
+ * can never work again. A code told apart on screen is still the same death
+ * underneath.
+ *
+ * `ALREADY_IN_A_WEDDING` IS DELIBERATELY ABSENT, and the spec says so in as
+ * many words: "**the token is not spent**, so the real partner can still use
+ * it." It is a fact about the CALLER, and its recovery — sign out, sign back in
+ * as the right account, land here with the invite still waiting — only works
+ * while the token is here (`lib/alreadyInAWedding.ts`).
+ */
+const SPENT: ReadonlySet<string | null> = new Set([
+  'INVITE_NOT_FOUND',
+  'INVITE_EXPIRED',
+  'INVITE_SUPERSEDED',
+  'PARTNER_ALREADY_JOINED',
+])
+
+/**
+ * Drop the token if this is an answer it cannot survive, and do nothing at all
+ * otherwise.
+ *
+ * **TWO CALLS LEARN THIS, SO ONE FUNCTION DECIDES IT.** The accept learns it
+ * from the tap and the preview learns it before the tap, off the same set of
+ * codes in the same order (docs/api-spec.md § POST /weddings/join/preview) —
+ * and a preview that refused to say so would be strictly worse than no preview
+ * at all: the person never taps, so nothing else ever drops the token, and it
+ * goes on diverting every empty ledger they open back to a screen that can only
+ * refuse them again.
+ *
+ * A `code` OF `null` KEEPS IT, and that is the same rule rather than a second
+ * one. `apiError` reports `null` for a 4xx that is not a problem document — a
+ * proxy or the servlet container answered, not the application (`lib/api.ts`) —
+ * so it is not an answer about the token at all, and a 404 from a load balancer
+ * must not destroy a live invite.
+ */
+export function forgetSpentInvite(error: unknown): void {
+  if (error instanceof ApiError && SPENT.has(error.code)) forgetInvite()
 }

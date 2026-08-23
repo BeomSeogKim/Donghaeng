@@ -5,11 +5,13 @@ import {
   type WeddingMutation,
 } from '../hooks/useUpdateWedding'
 import { ApiError } from '../lib/api'
+import { weddingNameError } from '../lib/name'
 import { buttonClassName } from './Button'
 import { Field } from './Field'
 
 /*
- * 웨딩 정보 — 예식일과 보증인원, and the only place either is edited.
+ * 웨딩 정보 — 결혼식 이름과 예식일과 보증인원, and the only place any of the three
+ * is edited.
  *
  * 보증인원 IS THE VENUE'S NUMBER, NEVER OURS. Nothing on this screen recommends
  * one, hints at ours, or subtracts anything: no 식대 인원 beside the box, no
@@ -35,11 +37,14 @@ export function WeddingInfoForm({
   guaranteedHeadcount,
   weddingDate,
   weddingId,
+  weddingName,
 }: {
   /** As the headcount endpoint publishes it — `null` when the couple has none. */
   guaranteedHeadcount: number | null
   weddingDate: string
   weddingId: number
+  /** As the wedding publishes it — `null` for a wedding nobody has named. */
+  weddingName: string | null
 }) {
   const update = useUpdateWedding(weddingId)
 
@@ -65,8 +70,13 @@ export function WeddingInfoForm({
    * touched, answered 200, with nothing to recover it from: v1 records no
    * attribution at all (`#25`, `#179` are both post-v1).
    */
-  const [baseline, setBaseline] = useState<Baseline>({ weddingDate, guaranteedHeadcount })
+  const [baseline, setBaseline] = useState<Baseline>({
+    weddingName,
+    weddingDate,
+    guaranteedHeadcount,
+  })
   const [values, setValues] = useState<FormValues>({
+    weddingName: weddingName ?? '',
     weddingDate,
     guaranteedHeadcount: guaranteedHeadcount === null ? '' : String(guaranteedHeadcount),
   })
@@ -105,6 +115,30 @@ export function WeddingInfoForm({
 
   return (
     <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+      {/*
+       * 결혼식 이름 — the couple's own words for their own wedding, and the
+       * screen's title everywhere it is read (`#212`).
+       *
+       * EMPTYING THE BOX IS AN ANSWER, exactly as it is for 보증인원: a couple
+       * who named their wedding and would rather not have can go back to
+       * having none, and `null` is the one spelling of that
+       * (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+       */}
+      <div className="flex flex-col gap-2">
+        <Field
+          error={errors.weddingName}
+          id="wedding-name"
+          label="결혼식 이름"
+          onChange={(event) => setValues({ ...values, weddingName: event.target.value })}
+          placeholder="예: 범석 희주의 가을"
+          type="text"
+          value={values.weddingName}
+        />
+        <p className="text-body leading-body text-ink-muted">
+          두 사람이 부르고 싶은 대로 적으면 됩니다. 비워 두면 이름 없이 씁니다.
+        </p>
+      </div>
+
       {/* A native `type="date"`: mobile is the primary device, so the control
           worth having is the one the phone already has — and its value is
           `YYYY-MM-DD`, which is exactly what the API wants. */}
@@ -178,6 +212,7 @@ export function WeddingInfoForm({
 
 /** What each member was worth when the couple last left it alone. */
 type Baseline = {
+  weddingName: string | null
   weddingDate: string
   guaranteedHeadcount: number | null
 }
@@ -199,6 +234,11 @@ function advanced(
   response: WeddingMutation,
 ): Baseline {
   return {
+    // Absent and `null` are one state here too — a wedding with no name.
+    weddingName:
+      'weddingName' in sent
+        ? (response.wedding.weddingName ?? null)
+        : baseline.weddingName,
     weddingDate:
       'weddingDate' in sent ? response.wedding.weddingDate : baseline.weddingDate,
     // Absent, never null, once it is cleared — the two are one state.
@@ -215,13 +255,22 @@ function advanced(
  * `null` is sent for, and `null` is the one spelling of "clear".
  */
 type FormValues = {
+  weddingName: string
   weddingDate: string
   guaranteedHeadcount: string
 }
 
 /** What is sent, which is not quite what was typed. */
 function trimmed(values: FormValues): FormValues {
-  return { ...values, guaranteedHeadcount: values.guaranteedHeadcount.trim() }
+  return {
+    ...values,
+    // Trimmed for the reason every name in this product is: the server measures
+    // 100 characters BEFORE its own trim (`lib/name.ts`). It also turns a box
+    // holding only spaces into an empty one, which is the state that means
+    // "no name" — never a `""` sent to the server, which is a 400.
+    weddingName: values.weddingName.trim(),
+    guaranteedHeadcount: values.guaranteedHeadcount.trim(),
+  }
 }
 
 /**
@@ -252,7 +301,22 @@ function trimmed(values: FormValues): FormValues {
 function changed(values: FormValues, baseline: Baseline): UpdateWeddingRequest {
   const guaranteed = readable(values.guaranteedHeadcount)
 
+  /*
+   * 결혼식 이름 EMPTIED IS `null`, AND `""` IS NOT AN ALTERNATIVE SPELLING OF IT.
+   * This is the one member of this body where an empty string gets as far as
+   * validation instead of failing to be read — a string is a readable value
+   * where a number is not — so the API refuses it with 400 `VALIDATION_FAILED`
+   * rather than clearing anything (docs/api-spec.md § PATCH /weddings/{weddingId}).
+   *
+   * `''` IS ALSO WHAT `null` LOOKS LIKE IN AN INPUT, which is why the baseline
+   * is normalised the same way on both sides of the comparison: a wedding that
+   * never had a name, opened and saved untouched, must send nothing at all
+   * rather than a `null` that would clear what was never there.
+   */
+  const name = values.weddingName === '' ? null : values.weddingName
+
   return {
+    ...(name === baseline.weddingName ? {} : { weddingName: name }),
     ...(values.weddingDate === baseline.weddingDate
       ? {}
       : { weddingDate: values.weddingDate }),
@@ -288,6 +352,10 @@ type FieldErrors = Partial<Record<keyof FormValues, string>>
  */
 function validate(values: FormValues): FieldErrors {
   const errors: FieldErrors = {}
+  // 결혼식 이름 is optional, so length is the only thing that can be wrong with
+  // it — and the limit is the column's, held in one place (`lib/name.ts`).
+  const weddingName = weddingNameError(values.weddingName)
+  if (weddingName !== undefined) errors.weddingName = weddingName
   if (values.weddingDate === '') errors.weddingDate = '예식일을 입력해 주세요.'
   if (values.guaranteedHeadcount !== '') {
     if (!NUMERIC.test(values.guaranteedHeadcount))

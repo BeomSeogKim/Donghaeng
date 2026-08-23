@@ -6,6 +6,7 @@ import { Field } from '../components/Field'
 import { GoogleLoginLink } from '../components/GoogleLoginLink'
 import { LogoutButton } from '../components/LogoutButton'
 import { Screen, ScreenFace } from '../components/Screen'
+import { type InvitePreview, useInvitePreview } from '../hooks/useInvitePreview'
 import { useJoinWedding } from '../hooks/useJoinWedding'
 import { useSession } from '../hooks/useSession'
 import { wasAlreadyInAWedding } from '../lib/alreadyInAWedding'
@@ -13,6 +14,8 @@ import { ApiError } from '../lib/api'
 import { isInAppBrowser } from '../lib/inAppBrowser'
 import { nameError } from '../lib/name'
 import { ledgerPath } from '../lib/routes'
+import { SEAT_SIDE } from '../lib/seat'
+import { formatWeddingDate } from '../lib/weddingDate'
 
 /*
  * 초대 수락 — where the KakaoTalk link lands, and the only screen a signed-out
@@ -29,6 +32,12 @@ import { ledgerPath } from '../lib/routes'
  * the ACCEPTING person's own: the seat is empty precisely because nobody types
  * anybody else's name. So a partner who arrives here signs in, then says who
  * they are, and only then is anything written.
+ *
+ * AND IT SAYS WHAT IS BEING ACCEPTED FIRST (`#212`) — 결혼식 이름 · 예식일 ·
+ * 초대한 사람, read by `POST /weddings/join/preview`. **It needs a session, so
+ * it belongs to the state after the Google round trip**: the signed-out half of
+ * this screen cannot name the wedding it is inviting somebody into, and does
+ * not try (docs/api-spec.md § POST /weddings/join/preview).
  *
  * THE REFUSALS ARE ANSWERS, not one answer repeated. Two 404s differ by whether
  * a new link would help, and the two 409s differ by whose problem it is: one is
@@ -154,6 +163,7 @@ function InAppBrowserNotice() {
 function AcceptForm({ token }: { token: string }) {
   const navigate = useNavigate()
   const join = useJoinWedding()
+  const preview = useInvitePreview(token)
   const [name, setName] = useState('')
 
   /*
@@ -206,7 +216,26 @@ function AcceptForm({ token }: { token: string }) {
    */
   if (wasAlreadyInAWedding()) return <AlreadyInAWedding />
 
-  const refusal = join.isError ? refusalFor(join.error) : null
+  /*
+   * THE REFUSAL CAN ARRIVE BEFORE THE TAP NOW. The preview answers **the same
+   * set of errors, in the same order**, as the accept — the spec says so in as
+   * many words, "so the screen can state the outcome the tap would have had" —
+   * so one function words both, and somebody holding a day-old link is told
+   * before they type their name in rather than after.
+   *
+   * ONLY A *SETTLED* PREVIEW REFUSAL SPEAKS, AND THAT ASYMMETRY IS THE POINT. A
+   * 5xx, or a 4xx that is not a problem document, decides nothing about this
+   * token — and this screen has not attempted anything yet, so saying
+   * "초대를 수락하지 못했습니다" would be reporting a failure that did not happen.
+   * The form stays and the tap is what finds out; the accept re-checks the
+   * token on every request and is the authority either way.
+   */
+  const previewRefusal = preview.isError ? refusalFor(preview.error) : null
+  const refusal = join.isError
+    ? refusalFor(join.error)
+    : previewRefusal?.settled === true
+      ? previewRefusal
+      : null
 
   /*
    * A settled refusal takes the form away rather than leaving a button that can
@@ -231,6 +260,8 @@ function AcceptForm({ token }: { token: string }) {
 
   return (
     <Screen aside={<InviteFace />}>
+      {preview.data !== undefined && <WhatThisOpens preview={preview.data} />}
+
       <p className="text-body leading-body text-ink-muted">
         하객 명부에 표시될 본인 이름을 적어 주세요. 상대방 이름은 적지 않습니다.
       </p>
@@ -264,6 +295,77 @@ function AcceptForm({ token }: { token: string }) {
 
       <Exit />
     </Screen>
+  )
+}
+
+/**
+ * 무엇을 수락하는지 — 결혼식 이름, 예식일, 초대한 사람, and nothing else.
+ *
+ * IT IS THREE FACTS ON RULED LINES, NOT A CARD. A 12px letterspaced term
+ * against its value, ruled the way a ledger is ruled — the same grammar 설정's
+ * sections wear, because this is the same kind of object: things stated, not a
+ * thing to press (design/AGENTS.md § Form).
+ *
+ * 결혼식 이름 WEARS THE DISPLAY FACE, and it is this screen's title in
+ * everything but position: what a person is deciding about is this couple's
+ * wedding, named in their own words. The 자적 面 beside it says what the STEP is
+ * ("초대를 받았습니다"), which is a different job.
+ *
+ * A WEDDING WITH NO NAME SIMPLY HAS NO ROW. `weddingName` is `null` for a
+ * couple who gave theirs none — an ordinary wedding — and **the API has no copy
+ * for that case on purpose**. 예식일 and 초대한 사람 still say whose wedding this
+ * is, and a placeholder in a name's place would say less than nothing.
+ *
+ * THERE IS NO SKELETON WHILE IT LOADS, and no "불러오는 중" either. The form
+ * below is usable the whole time and the block fills in when it answers;
+ * spending motion on apparatus is what this product is trying not to be.
+ */
+function WhatThisOpens({ preview }: { preview: InvitePreview }) {
+  return (
+    <dl className="flex w-full flex-col border-t border-line-strong">
+      {preview.weddingName != null && (
+        <Fact term="결혼식">
+          {/* One of RIDIBatang's three places — the screen's title, standing
+              where this screen's title would stand. */}
+          <span className="font-display text-title leading-snug tracking-display">
+            {preview.weddingName}
+          </span>
+        </Fact>
+      )}
+      <Fact term="예식일">
+        <span className="text-lead tabular-nums">
+          {formatWeddingDate(preview.weddingDate)}
+        </span>
+      </Fact>
+      <Fact term="초대한 사람">
+        {/* THE SIDE ALONE IS THE FALLBACK, not invented copy. This seat is the
+            TAKEN one, and both ways to take a seat write a name into it, so a
+            null here is only the document being wider than the API — springdoc
+            leaves a nullable Kotlin property out of `required`. The same `??`
+            the running head uses, and it reads on either contract. */}
+        <span className="text-lead">
+          {preview.invitedBy.name ?? SEAT_SIDE[preview.invitedBy.side]}
+          {preview.invitedBy.name != null && (
+            <span className="text-ink-muted"> · {SEAT_SIDE[preview.invitedBy.side]}</span>
+          )}
+        </span>
+      </Fact>
+    </dl>
+  )
+}
+
+/**
+ * One ruled line: the term on the left, the value on the right.
+ *
+ * `items-baseline` because the two sides are different sizes and it is their
+ * baselines that have to agree, not their boxes.
+ */
+function Fact({ children, term }: { children: ReactNode; term: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-line py-4">
+      <dt className="shrink-0 text-label tracking-label text-ink-muted">{term}</dt>
+      <dd className="min-w-0 text-right">{children}</dd>
+    </div>
   )
 }
 

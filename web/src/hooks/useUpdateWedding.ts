@@ -12,7 +12,7 @@ import { setWedding, weddingsQueryKey } from './useWeddings'
 type UpdateWedding = paths['/weddings/{weddingId}']['patch']
 
 /**
- * 예식일과 보증인원, and **only what is changing**.
+ * 결혼식 이름과 예식일과 보증인원, and **only what is changing**.
  *
  * THIS IS THE PRODUCT'S FIRST PARTIAL UPDATE AND ITS RULES ARE THE OPPOSITE OF
  * A CREATE'S (docs/api-spec.md § Partial updates,
@@ -25,7 +25,11 @@ type UpdateWedding = paths['/weddings/{weddingId}']['patch']
  *   straight to `JSON.stringify` is a refused request rather than a clear;
  * - **`weddingDate` has no `null` branch in this type at all**, and that is the
  *   API's answer rather than the generator's: a wedding always has a date, so
- *   clearing it is a 400.
+ *   clearing it is a 400. `weddingName` and `guaranteedHeadcount` both do have
+ *   one, because a wedding can be back to having neither;
+ * - **`weddingName` is the one member where `""` reaches validation** rather
+ *   than failing to be read, and is refused there — a string is a readable
+ *   value where a number is not. It is still not a spelling of "clear".
  *
  * Which members to send is the caller's decision and it is a real one — a body
  * carrying the date the form happened to load blind-writes whatever the partner

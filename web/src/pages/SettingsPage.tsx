@@ -67,7 +67,7 @@ export function SettingsPage() {
 }
 
 /**
- * 예식일과 보증인원, once both reads have answered.
+ * 결혼식 이름과 예식일과 보증인원, once both reads have answered.
  *
  * THE FORM IS NOT RENDERED UNTIL IT CAN BE PREFILLED, and on this screen that
  * is a data rule rather than a loading nicety: an empty 보증인원 field does not
@@ -113,6 +113,9 @@ function Prefilled({ wedding }: { wedding: Wedding }) {
       guaranteedHeadcount={headcount.data.guaranteedHeadcount ?? null}
       weddingDate={wedding.weddingDate}
       weddingId={wedding.id}
+      // 결혼식 이름 rides on `WeddingResponse` rather than on the headcount, and
+      // `null` is the ordinary state of a wedding nobody has named.
+      weddingName={wedding.weddingName ?? null}
     />
   )
 }

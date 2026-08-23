@@ -55,11 +55,13 @@ const SEATS: Wedding['seats'] = [
 function weddingApi(
   initial: {
     weddingDate?: string
+    weddingName?: string | null
     guaranteedHeadcount?: number
     mealHeadcount?: number
   } = {},
 ) {
   let weddingDate = initial.weddingDate ?? '2026-10-10'
+  let weddingName: string | null = initial.weddingName ?? null
   let guaranteed: number | null = initial.guaranteedHeadcount ?? null
   const mealHeadcount = initial.mealHeadcount ?? 128
 
@@ -67,7 +69,7 @@ function weddingApi(
   const headcountRequests: URL[] = []
   const weddingRequests: URL[] = []
 
-  const wedding = (): Wedding => ({ id: 12, weddingDate, seats: SEATS })
+  const wedding = (): Wedding => ({ id: 12, weddingDate, weddingName, seats: SEATS })
   const count = (): Headcount =>
     guaranteed === null
       ? { mealHeadcount }
@@ -79,7 +81,7 @@ function weddingApi(
     weddingRequests,
     /** What the last save asked the server to write. */
     lastSaved: () => saved[saved.length - 1],
-    stored: () => ({ weddingDate, guaranteedHeadcount: guaranteed }),
+    stored: () => ({ weddingDate, weddingName, guaranteedHeadcount: guaranteed }),
     /**
      * The partner, editing the same wedding from their own device.
      *
@@ -90,8 +92,13 @@ function weddingApi(
      * would, so the next response the form is handed carries a member it never
      * sent.
      */
-    partner: (edit: { weddingDate?: string; guaranteedHeadcount?: number | null }) => {
+    partner: (edit: {
+      weddingDate?: string
+      weddingName?: string | null
+      guaranteedHeadcount?: number | null
+    }) => {
       if (edit.weddingDate !== undefined) weddingDate = edit.weddingDate
+      if (edit.weddingName !== undefined) weddingName = edit.weddingName
       if (edit.guaranteedHeadcount !== undefined) guaranteed = edit.guaranteedHeadcount
     },
     me: () =>
@@ -128,6 +135,17 @@ function weddingApi(
           if (typeof sent !== 'string' || sent === '')
             return problem(400, 'MALFORMED_REQUEST_BODY')
           weddingDate = sent
+        }
+        if ('weddingName' in body) {
+          const sent: unknown = body.weddingName
+          // `null` clears it — 결혼식 이름 is one of the two members that has a
+          // cleared state. `""` gets as far as validation and is refused there
+          // rather than emptying it (docs/api-spec.md § PATCH /weddings/{weddingId}).
+          if (sent === null) weddingName = null
+          else if (typeof sent !== 'string') return problem(400, 'MALFORMED_REQUEST_BODY')
+          else if (sent.trim() === '' || sent.length > 100)
+            return problem(400, 'VALIDATION_FAILED')
+          else weddingName = sent.trim()
         }
         if ('guaranteedHeadcount' in body) {
           const sent: unknown = body.guaranteedHeadcount
@@ -172,6 +190,7 @@ async function form() {
   const date = await screen.findByLabelText('예식일')
   return {
     date: date as HTMLInputElement,
+    weddingName: screen.getByLabelText('결혼식 이름') as HTMLInputElement,
     guaranteed: screen.getByLabelText('보증인원') as HTMLInputElement,
     fill: async (field: HTMLInputElement, value: string) => {
       await userEvent.clear(field)
@@ -227,7 +246,123 @@ it('sends only the member the couple changed, and leaves the other alone', async
   expect(api.lastSaved()?.body).toEqual({ guaranteedHeadcount: 150 })
   expect(api.lastSaved()?.request.headers.get('Content-Type')).toBe('application/json')
   expect(api.lastSaved()?.request.credentials).toBe('include')
-  expect(api.stored()).toEqual({ weddingDate: '2027-03-14', guaranteedHeadcount: 150 })
+  expect(api.stored()).toEqual({
+    weddingDate: '2027-03-14',
+    weddingName: null,
+    guaranteedHeadcount: 150,
+  })
+})
+
+/*
+ * 결혼식 이름 — the wedding's own name, set, changed and cleared here, and the
+ * second member of this body with a cleared state
+ * (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+ */
+
+it('prefills 결혼식 이름 from the wedding, which is where it is published', async () => {
+  const api = weddingApi({ weddingName: '범석 희주의 가을' })
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+
+  // Unlike 보증인원 it rides on `WeddingResponse`: one number may not be spelled
+  // twice in one response, but a name has only one place it could be.
+  expect(fields.weddingName).toHaveValue('범석 희주의 가을')
+})
+
+it('reads a wedding with no name as the ordinary wedding it is', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+
+  expect(fields.weddingName).toHaveValue('')
+  expect(screen.queryByText(/불러오지 못했습니다/)).not.toBeInTheDocument()
+})
+
+it('sends 결혼식 이름 on its own when that is what moved', async () => {
+  const api = weddingApi({ weddingDate: '2027-03-14', guaranteedHeadcount: 150 })
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  await fields.fill(fields.weddingName, '범석 희주의 가을')
+  await fields.save()
+
+  // An equality, for the reason every other body on this screen is asserted as
+  // one: a member the couple did not touch is a blind write over their partner.
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+  expect(api.lastSaved()?.body).toEqual({ weddingName: '범석 희주의 가을' })
+  expect(api.stored().weddingName).toBe('범석 희주의 가을')
+})
+
+it('clears 결혼식 이름 with null when the couple empties the field, never with ""', async () => {
+  const api = weddingApi({ weddingName: '범석 희주의 가을' })
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  await fields.fill(fields.weddingName, '')
+  await fields.save()
+
+  /*
+   * `""` IS THE ONE THAT LOOKS RIGHT AND IS A 400. It is what a blanked input
+   * serialises to, and on this member it gets as far as validation and is
+   * refused there — it is not a spelling of "clear" and never becomes one
+   * (docs/api-spec.md § PATCH /weddings/{weddingId}).
+   */
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+  expect(api.lastSaved()?.body).toEqual({ weddingName: null })
+  expect(api.lastSaved()?.raw).toBe('{"weddingName":null}')
+  expect(api.stored().weddingName).toBeNull()
+  expect(await screen.findByText('저장했습니다.')).toBeVisible()
+})
+
+it('does not ask to clear a 결혼식 이름 that was never there', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  await fields.fill(fields.weddingName, '  ')
+  await fields.save()
+
+  // Whitespace trims to nothing, and nothing is what was already there, so
+  // there is nothing to write — and no `null` either, which would be a clear.
+  await waitFor(() => expect(api.saved).toHaveLength(1))
+  expect(api.lastSaved()?.body).toEqual({})
+})
+
+it('will not spend a round trip on a 결혼식 이름 the API would refuse', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  await fields.fill(fields.weddingName, '가'.repeat(101))
+  await fields.save()
+
+  expect(await screen.findByText('결혼식 이름은 100자까지 쓸 수 있습니다.')).toBeVisible()
+  expect(api.saved).toHaveLength(0)
+})
+
+it('carries a saved 결혼식 이름 into the running head above the form', async () => {
+  const api = weddingApi()
+  server.use(api.me(), api.weddings(), api.headcount(), api.update())
+
+  renderWithProviders(<App />, { initialEntries: ['/settings'] })
+  const fields = await form()
+  // The head reads the couple's two seats until the wedding has a name of its
+  // own — and taking that slot is what the name is for.
+  expect(await screen.findByText(/김신랑 · 이신부/)).toBeVisible()
+
+  await fields.fill(fields.weddingName, '범석 희주의 가을')
+  await fields.save()
+
+  expect(await screen.findByText(/범석 희주의 가을/)).toBeVisible()
+  expect(screen.queryByText(/김신랑 · 이신부/)).not.toBeInTheDocument()
 })
 
 it('clears 보증인원 with null when the couple empties the field, never with ""', async () => {

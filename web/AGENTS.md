@@ -184,7 +184,8 @@ what `web/` is required to do with them.
 - **Setting attendance must stay a one-or-two-tap action** — couple entry is
   the primary intake path, not a fallback.
 - **보증인원 does not render until it is set** in 설정 · 웨딩 정보. Onboarding
-  asks for **date and names only**.
+  asks for **예식일, 내 자리와 이름, and 결혼식 이름** — the last optional, the
+  rest required, and nothing else.
 - **Parsed vendor email is rendered as text, never as HTML.**
 - **Conflicts go to one review screen**, never a modal per row, where the
   **summary is the screen and the conflict list is the appendix**. Each
