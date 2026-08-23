@@ -53,7 +53,7 @@ export function GuestRow({ guest }: { guest: Guest }) {
           불참 is neutral and never red — a guest who cannot come is a fact, not
           an error. */}
       <span
-        className={`inline-flex min-h-9 min-w-14 items-center justify-center rounded-chip px-3 text-body font-semibold leading-none ${
+        className={`inline-flex min-h-9 min-w-14 items-center justify-center px-3 text-body font-semibold leading-none ${
           guest.expectedAttending
             ? 'bg-att-yes-bg text-att-yes-fg'
             : 'bg-att-no-bg text-att-no-fg'

@@ -7,7 +7,7 @@
  * namespace to `initial`, so `bg-slate-100`, `text-sm` and `rounded-lg` do not
  * exist and a hardcode fails to compile.
  *
- * Two holes survive that, and this file is both of them:
+ * Three holes survive that, and this file is all three of them:
  *
  * 1. Tailwind v4 has no duration namespace to clear, so `duration-300`
  *    compiles. Call sites must reach for the token: `duration-(--dh-dur-count)`.
@@ -15,6 +15,13 @@
  *    `text-[13px]`, `rounded-[4px]` and `duration-[300ms]` all compile no
  *    matter what the bridge cleared. So does the CSS-variable shorthand
  *    `bg-(--brand-blue)`, which names a variable from outside tokens.css.
+ * 3. Some utilities are STATIC RULES in Tailwind's own stylesheet rather than
+ *    namespace entries, so clearing the namespace cannot reach them at all.
+ *    `rounded-full` and `border-2` are the two that matter here, and both are
+ *    values the form language deleted on 2026-08-23 — the pill, and 2px as a
+ *    free number. Found while landing that change (`#215`); a namespace that
+ *    is cleared and a utility that still compiles is the worst possible pair,
+ *    because the bridge *looks* like it closed the hole.
  *
  * WHERE IT LOOKS. Not at `className=` attributes — a class written once and
  * reused is exactly where a duration or a radius gets hardcoded:
@@ -163,6 +170,34 @@ const ARBITRARY_ANCHOR = /-\[|^\[/
 const VAR_SHORTHAND = /-\((?:[a-z]+:)?(--[A-Za-z0-9_-]+)\)(?:\/\S*)?$/
 /** `duration-300`, `duration-0`. */
 const BARE_DURATION = /^duration-\d+$/
+/**
+ * The pill, which was deleted from the system on 2026-08-23 and which the
+ * @theme bridge cannot reach.
+ *
+ * Clearing `--radius-*: initial` kills `rounded-lg` because Tailwind reads that
+ * from the namespace — but `rounded-full` is a STATIC rule in Tailwind's own
+ * stylesheet (`border-radius: calc(infinity * 1px)`), so it compiles no matter
+ * what the bridge cleared and no matter that `--dh-radius-chip` is gone. That
+ * is the exact shape the new form rules created, and closing it is why this
+ * file changed in the same issue as the tokens
+ * (notes/2026-08-23-decision-the-form-language.md).
+ */
+const PILL = /^rounded(?:-(?:[tbrlse]|[tb][rl]|ss|se|ee|es))?-full$/
+/**
+ * A hardcoded border width of 2 or more — `border-2`, `border-b-2`,
+ * `divide-x-2`.
+ *
+ * Also static rules, also invisible to the bridge, and 2px is now three named
+ * jobs rather than a free number: the 구연 `--dh-rim-w`, the 인장
+ * `--dh-seal-h`, and 자적's marking edge `--dh-mark-w`. `border` on its own
+ * (1px) and `border-0` stay legal — a hairline and a reset are not a choice
+ * between values.
+ *
+ * `outline-*` and `ring-*` are deliberately NOT here. The focus ring is a base
+ * rule in design/tokens.css rather than a call-site decision, and widening onto
+ * it would be churn unrelated to the form language.
+ */
+const BARE_BORDER_WIDTH = /^(?:border|divide)(?:-(?:[xytbrlse]|[tb][rl]))?-(\d+)$/
 /** A background image is not a colour, a size, a radius or a duration. */
 const URL_VALUE = /^url\(/
 /**
@@ -314,6 +349,29 @@ export function inspectClassToken(token) {
     carriesDesignValue(utility.slice(0, shorthand.index), DESIGN_PREFIXES)
   ) {
     return foreignVariable(token, shorthand[1])
+  }
+
+  if (PILL.test(utility)) {
+    return {
+      token,
+      message:
+        'there is no pill in this system — `--dh-radius-chip` was deleted on 2026-08-23 and ' +
+        'radius is 0 (design/AGENTS.md § Form). `rounded-full` is a static Tailwind rule, so ' +
+        'the @theme bridge cannot stop it and this check has to. 참석 is a word in a 48px ' +
+        'column, not a badge.',
+    }
+  }
+
+  const borderWidth = BARE_BORDER_WIDTH.exec(utility)
+  if (borderWidth !== null && Number(borderWidth[1]) >= 2) {
+    return {
+      token,
+      message:
+        'a border of 2px or more is a named job, not a number: the 구연 `--dh-rim-w`, the ' +
+        '인장 `--dh-seal-h`, 자적의 표시선 `--dh-mark-w`. Tailwind emits this width from a ' +
+        'static rule the @theme bridge cannot clear, so read the token: ' +
+        '`border-(length:--dh-rim-w)`.',
+    }
   }
 
   if (BARE_DURATION.test(utility)) {

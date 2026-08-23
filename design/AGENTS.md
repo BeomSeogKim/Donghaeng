@@ -124,12 +124,13 @@ edge, the headcount living in a 자적 굽.
 ## Components
 
 Ten components plus four foundation cards cover v1 — the inventory is
-`design/components/parts/`, and it is a **closed set for v1**. The set is
-**behind the form rules above** as of 2026-08-23: the parts still draw pills,
-8px radii and a withdrawn three-state attendance control (`#177`). Before adding an
+`design/components/parts/`, and it is a **closed set for v1**. Before adding an
 eleventh, say which requirement it serves and why an existing part cannot carry
-it. Search is a **Field variant**; the filter chips are a **Tag with a selected
-state** — that is what kept the inventory at ten when search landed.
+it. Search is a **Field variant**; the filters are a **Tag with a selected
+state** — that is what kept the inventory at ten when search landed. The
+selected state is a 2px 자적 underline, not a fill: the pill went with the form
+rules above (`#215`), and the withdrawn three-state attendance control went
+with it (`#177`).
 
 ## Building
 

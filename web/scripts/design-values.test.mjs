@@ -184,6 +184,57 @@ describe('what is not a class list', () => {
   )
 })
 
+/*
+ * The form language (2026-08-23) deleted the pill and gave 2px three names. Both
+ * deletions are invisible to the @theme bridge, because Tailwind emits
+ * `rounded-full` and `border-2` from static rules rather than from a namespace
+ * — so clearing `--radius-*` does not stop either one from compiling.
+ */
+describe('hole 3 — static rules the cleared namespaces cannot reach', () => {
+  it.each([
+    'rounded-full',
+    'rounded-t-full',
+    'rounded-br-full',
+    'rounded-s-full',
+    'hover:rounded-full',
+    'rounded-full!',
+  ])('flags the pill %s', (token) => {
+    expect(tokensFlagged(jsx(`inline-flex ${token}`))).toEqual([token])
+  })
+
+  it.each([
+    'border-2',
+    'border-b-2',
+    'border-t-4',
+    'divide-y-2',
+    'md:border-2',
+    'border-x-8',
+  ])('flags the hardcoded border width %s', (token) => {
+    expect(tokensFlagged(jsx(`${token} border-line`))).toEqual([token])
+  })
+
+  it.each([
+    // A hairline and a reset are not a choice between values.
+    'border',
+    'border-0',
+    'border-b',
+    'divide-y',
+    // The colour utilities the bridge does expose share the prefix.
+    'border-line',
+    'border-line-strong',
+    'divide-line',
+    // The three named jobs, read as tokens.
+    'border-(length:--dh-rim-w)',
+    'border-b-(length:--dh-mark-w)',
+    'h-(--dh-seal-h)',
+    // Radius survives as two names, both of which are 0.
+    'rounded-flush',
+    'rounded-control',
+  ])('accepts %s', (token) => {
+    expect(tokensFlagged(jsx(`inline-flex ${token}`))).toEqual([])
+  })
+})
+
 describe('the utilities the @theme bridge does expose stay legal', () => {
   it('accepts the classes the scaffold already ships', () => {
     const source =
