@@ -7,6 +7,13 @@ import com.donghaeng.wedding.WeddingSide
  * TypeScript type from this shape, and resource-named so `#12`'s edit and `#15`'s
  * list return the same one.
  *
+ * **`expectedPartySize` is gone and [companionOf] replaced it** (changed 2026-08-23,
+ * `#213`). A party of three is three of these, and the third of them says whose it
+ * is: `null` on the head, the head's `id` on everyone they brought
+ * (notes/2026-08-23-decision-companions-become-guests.md). That is what lets a
+ * companion surfaced on its own — by a search, by a filter — still say whose it is,
+ * and it is the second half of the same fact the generated name carries.
+ *
  * **No `confirmed*`** — nothing in v1 writes them, and `docs/api-spec.md` tells the
  * client so; they arrive with the endpoint that can set them (`#12`, `#23`). **No
  * `weddingId`**, which the caller sent in the path, and no `createdBy` /
@@ -22,7 +29,7 @@ data class GuestResponse(
     val contact: String?,
     val accessibilityNote: String?,
     val expectedAttending: Boolean,
-    val expectedPartySize: Int,
+    val companionOf: Long?,
 )
 
 internal fun Guest.toGuestResponse() =
@@ -35,5 +42,5 @@ internal fun Guest.toGuestResponse() =
         contact = contact,
         accessibilityNote = accessibilityNote,
         expectedAttending = expectedAttending,
-        expectedPartySize = expectedPartySize,
+        companionOf = companionOf,
     )

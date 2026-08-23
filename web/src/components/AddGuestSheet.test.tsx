@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
 import { App } from '../App'
-import type { Guest } from '../hooks/useGuests'
+import type { Guest, GuestParty } from '../hooks/useGuests'
 import { type Headcount, headcountQueryKey } from '../hooks/useHeadcount'
 import type { Session } from '../hooks/useSession'
 import type { Wedding } from '../hooks/useWeddings'
@@ -27,7 +27,7 @@ const API = 'http://localhost:8080'
 
 type AddGuest = paths['/weddings/{weddingId}/guests']['post']
 type CreateGuestRequest = AddGuest['requestBody']['content']['application/json']
-/** `{guest, headcount}` — the envelope `#12` and `#13` will return too. */
+/** `{party, headcount}` — the envelope `#12` and `#13` will return too. */
 type GuestMutation = AddGuest['responses'][201]['content']['*/*']
 
 const WEDDING: Wedding = {
@@ -40,15 +40,21 @@ const WEDDING: Wedding = {
 }
 
 /**
- * The wedding's ledger, as the server keeps it — the rows, the two filters, the
- * create, and the number computed from the rows.
+ * The wedding's ledger, as the server keeps it — the PEOPLE, the two filters,
+ * the create, and the number computed from those people.
  *
- * IT IS STATEFUL AND IT SUMS ITS OWN ROWS, deliberately. A create double that
+ * IT IS STATEFUL AND IT COUNTS ITS OWN ROWS, deliberately. A create double that
  * answered a constant headcount would let a screen that shows a number
  * contradicting its own list stay green, and this is the product whose single
- * claim is that the number is never wrong. The sum is the server's rule: a
- * guest marked 불참 contributes zero whatever their party size says
- * (docs/api-spec.md § POST /weddings/{weddingId}/guests).
+ * claim is that the number is never wrong.
+ *
+ * 식대 인원 IS A COUNT OF ATTENDING RECORDS since 2026-08-23 (`#213`), not a sum
+ * of party sizes: `expectedPartySize: 3` writes three 하객 records, so a party
+ * that splits is counted person by person and there is no size left to sum.
+ *
+ * It stores rows as people and answers as parties — the fold is the server's,
+ * and the filters select people underneath it (docs/api-spec.md
+ * § GET /weddings/{weddingId}/guests).
  */
 function ledger(...initial: readonly Guest[]) {
   const rows: Guest[] = [...initial]
@@ -57,10 +63,29 @@ function ledger(...initial: readonly Guest[]) {
   let nextId = 100
 
   const count = (): Headcount => ({
-    mealHeadcount: rows
-      .filter((row) => row.expectedAttending)
-      .reduce((total, row) => total + row.expectedPartySize, 0),
+    mealHeadcount: rows.filter((row) => row.expectedAttending).length,
   })
+
+  /**
+   * The fold: parties in their head's entry order, members in their own, and
+   * `size`/`attendingCount` counting THE MEMBERS THAT MATCHED rather than the
+   * party's total.
+   */
+  const fold = (matched: readonly Guest[]): GuestParty[] => {
+    const parties = new Map<number, Guest[]>()
+    for (const row of matched) {
+      const headId = row.companionOf ?? row.id
+      parties.set(headId, [...(parties.get(headId) ?? []), row])
+    }
+    return [...parties].map(([headId, members]) => ({
+      // Always the head's, even when the filter excluded the head.
+      id: headId,
+      name: rows.find((row) => row.id === headId)?.name ?? '',
+      size: members.length,
+      attendingCount: members.filter((member) => member.expectedAttending).length,
+      members,
+    }))
+  }
 
   return {
     rows,
@@ -77,13 +102,15 @@ function ledger(...initial: readonly Guest[]) {
         const query = new URL(request.url).searchParams
         const side = query.get('side')
         const attendance = query.get('attendance')
-        return HttpResponse.json<Guest[]>(
-          rows.filter(
-            (row) =>
-              (side === null || side === '' || row.side === side) &&
-              (attendance === null ||
-                attendance === '' ||
-                row.expectedAttending === (attendance === 'ATTENDING')),
+        return HttpResponse.json<GuestParty[]>(
+          fold(
+            rows.filter(
+              (row) =>
+                (side === null || side === '' || row.side === side) &&
+                (attendance === null ||
+                  attendance === '' ||
+                  row.expectedAttending === (attendance === 'ATTENDING')),
+            ),
           ),
         )
       }),
@@ -97,9 +124,13 @@ function ledger(...initial: readonly Guest[]) {
      *
      * It refuses what the API refuses — a state-changing request without
      * `Content-Type: application/json` is answered 415 and never reaches the
-     * endpoint — and it stores the row AS STORED rather than as sent: the
+     * endpoint — and it stores the rows AS STORED rather than as sent: the
      * server trims every string and turns a blank one into `null`, so a double
      * that echoed the body back would hide a client that never trims.
+     *
+     * `expectedPartySize: 3` WRITES THREE RECORDS, named `{대표자} 동반 N` with
+     * N from 1, each taking the head's 측 · 그룹 · 라벨 · 참석 as a default and
+     * neither its 연락처 nor its 배려사항 — a phone number belongs to a person.
      */
     create: (respond?: () => Response) =>
       http.post(`${API}/weddings/:weddingId/guests`, async ({ request }) => {
@@ -110,7 +141,7 @@ function ledger(...initial: readonly Guest[]) {
         if (respond !== undefined) return respond()
 
         nextId += 1
-        const guest: Guest = {
+        const head: Guest = {
           id: nextId,
           name: body.name.trim(),
           side: body.side,
@@ -119,11 +150,32 @@ function ledger(...initial: readonly Guest[]) {
           contact: stored(body.contact),
           accessibilityNote: stored(body.accessibilityNote),
           expectedAttending: body.expectedAttending ?? true,
-          expectedPartySize: body.expectedPartySize ?? 1,
+          companionOf: null,
         }
-        rows.push(guest)
+        const members: Guest[] = [head]
+        for (let nth = 1; nth < (body.expectedPartySize ?? 1); nth += 1) {
+          nextId += 1
+          members.push({
+            ...head,
+            id: nextId,
+            name: `${head.name} 동반 ${nth}`,
+            contact: null,
+            accessibilityNote: null,
+            companionOf: head.id,
+          })
+        }
+        rows.push(...members)
         return HttpResponse.json<GuestMutation>(
-          { guest, headcount: count() },
+          {
+            party: {
+              id: head.id,
+              name: head.name,
+              size: members.length,
+              attendingCount: members.filter((member) => member.expectedAttending).length,
+              members,
+            },
+            headcount: count(),
+          },
           { status: 201 },
         )
       }),
@@ -136,7 +188,7 @@ function stored(value: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-/** A row as the API returns it, typed from the generated document. */
+/** One person, as the API returns one inside a party. */
 function guest(id: number, name: string, overrides: Partial<Guest> = {}): Guest {
   return {
     id,
@@ -147,7 +199,7 @@ function guest(id: number, name: string, overrides: Partial<Guest> = {}): Guest 
     contact: null,
     accessibilityNote: null,
     expectedAttending: true,
-    expectedPartySize: 1,
+    companionOf: null,
     ...overrides,
   }
 }
@@ -279,9 +331,15 @@ it('moves the number from the response the create carried, and never asks again'
   await form(sheet).party('예상 인원 늘리기')
   await form(sheet).submit()
 
-  // The sheet covers the pinned number on a phone, so the write says what it
-  // did — the same number the response carried, not a second read of it.
-  expect(await within(sheet).findByText(/김영수님을 추가했습니다/)).toBeVisible()
+  /*
+   * The sheet covers the pinned number on a phone, so the write says what it
+   * did — the same number the response carried, not a second read of it.
+   *
+   * AND IT SAYS HOW MANY ROWS IT WROTE. One 추가 press on a party of two is two
+   * 하객 records since `#213`, and a sentence naming only the person the couple
+   * typed would leave them to find the second one in the ledger.
+   */
+  expect(await within(sheet).findByText(/김영수님 외 1명을 추가했습니다/)).toBeVisible()
   expect(within(sheet).getByText(/식대 인원 3명/)).toBeVisible()
   // And the number behind the sheet moved in place: 1 + a party of 2.
   expect(await within(headcount).findByText('3')).toBeVisible()
@@ -361,7 +419,13 @@ it('writes one guest for a double press, not two people with one name', async ()
       await held
       return HttpResponse.json<GuestMutation>(
         {
-          guest: guest(101, '김영수'),
+          party: {
+            id: 101,
+            name: '김영수',
+            size: 1,
+            attendingCount: 1,
+            members: [guest(101, '김영수')],
+          },
           headcount: { mealHeadcount: 1 },
         },
         { status: 201 },
@@ -607,6 +671,51 @@ it('keeps the party size on a guest who cannot come, rather than erasing it', as
   // 불참 contributes zero, so the number did not move.
   const headcount = await screen.findByRole('region', { name: '인원수' })
   expect(await within(headcount).findByText('0')).toBeVisible()
+})
+
+it('shows the people the 인원 is about to create, in the names the server will give them', async () => {
+  const api = ledger()
+  server.use(api.me(), api.weddings(), api.list(), api.headcount(), api.create())
+
+  renderWithProviders(<App />, { initialEntries: ['/'] })
+  const sheet = await openSheet()
+  await form(sheet).name('한지우')
+
+  // A party of one is one person, and there is nothing to preview.
+  expect(within(sheet).queryByText('동반 인원도 각각 하객으로 등록됩니다.')).toBeNull()
+
+  await form(sheet).party('예상 인원 늘리기', 2)
+
+  /*
+   * THE NUMBER BECOMES ROWS (`#213`). Until 2026-08-23 a 3 was a column on one
+   * row; it is now three 하객 records with names, and a couple who pressed `+`
+   * twice without being shown that would be surprised by their own ledger.
+   *
+   * The spelling is the server's — `{대표자} 동반 N`, N from 1 — because this
+   * is a preview of the request and not a caption invented for the sheet.
+   */
+  expect(within(sheet).getByText('한지우 동반 1')).toBeVisible()
+  expect(within(sheet).getByText('한지우 동반 2')).toBeVisible()
+  expect(within(sheet).getByText('동반 인원도 각각 하객으로 등록됩니다.')).toBeVisible()
+
+  await form(sheet).side('신랑측')
+  await form(sheet).submit()
+
+  // And what was previewed is what the ledger now holds, under one row.
+  await waitFor(() => expect(renderedNames()).toEqual(['한지우']))
+  const row = screen.getAllByRole('listitem')[0]
+  await userEvent.click(within(row).getByRole('button', { name: '한지우 동반 인원' }))
+  const members = document.getElementById(
+    within(row)
+      .getByRole('button', { name: '한지우 동반 인원' })
+      .getAttribute('aria-controls') ?? '',
+  )
+  expect(members).not.toBeNull()
+  expect(
+    within(members as HTMLElement)
+      .getAllByRole('listitem')
+      .map((member) => member.textContent),
+  ).toEqual(['한지우참석', '한지우 동반 1참석', '한지우 동반 2참석'])
 })
 
 it('holds every field to the same bound the server does, and names the one that broke', async () => {

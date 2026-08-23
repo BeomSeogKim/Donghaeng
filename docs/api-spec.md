@@ -1490,11 +1490,21 @@ Five things are decided here rather than left to the caller to infer.
 
 ### `POST /weddings/{weddingId}/guests`
 
-Status: active (added 2026-08-20, `#134` — the backend half of `#11`)
+Status: active (added 2026-08-20, `#134` — the backend half of `#11`; **response
+shape changed 2026-08-23, `#213`**)
 Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
 
-하객 추가, the direct-entry sheet, and the first write that puts a row in the ledger.
+> **Breaking, 2026-08-23 (`#213`).** **The response member `guest` is now `party`**,
+> and it is a `GuestPartyResponse` rather than a `GuestResponse`. The request is
+> unchanged. The reason is that `expectedPartySize: 3` now creates **three 하객
+> records** instead of one row carrying a `3`, so there is no single guest to answer
+> with — see 동반인원 below. `GuestResponse` itself lost `expectedPartySize` and gained
+> `companionOf`. **A client written against an older copy of this spec reads
+> `response.guest` and gets `undefined`**, which the generated TypeScript refuses at
+> compile time rather than at runtime.
+
+하객 추가, the direct-entry sheet, and the first write that puts rows in the ledger.
 **Direct entry is the primary intake path, not a fallback**: attendance normally
 reaches a couple through their parents and KakaoTalk, so most rows in most ledgers
 are written here rather than imported or parsed.
@@ -1525,7 +1535,7 @@ Request
 | `contact` | no | `null` | ≤ 30 characters |
 | `accessibilityNote` | no | `null` | ≤ 500 characters |
 | `expectedAttending` | no | `true` (참석) | — |
-| `expectedPartySize` | no | `1` | an integer ≥ 1 |
+| `expectedPartySize` | no | `1` | an integer from 1 to 20 |
 
 **An omitted optional member and an explicit `null` mean exactly the same thing to
 the server** — both take the default, so a control the couple left alone can be sent
@@ -1545,43 +1555,102 @@ the `null` the server would also have accepted. Every other optional member is t
 `groupLabel`** — free labels fracture on typing variants, and a fractured group is a
 wrong number, so do not offer the label as a filter or a grouping.
 
-Response 201
+Response 201 — a party of one, which is the ordinary case
 ```json
 {
-  "guest": {
+  "party": {
     "id": 41,
     "name": "김영수",
-    "side": "GROOM",
-    "groupCategory": "OTHER",
-    "groupLabel": null,
-    "contact": null,
-    "accessibilityNote": null,
-    "expectedAttending": true,
-    "expectedPartySize": 1
+    "size": 1,
+    "attendingCount": 1,
+    "members": [
+      {
+        "id": 41,
+        "name": "김영수",
+        "side": "GROOM",
+        "groupCategory": "OTHER",
+        "groupLabel": null,
+        "contact": null,
+        "accessibilityNote": null,
+        "expectedAttending": true,
+        "companionOf": null
+      }
+    ]
   },
   "headcount": { "mealHeadcount": 128 }
 }
 ```
 
-The row **as stored**, which is not always what was sent — see the trimming rule
+And `{"name":"김영수","side":"GROOM","expectedPartySize":3}` — **three records, not
+one row carrying a three**:
+
+```json
+{
+  "party": {
+    "id": 41,
+    "name": "김영수",
+    "size": 3,
+    "attendingCount": 3,
+    "members": [
+      { "id": 41, "name": "김영수", "companionOf": null, "expectedAttending": true, "…": "…" },
+      { "id": 42, "name": "김영수 동반 1", "companionOf": 41, "expectedAttending": true, "…": "…" },
+      { "id": 43, "name": "김영수 동반 2", "companionOf": 41, "expectedAttending": true, "…": "…" }
+    ]
+  },
+  "headcount": { "mealHeadcount": 130 }
+}
+```
+
+The rows **as stored**, which is not always what was sent — see the trimming rule
 below. There is no `Location` header and no `GET` for a single guest yet.
+
+**동반인원 — what `expectedPartySize` now does** (changed 2026-08-23, `#213`,
+`notes/2026-08-23-decision-companions-become-guests.md`):
+
+- **Entry is unchanged.** The couple still types a number; the sheet keeps its 인원수
+  control exactly as it is.
+- **The number becomes rows.** A party of three is three 하객 records: the person the
+  couple named, plus two companions.
+- **A companion is given a name** — `{대표자 이름} 동반 N`, N from **1**. It is given
+  **once and never regenerated**: renaming the head later does not rename them,
+  deleting one does not renumber the others, and the moment the couple types over one
+  it is theirs. It exists so the row is addressable at all.
+- **A companion says whose it is, twice** — in that name, and in `companionOf`, which
+  carries the head's `id`. `companionOf` is `null` on a head. So a companion surfaced
+  on its own, by a search or a filter, still names the person who brought it.
+- **Two defaults are applied at creation and nothing enforces them afterwards.** A
+  companion takes the head's 측, its `groupCategory` and its `groupLabel`; and a head
+  entered `expectedAttending: false` brings its companions in 불참. **After that each
+  guest moves independently** — that is the whole point of the change, and it is what
+  makes a 신부측 companion of a 신랑측 guest, and a head who cannot come while their
+  companion still can, expressible at all. `contact` and `accessibilityNote` are NOT
+  inherited: a phone number belongs to a person.
+- **A party is at most 20 people.** This bound is new and it is operational rather
+  than a product rule: the number used to land in a column where any `integer` was as
+  cheap as any other, and it is now a count of rows one request writes. 21 is a 400.
 
 Carries the recomputed aggregate: **yes — `headcount`** (added 2026-08-21, `#151`).
 It is the same object `GET /weddings/{weddingId}/headcount` returns — including its
-`guaranteedHeadcount`, which is missing from the example above because that couple
+`guaranteedHeadcount`, which is missing from the examples above because that couple
 has not set one — computed after this write and inside the same transaction, so it
-already counts the guest that was just added. **Render it; do not refetch the number after a create.** `web/` reads
-`response.guest` and `response.headcount` and must not unwrap the envelope — the
-same shape is what `#12`'s edit and the attendance toggle return.
+already counts **every** record that was just added. **Render it; do not refetch the
+number after a create.** `web/` reads `response.party` and `response.headcount` and
+must not unwrap the envelope — the same shape is what `#12`'s edit and the attendance
+toggle return.
+
+**The response is the folded row the ledger draws**, so the screen can insert what it
+just created without re-reading `GET .../guests`.
 
 That member arrived as an **addition** to `{ "guest": … }`, which is why the
 one-member envelope shipped before there was anything to put beside it
-(`notes/2026-08-20-decision-mutation-response-envelope.md`).
+(`notes/2026-08-20-decision-mutation-response-envelope.md`). The envelope is what made
+2026-08-23's rename of the resource member — `guest` to `party` — one changed name
+rather than a changed response shape.
 
 Errors
 - 400 `VALIDATION_FAILED` — a `name` that is blank, whitespace-only or over 100
   characters; an over-long `groupLabel`, `contact` or `accessibilityNote`; an
-  `expectedPartySize` below 1.
+  `expectedPartySize` below 1 **or above 20**.
 - 400 `MALFORMED_REQUEST_BODY` — `name` or `side` omitted or sent as `null`; a
   `side` or `groupCategory` outside its list; an `expectedPartySize` that is not an
   integer or does not fit in 32 bits. **Two codes, one meaning for the user**: the
@@ -1606,18 +1675,18 @@ Eight things the caller should not have to infer.
 - **The confirmed slots are never written in v1, by this endpoint or any other.**
   See "참석 여부는 두 상태뿐" under `GET /weddings/{weddingId}/headcount` — that is
   the whole rule and it is stated once, there.
-- **`expectedPartySize` is the attending headcount including the guest**, not a
-  companion count. A couple bringing one guest sends `2`. **A party of zero is not a
-  party**: 불참 is `expectedAttending: false`, and a size of `0` is a 400.
-- **A companion follows the head guest**
-  (`notes/2026-08-20-decision-guest-entry-side-and-companions.md` §2–3). The party
-  size is a count with no 측 and no attendance of its own: a companion is on the head
-  guest's side, and **a guest with `expectedAttending: false` contributes zero to the
-  meal headcount whatever their party size says.** The size is kept rather than
-  erased, so flipping attendance back to 참석 restores the count rather than making
-  the couple retype what it had already told us. A party that splits — a companion on
-  the other 측, or a head who cannot come while their companion still can — is not
-  expressible in one row: **register that person as their own guest.**
+- **`expectedPartySize` is the party including the guest**, not a companion count.
+  A couple bringing one guest sends `2`. **A party of zero is not a party**: 불참 is
+  `expectedAttending: false`, and a size of `0` is a 400.
+- **A companion is a 하객 record and moves on its own** (changed 2026-08-23, `#213`;
+  this reverses §2 of
+  `notes/2026-08-20-decision-guest-entry-side-and-companions.md`, which kept
+  companions as a count). The 측 and the 참석 a companion is created with are
+  **defaults**, not rules: nothing pulls a companion back to its head afterwards, and
+  a party that splits is now the ordinary way to say it rather than something to work
+  around by registering a second guest. What is unchanged is §3 — **a guest with
+  `expectedAttending: false` contributes zero to the meal headcount** — which now
+  simply means that record is not counted.
 - **`expectedAttending` defaults to 참석** because the couple corrects what they hear
   about 불참, and that is fewer taps. Do not present the control as unset. That
   default and the meal count following the party size are
@@ -1650,9 +1719,16 @@ Two things this endpoint does **not** do:
 
 ### `GET /weddings/{weddingId}/guests`
 
-Status: active (added 2026-08-20, `#147` — the backend half of `#15`)
+Status: active (added 2026-08-20, `#147` — the backend half of `#15`; **response
+shape changed 2026-08-23, `#213`**)
 Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
+
+> **Breaking, 2026-08-23 (`#213`).** **This is a list of PARTIES, not of guests.**
+> Each entry is one 팀 — the head, the party's 인원, its 참석 breakdown, and the people
+> to show when the row is expanded. Query parameters are unchanged. **A client written
+> against an older copy of this spec reads `row.side` and `row.expectedAttending` off
+> the top-level entries and finds neither**; those live on `members[]` now.
 
 원장, the ledger itself — **the screen every other v1 screen opens on top of**
 (`notes/2026-08-07-design-screens-and-flow.md`). The couple's whole loop is "scan
@@ -1687,21 +1763,88 @@ Response 200
   {
     "id": 41,
     "name": "김영수",
-    "side": "GROOM",
-    "groupCategory": "FRIEND",
-    "groupLabel": "대학교 동아리 친구들",
-    "contact": "010-1234-5678",
-    "accessibilityNote": "휠체어 좌석",
-    "expectedAttending": true,
-    "expectedPartySize": 2
+    "size": 2,
+    "attendingCount": 1,
+    "members": [
+      {
+        "id": 41,
+        "name": "김영수",
+        "side": "GROOM",
+        "groupCategory": "FRIEND",
+        "groupLabel": "대학교 동아리 친구들",
+        "contact": "010-1234-5678",
+        "accessibilityNote": "휠체어 좌석",
+        "expectedAttending": true,
+        "companionOf": null
+      },
+      {
+        "id": 42,
+        "name": "김영수 동반 1",
+        "side": "GROOM",
+        "groupCategory": "FRIEND",
+        "groupLabel": "대학교 동아리 친구들",
+        "contact": null,
+        "accessibilityNote": null,
+        "expectedAttending": false,
+        "companionOf": 41
+      }
+    ]
   }
 ]
 ```
 
-A bare array, no envelope, and **each entry is the same `GuestResponse`
-`POST /weddings/{weddingId}/guests` returns** under its `guest` member — one type
-for the list, the create, and every edit to come. An empty ledger is `[]` and a 200,
-never a 404.
+A bare array, no envelope, and **each entry is the same `GuestPartyResponse`
+`POST /weddings/{weddingId}/guests` returns** under its `party` member — one type for
+the list, the create, and every edit to come. An empty ledger is `[]` and a 200, never
+a 404.
+
+#### One row per party, and what the collapsed row says
+
+**한 팀이 원장의 한 줄이다** (added 2026-08-23, `#213`,
+`notes/2026-08-23-decision-companions-become-guests.md`). A party is a head guest and
+everybody they brought. Put a disclosure on any party of two or more; expanding shows
+`members`, each holding its own 참석.
+
+| Member | Meaning |
+|---|---|
+| `id` | the **head's** id — the party's identity, and what to key a row on |
+| `name` | the **head's** name — what the collapsed row reads |
+| `size` | how many people this row carries |
+| `attendingCount` | how many of them are 참석 |
+| `members` | the people, in entry order, head first when it is here |
+
+**The 참석 column has three readings and the third is the point:**
+
+| | the row says |
+|---|---|
+| `attendingCount == size` | **참석** |
+| `attendingCount == 0` | **불참** |
+| anything between | **`3 / 4`** — and pressing it **expands the row** rather than picking one |
+
+A mixed party has no attendance, so the screen states the count it does know and hands
+the decision back. That is 애매한 것은 추측하지 않는다 applied to a control.
+
+**`size` and `attendingCount` are answered here rather than counted on the client.**
+Do not fold `members` yourself — the server counts what it returned, and under a
+filter that is not the same as the party's total (below).
+
+#### Filters select PEOPLE, and a party appears when any of its people matched
+
+`side` and `attendance` narrow **guests**, exactly as they did before. What is new is
+what a narrowed party looks like:
+
+- A party appears if **any** of its members matched.
+- `members`, `size` and `attendingCount` describe **the members that matched**, not
+  the party's total. Under `?attendance=ATTENDING`, a party of four with one 불참
+  comes back with `size: 3`.
+- **`id` and `name` are always the head's, even when the filter excluded the head.**
+  대표자는 불참인데 동반은 참석인 팀 under the 참석 chip is a row named after the head
+  carrying only the people who are coming. That is deliberate: the row is that
+  person's party, and it is how the couple recognises it.
+
+**This is what keeps 참석 chip과 식대 인원 the same number.** Summing `attendingCount`
+over `?attendance=ATTENDING` equals `mealHeadcount` exactly, and a test asserts it
+rather than describing it.
 
 Carries the recomputed aggregate: **no, and this is not the exception the rule
 warns about.** The `{resource, headcount}` envelope is a *mutation* rule
@@ -1720,6 +1863,8 @@ tell whether it still holds:
 - **The collection is bounded by the wedding, not by the product.** A real ledger is
   200–800 rows and the couple built every one of them; there is no growth path that
   turns it into a feed. At 800 rows this response is tens of kilobytes, gzipped.
+  **Companions count towards that** since 2026-08-23 — a party of three is three
+  records — and the bound is unchanged, since those people were always in the number.
 - **The screen needs the whole list anyway.** The couple scans for a person, and
   이름 검색 (`#16`) is the second most-used control in the product. A search that
   can only see the page in hand is wrong, and a paged list forces the search to the
@@ -1743,6 +1888,10 @@ building against a shape nobody has designed.
 list whose order the database chose would reshuffle between two reads of the same
 ledger, and the couple taps by position. Entry order also preserves the order of an
 imported file, which is the order the parents wrote it in.
+
+**Parties are ordered by their head's entry, and members by their own.** A companion
+carries the head's `created_at`, so it sorts immediately after the person who brought
+it and never between two other parties.
 
 It is not a claim that entry order is the *right* reading order for the screen. The
 client has the whole list, so any other order is a client-side sort; that is the
@@ -1783,6 +1932,13 @@ value this filters on is never unknown, and `?attendance=UNKNOWN` is a 400.
 `confirmedAttending` and `confirmedPartySize` are not members of `GuestResponse`,
 here or anywhere. See "참석 여부는 두 상태뿐" in the headcount entry below.
 
+#### One call, not two
+
+**The members ride along with the party**, so expanding a row is a client-side
+disclosure and never a request. The whole ledger already comes back in one response
+and a party's people are part of it; a second endpoint for "the members of party 41"
+would be a round trip on a tap, on the screen whose whole loop is scan-tap-watch.
+
 Errors
 - 400 `BAD_REQUEST` — a `side` or `attendance` value outside its set, **or either
   filter sent more than once**. One code for both, deliberately: they mean the same
@@ -1805,7 +1961,8 @@ Three things this endpoint does **not** do:
 
 ### `GET /weddings/{weddingId}/headcount`
 
-Status: active (added 2026-08-21, `#151` — the backend half of `#17`)
+Status: active (added 2026-08-21, `#151` — the backend half of `#17`; **what it
+counts changed 2026-08-23, `#213`** — the response shape did not)
 Auth: session cookie **and a seat in this wedding** — see "Being scoped to a
 wedding" above.
 
@@ -1814,7 +1971,8 @@ takes to their venue. **Two numbers, and there is no third.**
 
 원장 and 인원수 are one screen but two responses: `GET .../guests` is a read and
 carries no aggregate, so the screen opens both. **After a mutation, take the number
-from the mutation's own response** (`{ "guest": …, "headcount": … }`) rather than
+from the mutation's own response** (`{ "party": …, "headcount": … }` on a create)
+rather than
 calling this again — that is what keeps the row and the total from disagreeing for a
 round trip.
 
@@ -1871,17 +2029,17 @@ quietly appears.
 
 #### What the number counts, exactly
 
-    식대 인원 = Σ over live guests of this wedding, who are 참석, of expectedPartySize
+    식대 인원 = how many live 하객 records of this wedding are 참석
 
 Five things follow, and each one is asserted by a test rather than described:
 
-- **A 불참 guest contributes zero, whatever their party size says.** Attendance is
-  read before party size; the size is kept rather than erased so that flipping back
-  to 참석 restores it (`notes/2026-08-20-decision-guest-entry-side-and-companions.md`
-  §3).
-- **`expectedPartySize` is the whole party including the guest**, so a couple
-  bringing one companion adds 2. A companion has no attendance of their own — they
-  follow the head guest.
+- **It counts RECORDS, and 동반인원 are records** (changed 2026-08-23, `#213`). A
+  couple bringing one companion still adds 2 — two rows now instead of one row saying
+  `2`. It is the same number for every party that agrees with itself and a truer one
+  for every party that does not.
+- **A 불참 guest contributes zero**, and since a companion is a guest, a 불참
+  companion contributes zero while the head they came with still counts. That case
+  was not expressible before this change.
 - **A soft-deleted guest contributes zero.** The couple's own deletions leave the
   number exactly as the ledger shows it.
 - **Another wedding's guests contribute zero.** Each ledger has its own number, and
@@ -1892,10 +2050,9 @@ Five things follow, and each one is asserted by a test rather than described:
 
 #### 유아 인원 and per-meal-type counts are not here yet
 
-Today the number sums party sizes, because meal types (`#10`) and per-guest meal
-counts (`#14`) are not built. **When they land this endpoint gains members and this
-entry changes** — the rule will be "a guest's per-type counts if they have any, else
-their party size" — and 유아 인원 will stand **beside** the 식대 인원 as its own
+Today the number counts people, because meal types (`#10`) and per-guest meal counts
+(`#14`) are not built. **When they land this endpoint gains members and this entry
+changes** — the rule will be "a guest's per-type counts if they have any, else one" — and 유아 인원 will stand **beside** the 식대 인원 as its own
 count, **never folded into it**: a venue's child pricing is something we know exactly
 as well as we know its buffer, which is not at all
 (`notes/2026-08-11-decision-deletion-and-infant-meals.md`). Nothing about the

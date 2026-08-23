@@ -10,8 +10,29 @@ import { weddingsQueryKey } from './useWeddings'
 
 type ListGuests = paths['/weddings/{weddingId}/guests']['get']
 
-/** One row of the ledger — the same shape every guest mutation returns. */
-export type Guest = ListGuests['responses'][200]['content']['*/*'][number]
+/**
+ * One row of the ledger, and it is a PARTY rather than a person (`#213`).
+ *
+ * 한 팀이 원장의 한 줄이다. `id` and `name` are the head's — the party's
+ * identity and what the collapsed row reads — and `size` and `attendingCount`
+ * are answered by the server rather than counted here. **Do not fold `members`
+ * yourself**: under a filter those two describe the members that matched, which
+ * is not the party's total, and summing `attendingCount` over
+ * `?attendance=ATTENDING` is exactly 식대 인원 (docs/api-spec.md
+ * § GET /weddings/{weddingId}/guests).
+ *
+ * It is the same shape every guest mutation returns under `party`.
+ */
+export type GuestParty = ListGuests['responses'][200]['content']['*/*'][number]
+
+/**
+ * One person in a party — the head, or somebody they brought.
+ *
+ * A companion is a 하객 record of its own and moves on its own: `companionOf`
+ * carries the head's `id` and is `null` on a head, and the 측 · 그룹 · 참석 it
+ * was created with are defaults nothing pulls it back to afterwards.
+ */
+export type Guest = GuestParty['members'][number]
 
 /**
  * The seven aggregation groups, in the API's spelling, and what each is called
@@ -116,13 +137,13 @@ export function useGuests(weddingId: number, filters: GuestFilters) {
 async function fetchGuests(
   weddingId: number,
   filters: GuestFilters,
-): Promise<readonly Guest[]> {
+): Promise<readonly GuestParty[]> {
   const response = await apiFetch(guestsPath(weddingId, filters))
   if (!response.ok) throw await apiError(response)
 
   // Still a cast, as everywhere: generated types are compile-time only, so
   // nothing here has checked that the body matches what was declared.
-  return (await response.json()) as readonly Guest[]
+  return (await response.json()) as readonly GuestParty[]
 }
 
 /**
@@ -136,9 +157,14 @@ async function fetchGuests(
  * Two guests may share a name — direct entry allows it on purpose — and `sort`
  * is stable, so a tie keeps the API's entry order underneath. The copy is not
  * optional: the array belongs to the query cache and must never be mutated.
+ *
+ * IT SORTS THE PARTIES AND NEVER THE PEOPLE INSIDE ONE. `members` is in entry
+ * order, head first when it is here, and that order is the party's own shape —
+ * a companion sorted above the person who brought it would leave the row named
+ * after somebody the expansion no longer leads with.
  */
 const collator = new Intl.Collator('ko')
 
-function byName(guests: readonly Guest[]): readonly Guest[] {
-  return [...guests].sort((a, b) => collator.compare(a.name, b.name))
+function byName(parties: readonly GuestParty[]): readonly GuestParty[] {
+  return [...parties].sort((a, b) => collator.compare(a.name, b.name))
 }

@@ -1,5 +1,9 @@
 import { type FormEvent, useRef, useState } from 'react'
-import { type AddGuestRequest, useAddGuest } from '../hooks/useAddGuest'
+import {
+  type AddGuestRequest,
+  type GuestMutation,
+  useAddGuest,
+} from '../hooks/useAddGuest'
 import { GROUP_LABELS } from '../hooks/useGuests'
 import { useWideLayout } from '../hooks/useWideLayout'
 import { ApiError } from '../lib/api'
@@ -163,7 +167,7 @@ export function AddGuestSheet({
                 className="text-body leading-body tabular-nums text-att-yes-fg"
                 role="status"
               >
-                {`${add.data.guest.name}님을 추가했습니다 · 식대 인원 ${add.data.headcount.mealHeadcount}명`}
+                {`${added(add.data.party)} · 식대 인원 ${add.data.headcount.mealHeadcount}명`}
               </p>
             )}
 
@@ -212,6 +216,7 @@ export function AddGuestSheet({
             />
 
             <PartySize
+              name={sending.name}
               onChange={(expectedPartySize) => change({ expectedPartySize })}
               value={values.expectedPartySize}
             />
@@ -480,16 +485,19 @@ const PARTY_MIN = 1
  * floor is 1 and the button below it is disabled rather than refused — a size
  * of 0 is a 400, and 불참 is how the couple says nobody is coming.
  *
- * The party is a count with no 측 and no attendance of its own: a companion
- * follows the head guest, and a guest marked 불참 contributes zero to the meal
- * headcount whatever the size says. A party that splits is not one row — that
- * person is registered as their own guest
- * (notes/2026-08-20-decision-guest-entry-side-and-companions.md).
+ * THE NUMBER BECOMES ROWS, so the stepper shows the people it is about to
+ * create (`#213`, notes/2026-08-23-decision-companions-become-guests.md). Until
+ * 2026-08-23 a 3 was a column on one row and there was nothing to preview; it
+ * is now three 하객 records, each with a 측, a 참석 and a name of its own, and a
+ * couple who presses `+` twice without being shown that has been surprised by
+ * their own ledger.
  */
 function PartySize({
+  name,
   onChange,
   value,
 }: {
+  name: string
   onChange: (value: number) => void
   value: number
 }) {
@@ -523,8 +531,76 @@ function PartySize({
           본인을 포함한 인원
         </span>
       </div>
+
+      {value > PARTY_MIN && (
+        <>
+          {/*
+           * THE LIST NEEDS A NAME TO BE ABOUT, and until the couple has typed
+           * one there is nothing to show — a preview reading `동반 1` with the
+           * 대표자 missing would be a name nobody is going to get. The sentence
+           * below stands on its own, because what it says is true at any size
+           * over one.
+           */}
+          {name !== '' && (
+            <ul className="mt-1 bg-ground">
+              {companions(name, value).map((person) => (
+                <li className={PREVIEW_ROW} key={person.name}>
+                  <span
+                    className={`min-w-0 truncate text-body leading-snug ${
+                      person.head ? 'text-ink' : 'text-ink-muted'
+                    }`}
+                  >
+                    {person.name}
+                  </span>
+                  {person.head && (
+                    <span className="ms-auto shrink-0 text-label tracking-label text-ink-faint">
+                      본인
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-meta leading-body text-ink-muted">
+            동반 인원도 각각 하객으로 등록됩니다.
+          </p>
+        </>
+      )}
     </fieldset>
   )
+}
+
+const PREVIEW_ROW = 'flex items-center gap-3 min-h-9 px-3'
+
+/**
+ * The people this create is about to write, in the server's own spelling —
+ * `{대표자} 동반 N`, N from 1 (docs/api-spec.md § POST .../guests, 동반인원).
+ *
+ * IT IS A PREVIEW OF A REQUEST, NEVER A RENDERING OF A STORED NAME. The server
+ * gives a companion its name once and never regenerates it, so a row already in
+ * the ledger reads whatever is stored on it — renaming the head later does not
+ * move it. This list exists only before the write, which is the one moment the
+ * two are the same string.
+ */
+function companions(name: string, size: number) {
+  return Array.from({ length: size }, (_, index) => ({
+    name: index === 0 ? name : `${name} 동반 ${index}`,
+    head: index === 0,
+  }))
+}
+
+/**
+ * What a finished create says, said the way the couple pressed it: one 추가,
+ * one sentence, however many rows it wrote.
+ *
+ * The count comes off the response's own `size` rather than off the stepper —
+ * the rows AS STORED are what the ledger now holds, and the two differ the
+ * moment the server refuses or trims anything.
+ */
+function added(party: GuestMutation['party']): string {
+  return party.size > 1
+    ? `${party.name}님 외 ${party.size - 1}명을 추가했습니다`
+    : `${party.name}님을 추가했습니다`
 }
 
 const STEP =

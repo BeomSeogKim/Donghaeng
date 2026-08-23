@@ -30,6 +30,11 @@ class GuestController internal constructor(
     /**
      * 하객 추가 (`#11`), specified in `docs/api-spec.md`.
      *
+     * **It writes a PARTY, not a row** (changed 2026-08-23, `#213`): `expectedPartySize`
+     * is how many 하객 records this request creates, and the response is
+     * `{party, headcount}` — the folded row the ledger draws, so the screen inserts what
+     * it just made without a second read.
+     *
      * **[WeddingScope] is the first parameter, and that order is the authorization**:
      * resolution runs before the body is read, so an anonymous request is 401 rather
      * than a 400 that lists this endpoint's fields to someone with no claim on the
@@ -44,7 +49,7 @@ class GuestController internal constructor(
      * template and in no signature, because no handler may take one (swept by
      * `ResolvedPrincipalTest`).
      */
-    @Operation(operationId = "createGuest", summary = "Add a guest to the ledger")
+    @Operation(operationId = "createGuest", summary = "Add a guest — and their party — to the ledger")
     @Parameters(
         Parameter(
             name = "weddingId",
@@ -54,11 +59,14 @@ class GuestController internal constructor(
         ),
     )
     @ApiResponses(
-        ApiResponse(responseCode = "201", description = "The guest was added to this wedding's ledger."),
+        ApiResponse(
+            responseCode = "201",
+            description = "The party was added to this wedding's ledger — one 하객 record per person.",
+        ),
         ApiResponse(
             responseCode = "400",
             description =
-                "A blank or over-long name, a party size below 1, an over-long optional field, " +
+                "A blank or over-long name, a party size below 1 or above 20, an over-long optional field, " +
                     "or a body that could not be read.",
             content = [Content(schema = Schema(implementation = ProblemDetail::class))],
         ),
@@ -86,6 +94,11 @@ class GuestController internal constructor(
      * 원장 목록 (`#147`, the backend half of `#15`) — the screen every other v1 screen
      * opens on top of (notes/2026-08-07-design-screens-and-flow.md).
      *
+     * **One row per PARTY since 2026-08-23** (`#213`): the head, the party's 인원, its
+     * 참석 breakdown, and the members to show on expand. The fold is the server's
+     * because the collapsed row states counts, and this API returns conclusions rather
+     * than rows to add up.
+     *
      * **Two filters, both optional, and no third one.** 그룹 is an aggregation axis
      * and never a way to narrow the list, so it is absent by decision rather than by
      * omission; the same goes for a page, which `docs/api-spec.md` argues out in the
@@ -99,7 +112,7 @@ class GuestController internal constructor(
      * is bound, so an anonymous request is 401 whatever it asks for and a stranger's
      * request is 404 before any filter is parsed.
      */
-    @Operation(operationId = "listGuests", summary = "The wedding's ledger, filtered by side and attendance")
+    @Operation(operationId = "listGuests", summary = "The wedding's ledger as parties, filtered by side and attendance")
     @Parameters(
         Parameter(
             name = "weddingId",
@@ -111,7 +124,9 @@ class GuestController internal constructor(
     @ApiResponses(
         ApiResponse(
             responseCode = "200",
-            description = "The whole ledger, oldest first — an empty array when the couple has entered nobody yet.",
+            description =
+                "The whole ledger folded into parties, oldest first — an empty array when the couple has " +
+                    "entered nobody yet.",
         ),
         ApiResponse(
             responseCode = "400",
@@ -139,7 +154,7 @@ class GuestController internal constructor(
         @RequestParam(required = false) side: WeddingSide?,
         @Parameter(description = "참석 or 불참. Sent at most once; omitted or empty, both")
         @RequestParam(required = false) attendance: AttendanceFilter?,
-    ): List<GuestResponse> {
+    ): List<GuestPartyResponse> {
         refuseRepeated(request, SIDE, ATTENDANCE)
         return guests.list(wedding, side, attendance)
     }

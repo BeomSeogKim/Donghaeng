@@ -26,6 +26,20 @@ import java.time.Instant
  * asymmetry is the model** — a blank confirmed slot means UNKNOWN, never zero
  * (notes/2026-08-03-design-domain-model.md §1).
  *
+ * **[companionOf] is what replaced `expected_party_size`** (2026-08-23, `#213`,
+ * notes/2026-08-23-decision-companions-become-guests.md). A party of three is three
+ * of these rows, not one row carrying a `3`. What that buys is the two things a
+ * count could not express — a companion on the other 측, and a head who cannot come
+ * while their companion still can — and what it costs is that 측을 물려받고 불참을
+ * 따라간다 stop being facts of the model and become **defaults applied at creation**.
+ * Nothing enforces them afterwards, deliberately: each guest moves on its own, which
+ * is the whole point.
+ *
+ * **It is `val`, and that is a narrower claim than it looks.** Nothing in v1 moves a
+ * guest between parties, so the column is written once by [GuestService.create]; the
+ * day an edit does, this becomes a `var` and the composite FK below is what keeps it
+ * inside one wedding.
+ *
  * `guest_meal_count` is deliberately unmapped: it references `meal_type` rows only
  * `#10` can create. `validate` compares mapped columns only, so its absence is not
  * drift. The timestamps carry no defaults; [GuestService] is the only clock.
@@ -55,8 +69,6 @@ internal class Guest(
     var accessibilityNote: String?,
     @Column(name = "expected_attending", nullable = false)
     var expectedAttending: Boolean,
-    @Column(name = "expected_party_size", nullable = false)
-    var expectedPartySize: Int,
     @Column(name = "created_by", nullable = false, updatable = false)
     val createdBy: Long,
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -65,6 +77,12 @@ internal class Guest(
     var updatedBy: Long,
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant,
+    // The guest who brought this one, NULL on a head (2026-08-23, `#213`). A `Long`
+    // and not a self-association: `open-in-view: false` makes a lazy `@ManyToOne`
+    // read after the transaction a `LazyInitializationException`, and nothing here
+    // needs to load the head — the ledger folds a list it already has in hand.
+    @Column(name = "companion_of", updatable = false)
+    val companionOf: Long? = null,
     @Column(name = "confirmed_attending")
     var confirmedAttending: Boolean? = null,
     @Column(name = "confirmed_party_size")
