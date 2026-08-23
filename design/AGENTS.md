@@ -71,7 +71,10 @@ the same reason 백자 is prized for being *almost* white.
 
 - **Body text never goes below 15px.** Hangul packs more strokes into the em
   than Latin. **13px is for metadata fragments, never sentences.**
-- **Korean running text gets 1.65 leading**, not the Latin-typical 1.5.
+- **Korean running text gets 1.65 leading**, not the Latin-typical 1.5, and
+  **breaks at spaces, never mid-word** — `word-break: keep-all`, set once on
+  `:root`. The browser's default splits 마지막 across two lines; it is legal
+  and it reads cheap.
 - **No italics.** Korean has no italic tradition and synthesised obliques look
   broken.
 - **Every digit that can change in place is tabular** — headcount, meal counts,

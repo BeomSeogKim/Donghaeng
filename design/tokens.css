@@ -46,6 +46,7 @@
    * couple takes and comes back from and so still say where they are. */
   --dh-text-display: 4rem;      /* 64px — the headcount, and nothing else      */
   --dh-text-display-compact: 3.25rem; /* 52px — the same figure, on a phone    */
+  --dh-text-face: 2.125rem;     /* 34px — 자적 面 위의 표제, 진입 화면에만       */
   --dh-text-title: 1.375rem;    /* 22px — screen title                         */
   --dh-text-lead: 1.0625rem;    /* 17px — guest name, primary row content      */
   --dh-text-body: 0.9375rem;    /* 15px — body floor                           */
@@ -290,6 +291,17 @@
 /* ────────────────────────────────────────────────────────────
  * Base rules that are part of the system, not of any component
  * ──────────────────────────────────────────────────────────── */
+
+/* Korean breaks at the SYLLABLE by default, so a browser will happily
+ * split 마지막 across two lines. It is legal and it looks cheap, and it
+ * was visible on the very first screen this system drew properly — the
+ * one the founder had already rejected twice for not reading premium.
+ * `keep-all` breaks at spaces instead, which is what Korean typesetting
+ * does. Set once, on the root, because there is no screen it is wrong
+ * for; a call site that genuinely needs the default says so itself. */
+:root {
+  word-break: keep-all;
+}
 
 /* Every digit that can change in place is tabular. A headcount whose
  * width shifts as it counts reads as unstable, and this product's
