@@ -134,9 +134,15 @@ function Ledger({ wedding }: { wedding: Wedding }) {
 
     if (guests.data.length > 0) {
       return (
+        /*
+         * KEYED ON THE PARTY'S ID, WHICH IS THE HEAD'S — the party's identity,
+         * and what keeps a row's own open/closed state with the right team
+         * across a refetch and a re-sort (docs/api-spec.md
+         * § GET /weddings/{weddingId}/guests).
+         */
         <ul aria-busy={guests.isFetching}>
-          {guests.data.map((guest) => (
-            <GuestRow guest={guest} key={guest.id} />
+          {guests.data.map((party) => (
+            <GuestRow key={party.id} party={party} />
           ))}
         </ul>
       )

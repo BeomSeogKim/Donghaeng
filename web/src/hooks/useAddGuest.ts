@@ -24,13 +24,19 @@ type AddGuest = paths['/weddings/{weddingId}/guests']['post']
 export type AddGuestRequest = AddGuest['requestBody']['content']['application/json']
 
 /**
- * `{guest, headcount}` — the row as stored, and the number recomputed inside
- * the same transaction as the write.
+ * `{party, headcount}` — the folded row as stored, and the number recomputed
+ * inside the same transaction as the write.
+ *
+ * IT IS A PARTY AND NOT A GUEST, since 2026-08-23 (`#213`). `expectedPartySize:
+ * 3` writes three 하객 records rather than one row carrying a three, so there
+ * is no single guest to answer with — the response is the folded row the ledger
+ * draws, which is what lets the screen show what it just created without
+ * re-reading the list (docs/api-spec.md).
  *
  * THE ENVELOPE IS NOT UNWRAPPED HERE. `#12`'s edit and `#13`'s attendance
- * toggle return this same shape, so a hook that handed back only the guest
+ * toggle return this same shape, so a hook that handed back only the party
  * would have to be rewritten by the first caller that needs the number — which
- * is every caller (docs/api-spec.md).
+ * is every caller.
  */
 export type GuestMutation = AddGuest['responses'][201]['content']['*/*']
 
