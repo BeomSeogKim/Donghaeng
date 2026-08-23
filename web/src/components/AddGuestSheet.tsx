@@ -1,6 +1,7 @@
 import { type FormEvent, useRef, useState } from 'react'
 import { type AddGuestRequest, useAddGuest } from '../hooks/useAddGuest'
 import { GROUP_LABELS } from '../hooks/useGuests'
+import { useWideLayout } from '../hooks/useWideLayout'
 import { ApiError } from '../lib/api'
 import { buttonClassName } from './Button'
 import { Choice, type ChoiceOption } from './Choice'
@@ -53,6 +54,14 @@ export function AddGuestSheet({
 }) {
   const add = useAddGuest(weddingId)
   const nameField = useRef<HTMLInputElement>(null)
+  /*
+   * THE ONE THING ABOUT THIS SPLIT THAT CANNOT STAY IN CSS. On a laptop the
+   * panel is a column of the slab with the ledger live beside it; on a phone it
+   * covers the list. `aria-modal` is a claim about which of those is true, and
+   * claiming the wrong one tells a screen-reader user the ledger is unreachable
+   * while it is sitting next to the panel.
+   */
+  const wide = useWideLayout()
   const [values, setValues] = useState<FormValues>(EMPTY)
 
   /*
@@ -101,16 +110,24 @@ export function AddGuestSheet({
   const failure = add.isError ? failureMessage(add.error) : null
 
   return (
-    // The one thing in this product that still floats, so the one place the
-    // overlay shadow is used. It rises from the bottom edge on a phone and is
-    // centred on a laptop. Its CORNERS ARE SQUARE as of 2026-08-23 — radius is
-    // 0 and `--dh-radius-sheet` is deleted with the rest — and `#216` is where
-    // it stops floating at all and becomes the slab widening.
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-scrim md:items-center">
+    /*
+     * ON A LAPTOP THIS IS NOT A CARD OVER THE SCREEN — it is the slab widening
+     * by one column, which is why there is no scrim and no shadow
+     * (notes/2026-08-23-decision-the-form-language.md). That is not a styling
+     * preference: the 굽 stays visible the whole time a guest is being typed,
+     * and the number moving is the thing this product exists to show. A dim
+     * would put the couple's own hands over it.
+     *
+     * ON A PHONE THERE IS NO ROOM TO WIDEN, so it rises from the bottom edge —
+     * and what rises is the slab, gold 구연 and all, stopping short of the top
+     * so the 굽's figure is still on screen above it. The scrim stays there,
+     * because on a phone this really does cover the list.
+     */
+    <div className={FRAME}>
       <div
         aria-labelledby={TITLE_ID}
-        aria-modal="true"
-        className="flex max-h-[92dvh] w-full max-w-96 flex-col border border-line bg-surface shadow-overlay md:max-h-[88dvh]"
+        aria-modal={wide ? undefined : true}
+        className={PANEL}
         onKeyDown={(event) => {
           // Escape closes it. The event reaches here from whatever inside the
           // sheet has focus, and something always does — the name field takes
@@ -119,18 +136,21 @@ export function AddGuestSheet({
         }}
         role="dialog"
       >
-        <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 bg-line-strong" />
-        <div className="border-b border-line px-4 py-3">
-          <h2
-            className="font-display text-title leading-tight tracking-display"
-            id={TITLE_ID}
-          >
+        <div
+          aria-hidden="true"
+          className="mx-auto mt-2 h-1 w-9 bg-line-strong md:hidden"
+        />
+        <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-6 md:pt-6">
+          {/* NOT THE DISPLAY FACE. The display face appears once per screen and
+              on this one it is the headcount, which is still on the 굽 beside
+              this panel. A serif here would be the second. */}
+          <h2 className="text-title font-semibold leading-tight" id={TITLE_ID}>
             하객 추가
           </h2>
         </div>
 
         <form className="contents" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-4 overflow-y-auto px-4 py-4">
+          <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-6 md:px-6">
             {/*
              * WHAT THE WRITE DID, said where the couple is looking. The sheet
              * covers the pinned 인원수 on a phone, so without this the one
@@ -258,7 +278,7 @@ export function AddGuestSheet({
             )}
           </div>
 
-          <div className="flex gap-2 border-t border-line px-4 pt-3 pb-5">
+          <div className="flex items-center gap-3 border-t border-line px-4 pt-3 pb-5 md:px-6">
             <button
               className={buttonClassName('secondary')}
               onClick={onClose}
@@ -266,8 +286,11 @@ export function AddGuestSheet({
             >
               닫기
             </button>
+            <span className="hidden flex-1 text-meta text-ink-faint md:block">
+              계속 이어서 넣을 수 있습니다
+            </span>
             <button
-              className={`${buttonClassName('primary')} flex-1`}
+              className={`${buttonClassName('primary')} flex-1 md:flex-none`}
               disabled={add.isPending}
               type="submit"
             >
@@ -281,6 +304,28 @@ export function AddGuestSheet({
 }
 
 const TITLE_ID = 'add-guest-title'
+
+/*
+ * `fixed` on a phone and `contents` on a laptop: on the wide layout the panel
+ * becomes a direct child of the slab's flex row, so it sits between the list and
+ * the 굽 rather than over either. `display: contents` is what lets one DOM be
+ * both, the same trick `GuestRow` uses for its columns.
+ */
+const FRAME =
+  'fixed inset-0 z-20 flex items-end justify-center bg-scrim ' +
+  'md:static md:z-auto md:contents md:bg-transparent'
+
+const PANEL =
+  'flex max-h-[92dvh] w-full max-w-96 min-h-0 flex-col bg-surface ' +
+  // The phone's panel IS the slab, so it wears the same 구연 — and no bottom
+  // edge, because it runs off the bottom of the screen.
+  'border-(length:--dh-rim-w) border-(color:--dh-gold) border-b-0 ' +
+  // The laptop's is a column INSIDE the slab, so the slab's 구연 is already
+  // around it and all it needs is the beige edge that divides two columns.
+  // One 구연 per screen.
+  'md:max-h-none md:w-99 md:max-w-none md:shrink-0 ' +
+  'md:border-y-0 md:border-e-0 md:border-s-(length:--dh-rule-column) ' +
+  'md:border-(color:--dh-line-strong)'
 
 type Side = AddGuestRequest['side']
 type GroupCategory = NonNullable<AddGuestRequest['groupCategory']>

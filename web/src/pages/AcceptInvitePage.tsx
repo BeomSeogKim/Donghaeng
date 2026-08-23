@@ -1,12 +1,11 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { AlreadyInAWedding } from '../components/AlreadyInAWedding'
-import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
 import { Field } from '../components/Field'
 import { GoogleLoginLink } from '../components/GoogleLoginLink'
 import { LogoutButton } from '../components/LogoutButton'
-import { Screen } from '../components/Screen'
+import { Screen, ScreenFace } from '../components/Screen'
 import { useJoinWedding } from '../hooks/useJoinWedding'
 import { useSession } from '../hooks/useSession'
 import { wasAlreadyInAWedding } from '../lib/alreadyInAWedding'
@@ -86,19 +85,27 @@ export function AcceptInvitePage({ token }: { token: string | null }) {
  */
 function SignInFirst() {
   return (
-    <Screen>
-      <BrandMark />
-      <div className="flex w-full flex-col gap-3">
-        <h1 className="font-display text-title tracking-display">초대를 받았습니다</h1>
-        <p className="text-body leading-body text-ink-muted">
-          파트너가 만든 원장에 함께 들어갑니다. 먼저 로그인해 주세요.
-        </p>
-      </div>
+    <Screen aside={<InviteFace />}>
+      <p className="text-body leading-body text-ink-muted">
+        파트너가 만든 하객 명부에 함께 들어갑니다. 먼저 로그인해 주세요.
+      </p>
       <div className="flex w-full flex-col gap-4">
         <InAppBrowserNotice />
         <GoogleLoginLink />
       </div>
     </Screen>
+  )
+}
+
+/**
+ * The 자적 面 both halves of this screen wear — signing in, and then saying who
+ * you are. One face, because it is one arrival.
+ */
+function InviteFace() {
+  return (
+    <ScreenFace eyebrow="초대" heading="초대를 받았습니다">
+      비어 있던 한 자리에 들어갑니다. 지금부터 두 사람은 같은 명부를 봅니다.
+    </ScreenFace>
   )
 }
 
@@ -223,13 +230,10 @@ function AcceptForm({ token }: { token: string }) {
   }
 
   return (
-    <Screen>
-      <div className="flex w-full flex-col gap-3">
-        <h1 className="font-display text-title tracking-display">초대 수락</h1>
-        <p className="text-body leading-body text-ink-muted">
-          원장에 표시될 본인 이름을 적어 주세요. 상대방 이름은 적지 않습니다.
-        </p>
-      </div>
+    <Screen aside={<InviteFace />}>
+      <p className="text-body leading-body text-ink-muted">
+        하객 명부에 표시될 본인 이름을 적어 주세요. 상대방 이름은 적지 않습니다.
+      </p>
 
       <form className="flex w-full flex-col gap-5" onSubmit={handleSubmit}>
         <Field

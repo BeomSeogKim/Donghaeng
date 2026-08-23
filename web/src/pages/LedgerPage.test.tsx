@@ -150,8 +150,9 @@ it('renders the wedding it took from GET /weddings, in 이름 가나다순', asy
   await screen.findAllByTestId('guest-name')
   // 이름 검색 is post-v1, so the order IS how a couple finds a person in v1.
   expect(renderedNames()).toEqual(['김영수', '박지민', '이서연', '한지우'])
-  // Whose ledger this is — both seats taken, so both names.
-  expect(screen.getByText('김신랑 · 이신부')).toBeVisible()
+  // Whose ledger this is — both seats taken, so both names. It is the running
+  // head's first field, which is where 결혼식 이름 goes when `#212` lands.
+  expect(screen.getByText(/김신랑 · 이신부/)).toBeVisible()
   // `[0]` of GET /weddings, which is newest first and is contract.
   expect(calls.lastLedgerRequest().pathname).toBe('/weddings/12/guests')
 })
@@ -192,10 +193,10 @@ it('names the empty seat rather than leaving a gap where a name would be', async
   // partner's seat is created empty on purpose (docs/api-spec.md
   // § GET /weddings/{weddingId}). So this is the ordinary state, not a failure —
   // the header states it and does not dress it up as an error.
-  expect(await screen.findByText('김신랑 · 신부 자리 비어 있음')).toBeVisible()
+  expect(await screen.findByText(/김신랑 · 신부 자리 비어 있음/)).toBeVisible()
   // The two ways an absent name leaks onto a screen: the literal and the blank.
   expect(document.body.textContent).not.toContain('null')
-  expect(screen.queryByText('김신랑 ·')).not.toBeInTheDocument()
+  expect(screen.queryByText(/김신랑 · ·/)).not.toBeInTheDocument()
 })
 
 it('sends no filter parameter at all while both sides and both answers are wanted', async () => {
@@ -348,7 +349,9 @@ it('shows each guest with the side, group and party size the ledger is read by',
   expect(within(rows[0]).getByText('신랑')).toBeVisible()
   expect(within(rows[0]).getByText('혼주 손님')).toBeVisible()
   expect(within(rows[0]).getByText('아버지 회사 동료')).toBeVisible()
-  expect(within(rows[0]).getByText('2명')).toBeVisible()
+  // 인원 is a bare figure under its column heading — the unit is for the screen
+  // reader, so the badge's `2명` is gone with the badge.
+  expect(within(rows[0]).getByText(reads('2명'))).toBeVisible()
   expect(within(rows[0]).getByText('참석')).toBeVisible()
   // 불참 is a fact, not an error — it is stated as plainly as 참석.
   expect(within(rows[1]).getByText('불참')).toBeVisible()
@@ -371,7 +374,7 @@ it('offers the failure again rather than explaining it away', async () => {
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
 
-  expect(await screen.findByText('원장을 불러오지 못했습니다')).toBeVisible()
+  expect(await screen.findByText('하객 명부를 불러오지 못했습니다')).toBeVisible()
 
   await userEvent.click(screen.getByRole('button', { name: '다시 시도' }))
 
@@ -391,7 +394,7 @@ it('turns a 404 into the same failure as any other, never into an existence hint
 
   // No such wedding, not the caller's, and deleted are one answer on the server
   // (docs/api-spec.md), so they are one answer on the screen too.
-  expect(await screen.findByText('원장을 불러오지 못했습니다')).toBeVisible()
+  expect(await screen.findByText('하객 명부를 불러오지 못했습니다')).toBeVisible()
   expect(screen.queryByText(/없는 웨딩|권한/)).not.toBeInTheDocument()
 })
 
@@ -414,7 +417,7 @@ it('reads a failed wedding list as the same failure, and recovers from it', asyn
 
   // Which of the two reads failed is not the couple's problem: they asked for
   // 원장 and did not get it. One message, one way out.
-  expect(await screen.findByText('원장을 불러오지 못했습니다')).toBeVisible()
+  expect(await screen.findByText('하객 명부를 불러오지 못했습니다')).toBeVisible()
 
   await userEvent.click(screen.getByRole('button', { name: '다시 시도' }))
 
@@ -432,7 +435,7 @@ it('sends a person with no wedding to 웨딩 만들기 instead of an empty ledge
 
   // An empty array is the ordinary answer for someone with no wedding, and it
   // is the branch 최초 1회 exists for — not an error and not an empty ledger.
-  expect(await screen.findByRole('heading', { name: '웨딩 만들기' })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '결혼식 만들기' })).toBeVisible()
   expect(calls.ledgerRequests).toHaveLength(0)
 })
 
@@ -456,8 +459,8 @@ it('sends a partner holding an invite to 수락, never to 웨딩 만들기', asy
    * person, one wedding, forever (`#158`,
    * notes/2026-08-22-decision-the-invite-link.md §3).
    */
-  expect(await screen.findByRole('heading', { name: '초대 수락' })).toBeVisible()
-  expect(screen.queryByRole('heading', { name: '웨딩 만들기' })).not.toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: '초대를 받았습니다' })).toBeVisible()
+  expect(screen.queryByRole('heading', { name: '결혼식 만들기' })).not.toBeInTheDocument()
 })
 
 /*
@@ -500,7 +503,7 @@ it('does not say a filter matched nobody before the server has answered it', asy
   // then contradicted itself when the twelve landed.
   expect(screen.queryByText('신부측으로 좁혀져 있습니다.')).not.toBeInTheDocument()
   expect(screen.queryByText('조건에 맞는 하객이 없습니다')).not.toBeInTheDocument()
-  expect(screen.getByText('원장을 불러오는 중입니다')).toBeVisible()
+  expect(screen.getByText('하객 명부를 불러오는 중입니다')).toBeVisible()
 
   release()
   expect(await screen.findByTestId('guest-name')).toHaveTextContent('윤채원')
@@ -533,7 +536,7 @@ it('does not call the ledger empty while it is holding a filter\u0027s rows', as
   await userEvent.click(screen.getByRole('button', { name: '필터 지우기' }))
 
   expect(screen.queryByText('아직 등록된 하객이 없습니다')).not.toBeInTheDocument()
-  expect(screen.getByText('원장을 불러오는 중입니다')).toBeVisible()
+  expect(screen.getByText('하객 명부를 불러오는 중입니다')).toBeVisible()
 
   release()
   expect(await screen.findByTestId('guest-name')).toHaveTextContent('김영수')
@@ -555,7 +558,7 @@ it('sends a 401 on the ledger read back to log in, not to a connection message',
   // the couple live on. The client answers every 401 the same way and the login
   // screen is the exit (lib/queryClient.ts).
   expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeVisible()
-  expect(screen.queryByText('원장을 불러오지 못했습니다')).not.toBeInTheDocument()
+  expect(screen.queryByText('하객 명부를 불러오지 못했습니다')).not.toBeInTheDocument()
 })
 
 it('refetches the filtered ledger when the wedding\u0027s ledger key is invalidated', async () => {
@@ -640,7 +643,7 @@ it('asks for the number beside the ledger rather than after it', async () => {
   // carries no aggregate to wait for (docs/api-spec.md).
   expect(await within(await headcount()).findByText('1')).toBeVisible()
   expect(calls.ledgerRequests).toHaveLength(1)
-  expect(screen.getByText('원장을 불러오는 중입니다')).toBeVisible()
+  expect(screen.getByText('하객 명부를 불러오는 중입니다')).toBeVisible()
 
   release()
   expect(await screen.findByTestId('guest-name')).toHaveTextContent('김영수')
@@ -772,7 +775,9 @@ it('draws no comparison at all while the couple has no 보증인원', async () =
   renderWithProviders(<App />, { initialEntries: ['/'] })
 
   expect(await within(await headcount()).findByText('2')).toBeVisible()
-  expect(within(await headcount()).queryByText(/보증/)).not.toBeInTheDocument()
+  // The 굽 still says whose number 보증인원 is — that sentence is a standing
+  // fact, not a comparison. What must be absent is a FIGURE to compare against.
+  expect(within(await headcount()).queryByText(/보증\s*\d/)).not.toBeInTheDocument()
   expect(within(await headcount()).queryByText(/여유|초과/)).not.toBeInTheDocument()
   expect(
     within(await headcount()).queryByTestId('guarantee-meter'),

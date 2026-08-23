@@ -282,7 +282,7 @@ it('sends the token in the body and the name the person typed, and seats them', 
 
   // 원장 is where a seated person belongs, and the wedding came off the accept's
   // own response rather than from a second read.
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeInTheDocument()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeInTheDocument()
   // Spent, and it can never work again.
   expect(stored()).toBeNull()
 })
@@ -322,7 +322,7 @@ it('sends once for a double press, because the token is spent by the first', asy
   await userEvent.click(button)
 
   api.release()
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeInTheDocument()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeInTheDocument()
   expect(api.joins).toHaveLength(1)
 })
 
@@ -361,7 +361,9 @@ it('points a superseded link at the newer one instead of at nothing', async () =
   expect(screen.queryByText('이 링크는 사용할 수 없습니다')).not.toBeInTheDocument()
   // No 내 원장 열기 either — this person has no ledger of their own, which is
   // the whole reason they were sent a link.
-  expect(screen.queryByRole('link', { name: '내 원장 열기' })).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: '내 하객 명부 열기' }),
+  ).not.toBeInTheDocument()
   // Settled: pressing again cannot change the answer, so the form goes.
   expect(screen.queryByLabelText('내 이름')).not.toBeInTheDocument()
   // And the dead token goes with it. Before `#201` this answer was
@@ -395,7 +397,7 @@ it('treats a person who already has a ledger as having one, not as having failed
   renderWithProviders(<App />, { initialEntries: ['/invite'] })
   await accept('이신부')
 
-  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeInTheDocument()
+  expect(await screen.findByText('이미 다른 결혼식에 속해 있습니다')).toBeInTheDocument()
 
   /*
    * THE TOKEN SURVIVES THIS ONE, and it is the only 409 that keeps it: the spec
@@ -413,8 +415,8 @@ it('treats a person who already has a ledger as having one, not as having failed
   // The spec's own recovery: open the wedding `GET /weddings` comes back with.
   // A held token cannot divert them back here — 원장 only reads it when the
   // list is EMPTY, and this person's is not (LedgerPage.tsx).
-  await userEvent.click(screen.getByRole('link', { name: '내 원장 열기' }))
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('link', { name: '내 하객 명부 열기' }))
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeInTheDocument()
 })
 
 it('says it again on the second arrival instead of offering the form that refused them', async () => {
@@ -428,13 +430,15 @@ it('says it again on the second arrival instead of offering the form that refuse
 
   renderWithProviders(<App />, { initialEntries: ['/invite'] })
   await accept('이신부')
-  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeVisible()
+  expect(await screen.findByText('이미 다른 결혼식에 속해 있습니다')).toBeVisible()
 
   // On 원장 now, with its list still in flight — this screen is gone, so what
   // comes back below is the second arrival and not this render.
-  await userEvent.click(screen.getByRole('link', { name: '내 원장 열기' }))
+  await userEvent.click(screen.getByRole('link', { name: '내 하객 명부 열기' }))
   await waitFor(() =>
-    expect(screen.queryByText('이미 다른 웨딩에 속해 있습니다')).not.toBeInTheDocument(),
+    expect(
+      screen.queryByText('이미 다른 결혼식에 속해 있습니다'),
+    ).not.toBeInTheDocument(),
   )
   api.releaseWeddings()
 
@@ -445,9 +449,9 @@ it('says it again on the second arrival instead of offering the form that refuse
    * partner who has not joined looks like (`#158`). What changes is that this
    * arrival remembers the verdict and says it.
    */
-  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeVisible()
+  expect(await screen.findByText('이미 다른 결혼식에 속해 있습니다')).toBeVisible()
   expect(screen.queryByLabelText('내 이름')).not.toBeInTheDocument()
-  expect(screen.getByRole('link', { name: '내 원장 열기' })).toBeVisible()
+  expect(screen.getByRole('link', { name: '내 하객 명부 열기' })).toBeVisible()
   expect(screen.getByRole('button', { name: '로그아웃' })).toBeVisible()
 
   // Nothing was pressed a second time, and the token is untouched: the verdict
@@ -465,7 +469,7 @@ it('keeps the invite alive for the person who signed in as the wrong account', a
 
   const { unmount } = renderWithProviders(<App />, { initialEntries: ['/invite'] })
   await accept('이신부')
-  await screen.findByText('이미 다른 웨딩에 속해 있습니다')
+  await screen.findByText('이미 다른 결혼식에 속해 있습니다')
 
   /*
    * NOTHING ON THIS SCREEN NAMES THE SIGNED-IN ACCOUNT, so this 409 is the ONLY
@@ -479,11 +483,11 @@ it('keeps the invite alive for the person who signed in as the wrong account', a
    * AND THE SCREEN NAMES THAT POSSIBILITY, because the exit being reachable is
    * not the same as it being guessable. Nothing in this flow says who is signed
    * in — 마이페이지 does (`#159`) and it sits behind 원장, which this person
-   * cannot open — so 이미 다른 웨딩에 속해 있습니다 is true of the account they
+   * cannot open — so 이미 다른 결혼식에 속해 있습니다 is true of the account they
    * are in and says nothing about the one they meant.
    */
   expect(
-    screen.getByText('원장이 열리지 않으면 다른 계정으로 로그인한 것일 수 있습니다.'),
+    screen.getByText('명부가 열리지 않으면 다른 계정으로 로그인한 것일 수 있습니다.'),
   ).toBeVisible()
 
   await userEvent.click(screen.getByRole('button', { name: '로그아웃' }))

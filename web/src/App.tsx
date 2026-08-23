@@ -53,7 +53,7 @@ export function App() {
   if (session.isPending) {
     return (
       <Screen>
-        <BrandMark />
+        <BrandMark heading />
       </Screen>
     )
   }

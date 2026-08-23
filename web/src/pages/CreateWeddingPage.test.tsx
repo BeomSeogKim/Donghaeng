@@ -193,7 +193,7 @@ it('sends a person who already has a wedding to 원장 instead of the form', asy
   // only thing standing there, and a person who already has one is taken to it.
   renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
 
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
   expect(screen.queryByLabelText('예식일')).not.toBeInTheDocument()
   expect(calls.created).toHaveLength(0)
 })
@@ -211,7 +211,7 @@ it('does not offer the form when it could not find out whether they have a weddi
 
   // The cost is asymmetric: a retry costs a tap, and a form offered to someone
   // who already has a wedding costs them the ledger.
-  expect(await screen.findByText('웨딩 정보를 불러오지 못했습니다')).toBeVisible()
+  expect(await screen.findByText('결혼식 정보를 불러오지 못했습니다')).toBeVisible()
   expect(screen.queryByLabelText('예식일')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: '다시 시도' })).toBeVisible()
 })
@@ -284,7 +284,7 @@ it("creates a wedding from a date, a side and the caller's own name", async () =
   // The couple land on 원장 (`#15`), which is home — and they land ON it rather
   // than being bounced back here by a wedding list the client fetched one
   // request ago and which still says they have none.
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
 })
 
 it('trims the name it sends, because the server measures length before trimming', async () => {
@@ -354,7 +354,7 @@ it("sends the seat the caller chose, and never their partner's", async () => {
   })
 
   // And the ledger they land on says so, in as many words.
-  expect(await screen.findByText('신랑 자리 비어 있음 · 이신부')).toBeVisible()
+  expect(await screen.findByText(/신랑 자리 비어 있음 · 이신부/)).toBeVisible()
 })
 
 it('names the field that is empty rather than failing the whole form at once', async () => {
@@ -466,7 +466,7 @@ it('reports a failed create without inventing a reason for it', async () => {
   // A 5xx says nothing about what went wrong, by design — so there is nothing
   // to explain and only something to try again.
   expect(
-    await screen.findByText('웨딩을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'),
+    await screen.findByText('결혼식을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'),
   ).toBeVisible()
   expect(screen.getByLabelText('예식일')).toHaveValue('2026-10-10')
 })
@@ -499,7 +499,7 @@ it('creates one wedding when the button is pressed twice', async () => {
   // is what keeps an ordinary double press from taking that detour at all.
   expect(calls.created).toHaveLength(1)
   release()
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
 })
 
 it('opens the wedding it turns out they already have', async () => {
@@ -537,7 +537,7 @@ it('opens the wedding it turns out they already have', async () => {
    * that is not a failure at all — "이미 있으니 그걸 열었다"
    * (docs/api-spec.md § POST /weddings).
    */
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
   expect(screen.queryByText(/다시 시도해 주세요/)).not.toBeInTheDocument()
   // Never retried: a second create is a second wedding the moment it succeeds.
   expect(calls.created).toHaveLength(1)
@@ -559,8 +559,8 @@ it('says so when the list disagrees, rather than handing back the same form', as
   await submit()
 
   // The same sentence 초대 수락 says, from the same code — one 409, one answer.
-  expect(await screen.findByText('이미 다른 웨딩에 속해 있습니다')).toBeVisible()
-  expect(screen.getByRole('link', { name: '내 원장 열기' })).toBeVisible()
+  expect(await screen.findByText('이미 다른 결혼식에 속해 있습니다')).toBeVisible()
+  expect(screen.getByRole('link', { name: '내 하객 명부 열기' })).toBeVisible()
   // 로그아웃 where it can be seen: on a shared phone, being signed in as the
   // partner is one of the ways to arrive here, and then it is the recovery.
   expect(screen.getByRole('button', { name: '로그아웃' })).toBeVisible()

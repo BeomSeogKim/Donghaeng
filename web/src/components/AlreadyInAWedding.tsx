@@ -5,7 +5,7 @@ import { LogoutButton } from './LogoutButton'
 import { Screen } from './Screen'
 
 /**
- * 이미 다른 웨딩에 속해 있습니다 — the one screen both 웨딩 만들기 and 초대 수락
+ * 이미 다른 결혼식에 속해 있습니다 — the one screen both 웨딩 만들기 and 초대 수락
  * put up when the API answers 409 `ALREADY_IN_A_WEDDING`.
  *
  * IT IS ONE COMPONENT BECAUSE IT IS ONE ANSWER. The two screens are told the
@@ -14,7 +14,7 @@ import { Screen } from './Screen'
  * (`lib/alreadyInAWedding.ts`).
  *
  * IT IS NOT AN ERROR SCREEN. The ordinary way here is that the couple's other
- * tab already made the wedding, and then 내 원장 열기 is not a consolation — it
+ * tab already made the wedding, and then 내 하객 명부 열기 is not a consolation — it
  * is the recovery, and the list usually agrees the moment it is asked. The
  * screen exists for when it does not.
  *
@@ -29,12 +29,12 @@ import { Screen } from './Screen'
  * alive through this 409 in the first place — the refusal is the only signal
  * the wrong account produces — and 마이페이지, which does name the account
  * (`#159`), sits behind 원장, which is precisely what this person cannot open.
- * Somebody reading 이미 다른 웨딩에 속해 있습니다 believes it, because it is true
+ * Somebody reading 이미 다른 결혼식에 속해 있습니다 believes it, because it is true
  * of the account they are in; it is simply useless about the one they meant.
  *
  * THE SENTENCE IS CONDITIONAL AND SITS WITH 로그아웃, NOT IN THE BLOCK. The block
  * states the refusal, which is settled fact. This speaks only to the person for
- * whom 내 원장 열기 did not open anything, and stays quiet for the ordinary
+ * whom 내 하객 명부 열기 did not open anything, and stays quiet for the ordinary
  * case — somebody who really does have their own ledger and opened a friend's
  * link, who is one tap from where they belong.
  *
@@ -47,18 +47,18 @@ export function AlreadyInAWedding() {
     <Screen>
       <div className="flex w-full flex-col items-start gap-3 border border-line bg-surface px-6 py-8">
         <h1 className="text-lead font-semibold leading-snug">
-          이미 다른 웨딩에 속해 있습니다
+          이미 다른 결혼식에 속해 있습니다
         </h1>
         <p className="text-body leading-body text-ink-muted">
-          한 사람은 하나의 웨딩에만 속할 수 있습니다.
+          한 사람은 하나의 결혼식에만 속할 수 있습니다.
         </p>
         <Link className={buttonClassName('secondary')} to={ledgerPath}>
-          내 원장 열기
+          내 하객 명부 열기
         </Link>
       </div>
       <div className="flex w-full flex-col items-center gap-3 text-center">
         <p className="text-body leading-body text-ink-muted">
-          원장이 열리지 않으면 다른 계정으로 로그인한 것일 수 있습니다.
+          명부가 열리지 않으면 다른 계정으로 로그인한 것일 수 있습니다.
         </p>
         <LogoutButton className="flex flex-col items-center gap-2 text-center" />
       </div>

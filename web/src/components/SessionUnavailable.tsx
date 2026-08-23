@@ -15,7 +15,7 @@ import { Screen } from './Screen'
 export function SessionUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
     <Screen>
-      <BrandMark />
+      <BrandMark heading />
       <div className="flex w-full flex-col items-center gap-4">
         <p className="text-body leading-body text-ink-muted">
           로그인 상태를 확인하지 못했습니다

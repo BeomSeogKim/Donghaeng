@@ -1,6 +1,5 @@
-import { BrandMark } from '../components/BrandMark'
 import { GoogleLoginLink } from '../components/GoogleLoginLink'
-import { Screen } from '../components/Screen'
+import { LoginFace, Screen } from '../components/Screen'
 import { type LoginFailure, useLoginFailure } from '../hooks/useLoginFailure'
 
 /*
@@ -24,11 +23,23 @@ export function LoginPage() {
   const failure = useLoginFailure()
 
   return (
-    <Screen>
-      <BrandMark />
-      <p className="text-body leading-body text-ink-muted">
-        하객 명부와 인원수를 한 화면에서 관리합니다.
-      </p>
+    /*
+     * 자적 위의 금박 — the one screen that shows what this palette came from,
+     * before the couple has ever seen a number
+     * (notes/2026-08-23-decision-the-form-language.md). It is the same 자적 the
+     * ledger's 굽 is, so the entry flow and the ledger are one garment.
+     */
+    <Screen aside={<LoginFace>몇 명이 오는지, 마지막까지 정확하게.</LoginFace>}>
+      <div className="flex flex-col gap-3">
+        {/* One of RIDIBatang's three places. There is no headcount here, so
+            this is the display face's single appearance on the pane. */}
+        <h2 className="font-display text-title leading-snug font-bold tracking-display">
+          시작하기
+        </h2>
+        <p className="text-body leading-body text-ink-muted">
+          계정 하나면 됩니다. 초대를 보내면 상대방도 같은 명부로 들어옵니다.
+        </p>
+      </div>
       <div className="flex w-full flex-col gap-4">
         {failure !== null && (
           <div className="flex flex-col gap-2">
@@ -41,6 +52,9 @@ export function LoginPage() {
         )}
         <GoogleLoginLink />
       </div>
+      <p className="text-meta leading-body text-ink-faint">
+        계속하면 이용약관과 개인정보 처리방침에 동의하게 됩니다.
+      </p>
     </Screen>
   )
 }

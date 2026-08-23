@@ -6,7 +6,7 @@ import { buttonClassName } from '../components/Button'
 import { Choice, type ChoiceOption } from '../components/Choice'
 import { Field } from '../components/Field'
 import { LogoutButton } from '../components/LogoutButton'
-import { Screen } from '../components/Screen'
+import { Screen, ScreenFace } from '../components/Screen'
 import { type CreateWeddingRequest, useCreateWedding } from '../hooks/useCreateWedding'
 import { useWeddings } from '../hooks/useWeddings'
 import { wasAlreadyInAWedding } from '../lib/alreadyInAWedding'
@@ -62,7 +62,7 @@ export function CreateWeddingPage() {
   if (weddings.isPending) {
     return (
       <Screen>
-        <BrandMark />
+        <BrandMark heading />
       </Screen>
     )
   }
@@ -70,10 +70,10 @@ export function CreateWeddingPage() {
   if (weddings.isError) {
     return (
       <Screen>
-        <BrandMark />
+        <BrandMark heading />
         <div className="flex w-full flex-col items-center gap-4">
           <p className="text-body leading-body text-ink-muted">
-            웨딩 정보를 불러오지 못했습니다
+            결혼식 정보를 불러오지 못했습니다
           </p>
           <button
             className={buttonClassName('secondary')}
@@ -153,9 +153,21 @@ function CreateWeddingForm() {
   const failure = create.isError ? failureMessage(create.error) : null
 
   return (
-    <Screen>
+    /*
+     * The same 자적 面 로그인 wears, so the whole entry flow is one garment
+     * (notes/2026-08-23-decision-the-form-language.md). The heading moved onto
+     * that face: what this screen is stays on the 자적, and the pane beside it
+     * holds only what has to be filled in.
+     */
+    <Screen
+      aside={
+        <ScreenFace eyebrow="시작하기" heading="결혼식 만들기">
+          결혼식에는 두 자리가 있습니다. 지금 만드는 건 그중 본인 자리이고, 나머지 한
+          자리는 초대로 채웁니다.
+        </ScreenFace>
+      }
+    >
       <div className="flex w-full flex-col gap-3">
-        <h1 className="font-display text-title tracking-display">웨딩 만들기</h1>
         <p className="text-body leading-body text-ink-muted">
           예식일과 본인 이름만 있으면 시작할 수 있습니다. 상대방 이름은 적지 않습니다.
         </p>
@@ -325,5 +337,5 @@ function failureMessage(error: unknown): string | null {
   if (error instanceof ApiError && error.status === 401) return null
   if (error instanceof ApiError && error.status === 400)
     return '예식일과 이름을 다시 확인해 주세요.'
-  return '웨딩을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  return '결혼식을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'
 }
