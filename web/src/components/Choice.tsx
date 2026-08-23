@@ -23,12 +23,18 @@
  */
 
 const TONES = {
-  /** 자적 — the same fill the pressed filter chip and 웨딩 만들기's 측 use. */
-  primary: 'has-[:checked]:bg-primary has-[:checked]:text-ink-on-accent',
+  /** 자적 — soft fill, 자적 label, and the 2px marking edge. */
+  primary:
+    'has-[:checked]:border-(color:--dh-primary) has-[:checked]:border-(length:--dh-mark-w) ' +
+    'has-[:checked]:bg-primary-soft has-[:checked]:text-primary',
   /** 초록원삼's green. */
-  yes: 'has-[:checked]:bg-att-yes-bg has-[:checked]:text-att-yes-fg',
+  yes:
+    'has-[:checked]:border-(color:--dh-att-yes-fg) has-[:checked]:border-(length:--dh-mark-w) ' +
+    'has-[:checked]:bg-att-yes-bg has-[:checked]:text-att-yes-fg',
   /** Neutral, and ink rather than the muted foreground: it is the chosen answer. */
-  no: 'has-[:checked]:bg-att-no-bg has-[:checked]:text-ink',
+  no:
+    'has-[:checked]:border-(color:--dh-line-strong) has-[:checked]:border-(length:--dh-mark-w) ' +
+    'has-[:checked]:bg-att-no-bg has-[:checked]:text-ink',
 } as const
 
 export type ChoiceTone = keyof typeof TONES
@@ -77,18 +83,17 @@ export function Choice<T extends string>({
       className="flex flex-col gap-2"
       role="radiogroup"
     >
-      <span className="text-meta font-semibold text-ink" id={labelId}>
+      <span className="text-label tracking-label text-ink-muted" id={labelId}>
         {label}
       </span>
-      <div
-        className={`flex overflow-hidden rounded-control border ${
-          invalid ? 'border-danger' : 'border-line-strong'
-        }`}
-      >
-        {options.map((option, index) => (
+      {/* SEPARATE CELLS WITH A GAP, not one clipped box with dividers. The
+          chosen cell is marked by its own 2px 자적 edge, and an edge has to
+          have four sides to be one. */}
+      <div className="flex gap-2">
+        {options.map((option) => (
           <label
             className={`${CELL} ${TONES[option.tone]} ${
-              index > 0 ? 'border-l border-line' : ''
+              invalid ? 'border-danger' : 'border-line-strong'
             }`}
             key={option.value}
           >
@@ -114,12 +119,12 @@ export function Choice<T extends string>({
 }
 
 /*
- * The focus ring is offset INWARD: the cells sit inside a clipped rounded
- * border, so an outline drawn outside the cell is an outline nobody sees.
+ * The focus ring is offset INWARD: cells sit flush against their neighbours'
+ * gap, and an outline drawn outside a 44px cell overlaps the next one.
  */
 const CELL =
   'flex flex-1 min-h-[var(--dh-tap-min)] cursor-pointer items-center justify-center ' +
-  'bg-surface px-3 text-body font-semibold text-ink-muted transition-colors ' +
+  'rounded-control border bg-surface px-3 text-body text-ink-muted transition-colors ' +
   'duration-(--dh-dur-fast) ease-standard ' +
   'has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 ' +
   'has-[:focus-visible]:outline-focus'

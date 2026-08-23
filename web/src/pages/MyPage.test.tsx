@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { expect, it } from 'vitest'
@@ -54,7 +54,12 @@ it('says which account this device is signed in as', async () => {
   renderWithProviders(<App />, { initialEntries: ['/me'] })
 
   expect(await screen.findByRole('heading', { name: '마이페이지' })).toBeVisible()
-  expect(screen.getByText('김테스터')).toBeVisible()
+  // Scoped to the section, because the running head above every signed-in
+  // screen now names the account too — which is the same answer to `#159`,
+  // given everywhere rather than only here.
+  expect(
+    within(screen.getByRole('region', { name: '로그인한 계정' })).getByText('김테스터'),
+  ).toBeVisible()
 })
 
 it('names the account when the provider handed us no name at all', async () => {

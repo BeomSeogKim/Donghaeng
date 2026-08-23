@@ -535,7 +535,7 @@ it('says the wedding could not be read rather than offering an empty form', asyn
 
   // A form prefilled from a read that failed would offer a blank 보증인원 —
   // which on this screen is not "unknown", it is "clear it".
-  expect(await screen.findByText('웨딩 정보를 불러오지 못했습니다')).toBeVisible()
+  expect(await screen.findByText('결혼식 정보를 불러오지 못했습니다')).toBeVisible()
   expect(screen.queryByLabelText('보증인원')).toBeNull()
 
   server.use(api.headcount())
@@ -562,7 +562,7 @@ it('is reached from 원장 and goes back to it', async () => {
 
   // 원장 is home and this screen is a trip away from it, so the way back is on
   // the screen rather than in the browser's Back button alone.
-  await userEvent.click(screen.getByRole('link', { name: '원장' }))
+  await userEvent.click(screen.getByRole('link', { name: '하객 명부' }))
   expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
 })
 
@@ -593,7 +593,7 @@ it('sends a person with no wedding to 웨딩 만들기 instead of an empty form'
 
   // An empty list is the ordinary answer for a person with no wedding — 최초
   // 1회, and also what being removed from a partner's wedding looks like.
-  expect(await screen.findByRole('heading', { name: '웨딩 만들기' })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: '결혼식 만들기' })).toBeVisible()
 })
 
 it('keeps our own number off the screen the venue\u0027s number is typed into', async () => {

@@ -75,7 +75,7 @@ export function PartnerInvite() {
       <div className="flex flex-col gap-4">
         {link}
         <p className="text-body leading-body text-ink-muted">
-          웨딩 정보를 불러오지 못했습니다
+          결혼식 정보를 불러오지 못했습니다
         </p>
       </div>
     )
@@ -124,8 +124,8 @@ function Invite({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-body leading-body text-ink-muted">
-        링크를 받은 사람이 로그인하면 이 원장에 함께 들어옵니다. 링크는 하루 동안 쓸 수
-        있고, 새로 만들면 이전 링크는 바로 쓸 수 없게 됩니다.
+        링크를 받은 사람이 로그인하면 이 하객 명부에 함께 들어옵니다. 링크는 하루 동안 쓸
+        수 있고, 새로 만들면 이전 링크는 바로 쓸 수 없게 됩니다.
       </p>
 
       {link}

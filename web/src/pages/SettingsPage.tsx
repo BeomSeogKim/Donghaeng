@@ -41,8 +41,8 @@ import { createWeddingPath, ledgerPath, myPagePath } from '../lib/routes'
  */
 export function SettingsPage() {
   return (
-    <SubScreen back={{ label: '원장', to: ledgerPath }} title="설정">
-      <Section title="웨딩 정보">
+    <SubScreen back={{ label: '하객 명부', to: ledgerPath }} title="설정">
+      <Section title="결혼식 정보">
         <WeddingInfo />
       </Section>
       {/* `#9` 파트너 초대 — the sibling this shell was built for. It reads the
@@ -119,7 +119,9 @@ function Prefilled({ wedding }: { wedding: Wedding }) {
 
 function Loading() {
   return (
-    <p className="text-body leading-body text-ink-muted">웨딩 정보를 불러오는 중입니다</p>
+    <p className="text-body leading-body text-ink-muted">
+      결혼식 정보를 불러오는 중입니다
+    </p>
   )
 }
 
@@ -133,7 +135,7 @@ function Loading() {
 function Failure({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="flex flex-col items-start gap-3">
-      <p className="text-body leading-body text-ink">웨딩 정보를 불러오지 못했습니다</p>
+      <p className="text-body leading-body text-ink">결혼식 정보를 불러오지 못했습니다</p>
       <p className="text-body leading-body text-ink-muted">
         연결을 확인하고 다시 시도해 주세요.
       </p>

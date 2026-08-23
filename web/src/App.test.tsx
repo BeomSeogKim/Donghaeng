@@ -200,7 +200,7 @@ it('opens the ledger for a signed-in person, and signs them out from 마이페�
 
   renderWithProviders(<App />, { initialEntries: ['/'] })
 
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
   // The ledger no longer carries it, so the flow is the real two taps.
   expect(screen.queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument()
 
@@ -264,7 +264,7 @@ it('leaves nothing of the signed-out person in the cache', async () => {
   )
 
   const { queryClient } = renderWithProviders(<App />, { initialEntries: ['/'] })
-  await screen.findByRole('heading', { name: '원장' })
+  await screen.findByRole('region', { name: '인원수' })
   // The real ledger key, which now exists. Two people share one device here;
   // the next person to sign in must not be shown a frame of the last one's
   // guests.
@@ -328,7 +328,7 @@ it('keeps a signed-in person off the login screen', async () => {
 
   renderWithProviders(<App />, { initialEntries: ['/login'] })
 
-  expect(await screen.findByRole('heading', { name: '원장' })).toBeVisible()
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
 })
 
 /*

@@ -4,25 +4,37 @@ import { Link, Navigate } from 'react-router'
 import { AddGuestSheet } from '../components/AddGuestSheet'
 import { BrandMark } from '../components/BrandMark'
 import { buttonClassName } from '../components/Button'
-import { GuestRow } from '../components/GuestRow'
+import { GuestRow, LedgerHeader } from '../components/GuestRow'
 import { Headcount } from '../components/Headcount'
 import { Screen } from '../components/Screen'
+import { Slab } from '../components/Slab'
 import { FilterChip } from '../components/Tag'
+import { WeddingHead } from '../components/WeddingHead'
 import { type GuestFilters, useGuests } from '../hooks/useGuests'
 import { useWeddings, type Wedding } from '../hooks/useWeddings'
 import { pendingInvite } from '../lib/invite'
 import { createWeddingPath, invitePath, settingsPath } from '../lib/routes'
 
 /*
- * 원장 — and 원장 is home. There is essentially one screen in this product
+ * 하객 명부 — and it is home. There is essentially one screen in this product
  * (notes/2026-08-07-design-screens-and-flow.md): 하객 추가 (`#135`), 하객 상세
  * (`#12`) and 참석 토글 (`#13`) all open on top of this one, and the main action
  * never leaves it. No tab bar and no dashboard, because either creates the
  * question "where do I go to see the number", which this product must not have.
  *
+ * IT IS ONE 기물: 보자기 ground → 백자 slab → 자적 굽, with a single 2px gold
+ * 구연 at the slab's edge (notes/2026-08-23-decision-the-form-language.md).
+ * 인원수 is not a card pinned above the list — it is the face the slab stands
+ * on, a rail on a laptop and the slab's head on a phone.
+ *
  * THE SCREEN'S ORDER IS 숫자 → 도구 → 목록, and it is the couple's own order:
- * see the number, find the person, tap. 원장과 인원수는 한 화면 — the number is
- * `components/Headcount.tsx` and it is read beside the list, never after it.
+ * see the number, find the person, tap. 명부와 인원수는 한 화면.
+ *
+ * THE SCREEN HAS NO TITLE. 결혼식 이름 is a 13px running head above the slab, so
+ * the display face appears exactly once — on the headcount. What that head says
+ * today is the couple's two seats, because `wedding.name` is `#212` and the
+ * spec does not carry it yet; when it does, the name replaces the argument and
+ * nothing else here moves.
  *
  * THE WEDDING ID IS NOT IN THE URL. It comes from `GET /weddings`, which holds
  * AT MOST ONE ENTRY — a person belongs to exactly one wedding, and that sentence
@@ -30,33 +42,32 @@ import { createWeddingPath, invitePath, settingsPath } from '../lib/routes'
  * ledger (docs/api-spec.md § GET /weddings; the list's newest-first order is
  * retained and decides nothing). That also means this screen never calls
  * `GET /weddings/{weddingId}` — the header it would render is already in the
- * list entry, and a second round trip for the same four fields buys nothing. It
- * starts to matter when a wedding id can arrive from outside the list, which v1
- * has no way to produce.
+ * list entry, and a second round trip for the same four fields buys nothing.
  */
 export function LedgerPage() {
   const weddings = useWeddings()
 
   /*
-   * NEITHER OF THESE WEARS THE LEDGER'S HEADER, and that is deliberate rather
+   * NEITHER OF THESE WEARS THE LEDGER'S CHROME, and that is deliberate rather
    * than lazy. The app is still deciding which screen this is, so it stays on
    * the screen it was already showing — App renders exactly this while the
-   * session resolves — instead of putting up a 원장 header that is about to be
-   * torn down and rebuilt under the couple's thumb.
+   * session resolves — instead of putting up a slab that is about to be torn
+   * down and rebuilt under the couple's thumb.
    */
   if (weddings.isPending) {
     return (
       <Screen>
-        <BrandMark />
+        <BrandMark heading />
       </Screen>
     )
   }
 
   if (weddings.isError) {
     return (
-      <main className="min-h-[100dvh] bg-ground text-ink">
+      <Screen>
+        <BrandMark heading />
         <LedgerFailure onRetry={() => void weddings.refetch()} />
-      </main>
+      </Screen>
     )
   }
 
@@ -76,7 +87,7 @@ export function LedgerPage() {
    * (notes/2026-08-22-decision-the-invite-link.md §3).
    *
    * IT IS INSIDE THIS BRANCH AND NOT ABOVE IT. A person who already holds a
-   * wedding is never diverted anywhere by a token sitting in storage — 원장 is
+   * wedding is never diverted anywhere by a token sitting in storage — 명부 is
    * their screen and it stays on screen.
    */
   if (wedding === undefined) {
@@ -93,12 +104,12 @@ function Ledger({ wedding }: { wedding: Wedding }) {
    * THE FILTERS HOLD AT MOST ONE VALUE PER AXIS, which is what makes the request
    * the API refuses unreachable: "both" is not a value, it is the absence of the
    * parameter (docs/api-spec.md § GET /weddings/{weddingId}/guests). Pressing the
-   * pressed chip clears its axis; pressing the other one replaces it.
+   * pressed filter clears its axis; pressing the other one replaces it.
    *
    * `useState` is the bottom rung and this is the only screen that reads it, so
    * it stays here (notes/2026-08-08-decision-frontend-architecture.md).
    *
-   * EVERY CHIP UPDATES FUNCTIONALLY. A handler that spreads the `filters` it
+   * EVERY FILTER UPDATES FUNCTIONALLY. A handler that spreads the `filters` it
    * closed over spreads the value from the render it was created in, and the
    * other axis is carried in that same object — so the question of whether two
    * updates can ever be queued together is one this screen does not have to
@@ -109,8 +120,8 @@ function Ledger({ wedding }: { wedding: Wedding }) {
   const narrowed = describe(filters)
 
   /*
-   * 하객 추가 opens OVER this screen and the main action never leaves it
-   * (notes/2026-08-07-design-screens-and-flow.md). Whether the sheet is open is
+   * 하객 추가 opens beside this screen and the main action never leaves it
+   * (notes/2026-08-07-design-screens-and-flow.md). Whether the panel is open is
    * this screen's own state and nobody else's, so it stays on the bottom rung —
    * `useState`, here (notes/2026-08-08-decision-frontend-architecture.md).
    */
@@ -118,15 +129,12 @@ function Ledger({ wedding }: { wedding: Wedding }) {
 
   /** The states the list itself can be in, and they are exclusive. */
   function list() {
-    if (guests.isPending) return <Notice title="원장을 불러오는 중입니다" />
+    if (guests.isPending) return <Notice title="하객 명부를 불러오는 중입니다" />
     if (guests.isError) return <LedgerFailure onRetry={() => void guests.refetch()} />
 
     if (guests.data.length > 0) {
       return (
-        <ul
-          aria-busy={guests.isFetching}
-          className="divide-y divide-line border-y border-line bg-surface"
-        >
+        <ul aria-busy={guests.isFetching}>
           {guests.data.map((guest) => (
             <GuestRow guest={guest} key={guest.id} />
           ))}
@@ -143,7 +151,7 @@ function Ledger({ wedding }: { wedding: Wedding }) {
      * contradict itself when the twelve rows land. An instrument does not
      * assert something it has not been told.
      */
-    if (guests.isPlaceholderData) return <Notice title="원장을 불러오는 중입니다" />
+    if (guests.isPlaceholderData) return <Notice title="하객 명부를 불러오는 중입니다" />
 
     if (narrowed !== null) {
       // A filter must never be a dead end: the way out is on the screen that
@@ -169,49 +177,68 @@ function Ledger({ wedding }: { wedding: Wedding }) {
      * rather than an edge case. It names the one action that fills a ledger in
      * v1 — direct entry, the import and the vendor-email paste being post-v1 —
      * and points at the button rather than repeating it: a second 하객 추가 on
-     * screen is two places to press for one action, and the pinned one is
+     * screen is two places to press for one action, and the one on the 굽 is
      * always there. No illustration and no emoji: a tool has no reason to be
      * cheerful about being empty.
      */
     return (
       <Notice title="아직 등록된 하객이 없습니다">
         <p className="text-body leading-body text-ink-muted">
-          위 하객 추가로 첫 하객을 등록해 주세요.
+          하객 추가로 첫 하객을 등록해 주세요.
         </p>
       </Notice>
     )
   }
 
   return (
-    <Frame
-      /*
-       * PINNED WITH THE NUMBER AND THE FILTERS, not in the tools row and not at
-       * the bottom of the screen. The bottom belongs to the list, and the
-       * filter row is 2rem tall on purpose — a 44px button in it would push the
-       * list down on the device 원장 is mostly read on
-       * (notes/2026-08-21-decision-ledger-screen.md).
-       */
-      action={
-        <button
-          className={buttonClassName('primary')}
-          onClick={() => setAdding(true)}
-          type="button"
-        >
-          하객 추가
-        </button>
+    <Slab
+      head={
+        <WeddingHead
+          action={
+            <Link
+              className="shrink-0 text-meta text-primary hover:text-primary-hover"
+              to={settingsPath}
+            >
+              설정
+            </Link>
+          }
+        />
       }
-      /*
+    >
+      {/*
        * THE NUMBER IS READ BESIDE THE LIST, NOT AFTER IT. Both queries mount in
        * this same commit, so neither waits on the other's response — and neither
        * one's failure decides the other's, because they are two reads of two
        * endpoints (docs/api-spec.md § GET /weddings/{weddingId}/headcount).
-       */
-      headcount={<Headcount weddingId={wedding.id} />}
-      tools={
-        <div className="flex flex-wrap items-center gap-2 px-4 pb-3 md:px-6">
+       *
+       * 하객 추가 LIVES ON THE 굽, which is the one place on this screen that is
+       * always visible whether the couple is at the top of the list or the
+       * bottom of it. It was a pinned header button; the 굽 is what replaced the
+       * pinned header.
+       */}
+      <Headcount
+        action={
+          <button
+            className={`${buttonClassName('onFoot')} md:w-full`}
+            onClick={() => setAdding(true)}
+            type="button"
+          >
+            하객 추가
+          </button>
+        }
+        weddingId={wedding.id}
+      />
+
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* 숫자 → 도구 → 목록. The tools row sits below the 44px tap floor on
+            purpose: a 44px toolbar between the number and the list pushes the
+            list down on the device 명부 is mostly read on
+            (notes/2026-08-21-decision-ledger-screen.md). */}
+        <div className="flex flex-wrap items-end gap-6 px-4 pt-4 md:px-6 md:pt-6">
           {/* A fieldset, and outside a form on purpose: it is the element that
-              carries "these two chips are one axis" without inventing a role. */}
-          <fieldset aria-label="측" className="flex gap-2">
+              carries "these two filters are one axis" without inventing a
+              role. */}
+          <fieldset aria-label="측" className="flex gap-4">
             <FilterChip
               onClick={() =>
                 setFilters((current) => ({
@@ -235,9 +262,9 @@ function Ledger({ wedding }: { wedding: Wedding }) {
               신부
             </FilterChip>
           </fieldset>
-          {/* 참석 여부는 참석 · 불참 둘뿐이다 — there is no 미확인 chip, and
+          {/* 참석 여부는 참석 · 불참 둘뿐이다 — there is no 미확인 filter, and
               `?attendance=UNKNOWN` is a 400. */}
-          <fieldset aria-label="참석 여부" className="flex gap-2">
+          <fieldset aria-label="참석 여부" className="flex gap-4">
             <FilterChip
               onClick={() =>
                 setFilters((current) => ({
@@ -262,104 +289,18 @@ function Ledger({ wedding }: { wedding: Wedding }) {
             </FilterChip>
           </fieldset>
         </div>
-      }
-      wedding={wedding}
-    >
-      {list()}
+
+        <div className="mt-4 flex min-h-0 flex-1 flex-col">
+          <LedgerHeader />
+          <div className="min-h-0 flex-1 overflow-y-auto">{list()}</div>
+        </div>
+      </section>
+
       {adding && (
         <AddGuestSheet onClose={() => setAdding(false)} weddingId={wedding.id} />
       )}
-    </Frame>
+    </Slab>
   )
-}
-
-/**
- * The screen around the list. Full-bleed and edge to edge — the ledger is not
- * one of `Screen`'s centered columns.
- *
- * The header and the tools are pinned: the couple must see *which* figure moved
- * when they tap, and they tap while scrolled into the list.
- */
-function Frame({
-  action,
-  children,
-  headcount,
-  tools,
-  wedding,
-}: {
-  action: ReactNode
-  children: ReactNode
-  headcount: ReactNode
-  tools: ReactNode
-  wedding: Wedding
-}) {
-  return (
-    <main className="min-h-[100dvh] bg-ground text-ink">
-      <div className="sticky top-0 z-10 border-b border-line bg-ground">
-        <header className="flex items-start justify-between gap-4 px-4 py-3 md:px-6">
-          <div className="flex min-w-0 flex-col">
-            {/* One of RIDIBatang's three places: the headcount, screen titles,
-                the brand mark. Never the list. */}
-            <h1 className="font-display text-title leading-tight tracking-display">
-              원장
-            </h1>
-            {/* WHOSE LEDGER THIS IS. A person belongs to exactly one wedding
-                (docs/api-spec.md § GET /weddings), so this is not a switcher and
-                never was — it is the couple, read off the two seats. */}
-            <p className="truncate text-meta text-ink-muted">
-              {wedding.seats.map(seatLabel).join(' · ')}
-            </p>
-          </div>
-          {/* TWO CONTROLS, ONE ROW — and the reason is the row itself. `#174`
-              split this into two because three controls beside the couple's own
-              names ellipsised the line that says whose ledger this is; the
-              crowding was real, but the second row lives inside `sticky top-0`,
-              so it spent vertical space above the number and the filters on
-              every scroll of the ledger. 로그아웃 was the control paying for it:
-              once a session, and it has a screen of its own now
-              (notes/2026-08-22-decision-logout-leaves-the-ledger.md). 설정 is a
-              link because it is a navigation, the same reason starting login is
-              an <a>. */}
-          <div className="flex shrink-0 items-start gap-2">
-            {action}
-            <Link className={buttonClassName('secondary')} to={settingsPath}>
-              설정
-            </Link>
-          </div>
-        </header>
-
-        {/* 인원수 — above the tools and above the list, and inside the pinned
-            block with them: the couple taps attendance while scrolled into the
-            list and has to see WHICH figure moved. */}
-        {headcount}
-
-        {tools}
-      </div>
-
-      {children}
-    </main>
-  )
-}
-
-const SEAT_SIDE = { GROOM: '신랑', BRIDE: '신부' } as const
-
-/**
- * What the header calls one seat.
- *
- * SHOW WHAT YOU HAVE. A seat whose person has not arrived is the ordinary state
- * of a wedding on its first day — both seats are created with the wedding and
- * the partner's carries a side and nothing else (docs/api-spec.md
- * § POST /weddings). So the empty half is stated as the fact it is, in the same
- * neutral line as the names, rather than rendered as a gap, a dash, or an error.
- *
- * ONE `??` COVERS BOTH ABSENCES, and that is not defensiveness about the API.
- * The document types `name` as optional AND nullable because springdoc leaves a
- * nullable Kotlin property out of `required`; the API always sends the key, with
- * `null` in it. The written contract is the narrower of the two, and this reads
- * the same on either.
- */
-function seatLabel(seat: Wedding['seats'][number]): string {
-  return seat.name ?? `${SEAT_SIDE[seat.side]} 자리 비어 있음`
 }
 
 /**
@@ -377,7 +318,7 @@ function seatLabel(seat: Wedding['seats'][number]): string {
  */
 function LedgerFailure({ onRetry }: { onRetry: () => void }) {
   return (
-    <Notice title="원장을 불러오지 못했습니다">
+    <Notice title="하객 명부를 불러오지 못했습니다">
       <p className="text-body leading-body text-ink-muted">
         연결을 확인하고 다시 시도해 주세요.
       </p>
@@ -388,17 +329,20 @@ function LedgerFailure({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-/** The EmptyState part — a bordered block on surface, never a floating card. */
+/** The EmptyState part — a bordered block on the slab, never a floating card. */
 function Notice({ children, title }: { children?: ReactNode; title: string }) {
   return (
-    <div className="mx-4 mt-6 flex max-w-104 flex-col items-start gap-3 border border-line bg-surface px-6 py-8 md:mx-6">
+    <div className="m-4 flex max-w-104 flex-col items-start gap-3 border border-line bg-ground px-6 py-8 md:m-6">
       <h2 className="text-lead font-semibold leading-snug">{title}</h2>
       {children}
     </div>
   )
 }
 
-/** Press the pressed chip and its axis clears; press the other and it replaces. */
+/**
+ * Pressing a pressed filter clears its axis; pressing the other one replaces it.
+ * `undefined` is "both", which is spelled by leaving the parameter out.
+ */
 function toggle<T>(current: T | undefined, pressed: T): T | undefined {
   return current === pressed ? undefined : pressed
 }

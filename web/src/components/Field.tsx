@@ -44,7 +44,7 @@ export function Field({ error, id, label, ...input }: FieldProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-meta font-semibold text-ink" htmlFor={id}>
+      <label className="text-label tracking-label text-ink-muted" htmlFor={id}>
         {label}
       </label>
       <input
@@ -85,7 +85,7 @@ export function SelectField({ error, id, label, ...select }: SelectFieldProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-meta font-semibold text-ink" htmlFor={id}>
+      <label className="text-label tracking-label text-ink-muted" htmlFor={id}>
         {label}
       </label>
       <select
@@ -104,9 +104,18 @@ export function SelectField({ error, id, label, ...select }: SelectFieldProps) {
   )
 }
 
-// The 44px floor is the tap minimum from the token file: this is filled with a
-// thumb on a phone, and on a date input the whole control is the picker.
+/*
+ * The 44px floor is the tap minimum from the token file: this is filled with a
+ * thumb on a phone, and on a date input the whole control is the picker.
+ *
+ * THE CORNER IS SQUARE AND THE FOCUSED BORDER IS 자적 2px — `--dh-mark-w`, the
+ * same marking thickness the chosen filter wears. The outline stays as well,
+ * because the border is the design and the outline is the accessibility floor:
+ * a 2px border shift alone is a colour change, which is not a focus indicator
+ * for someone who cannot see the colour.
+ */
 const INPUT =
   'min-h-[var(--dh-tap-min)] w-full rounded-control border bg-surface px-3 ' +
   'text-body text-ink placeholder:text-ink-faint ' +
-  'focus:border-focus focus:outline-2 focus:outline-offset-1 focus:outline-focus'
+  'focus:border-(color:--dh-primary) focus:border-(length:--dh-mark-w) ' +
+  'focus:outline-2 focus:outline-offset-1 focus:outline-focus'
