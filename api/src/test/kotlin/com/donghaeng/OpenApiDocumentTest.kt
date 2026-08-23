@@ -82,6 +82,7 @@ class OpenApiDocumentTest {
             .containsExactlyInAnyOrder(
                 "/weddings",
                 "/weddings/join",
+                "/weddings/join/preview",
                 "/weddings/{weddingId}",
                 "/weddings/{weddingId}/seats/me",
                 "/weddings/{weddingId}/invite",

@@ -114,6 +114,49 @@ internal class UpdateWeddingContractTest : GuestFixture() {
     }
 
     @Test
+    fun `결혼식 이름 is set, cleared, and left alone when it is not sent`() {
+        // All three partial-update states on the member `#214` added, in one test
+        // because what is being asserted is that they DIFFER. 이름 없이 시작한 웨딩이
+        // 정상이고 붙였다 떼는 것도 정상이므로 `null` clears rather than being refused —
+        // the same answer 보증인원 gives, for the same kind of reason
+        // (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+        val session = login()
+        val weddingId = createWedding(session)
+
+        val named = patch("/weddings/$weddingId", listOf(session), "{\"weddingName\":\"  범석 희주의 가을 \"}")
+        assertThat(named.statusCode()).isEqualTo(200)
+        // Trimmed at the write point, exactly as the create trims it.
+        assertThat(named.json()["wedding"]["weddingName"].asText()).isEqualTo("범석 희주의 가을")
+
+        // A request that does not mention the name does not write one.
+        val elsewhere = patch("/weddings/$weddingId", listOf(session), """{"weddingDate":"2027-03-14"}""")
+        assertThat(elsewhere.json()["wedding"]["weddingName"].asText()).isEqualTo("범석 희주의 가을")
+
+        val cleared = patch("/weddings/$weddingId", listOf(session), """{"weddingName":null}""")
+        assertThat(cleared.statusCode()).isEqualTo(200)
+        // `null`, not absent: the member is on `WeddingResponse` always, and its value is
+        // what says the couple has no name for their wedding.
+        assertThat(cleared.json()["wedding"]["weddingName"].isNull).isTrue()
+        assertThat(get("/weddings/$weddingId", listOf(session)).json()["weddingName"].isNull).isTrue()
+    }
+
+    @Test
+    fun `a 결혼식 이름 the column would refuse is a 400, not a masked 500`() {
+        // The Patch-typed half of the name rule. Unvalidated, the over-long one is a
+        // `varchar(100)` violation arriving as a masked 500, and the invisible one is a
+        // ledger header rendering nothing
+        // (notes/2026-08-17-decision-log-masking-mechanism.md).
+        val session = login()
+        val weddingId = createWedding(session)
+
+        listOf("​", "가".repeat(101)).forEach { name ->
+            val response = patch("/weddings/$weddingId", listOf(session), "{\"weddingName\":\"$name\"}")
+            assertThat(response.statusCode()).describedAs(name).isEqualTo(400)
+            assertThat(response.json()["code"].asText()).describedAs(name).isEqualTo("VALIDATION_FAILED")
+        }
+    }
+
+    @Test
     fun `예식일 cannot be cleared`() {
         val session = login()
         val weddingId = createWedding(session)

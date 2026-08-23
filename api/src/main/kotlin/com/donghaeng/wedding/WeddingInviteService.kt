@@ -82,6 +82,85 @@ internal class WeddingInviteService(
     }
 
     /**
+     * 초대 수락 화면이 무엇을 수락하는지 보여주기 위한 읽기 (`#214`) — 결혼식 이름,
+     * 예식일, 초대한 사람. **It writes nothing and spends nothing**, so a person may
+     * open the link, read whose wedding it is, and walk away.
+     *
+     * **The refusals are [accept]'s, in [accept]'s order, and that is the point.** A
+     * screen that could preview a link it cannot use would say 이 결혼식에 참여하시겠어요
+     * and then refuse the tap; asking the same questions here means the answer the
+     * person reads is the answer they will get. The membership check runs first for the
+     * same reason it does there — somebody who already has a wedding is told so rather
+     * than shown one they can never join — and it is a plain read rather than
+     * [WeddingService.claimSoleSeat], because nothing is being seated and a lock taken
+     * for a read guards nothing.
+     *
+     * **The seat is read, not locked.** A seat somebody fills between this and the
+     * accept is exactly the race the accept already answers with
+     * [PartnerAlreadyJoinedException]; taking a row lock inside a read-only transaction
+     * would serialise every preview against the acceptance it is about, and buy an
+     * answer that is stale the moment it is rendered anyway.
+     *
+     * **What it publishes is argued in [InvitePreviewResponse]** — the token is what
+     * stands in for the scope, and there is no wedding id in the answer.
+     */
+    @Transactional(readOnly = true)
+    fun preview(
+        callerId: Long,
+        request: InvitePreviewRequest,
+        now: Instant = Instant.now(),
+    ): InvitePreviewResponse {
+        if (seats.existsByUserIdAndDeletedAtIsNull(callerId)) throw AlreadyInAWeddingException()
+
+        val invite = liveInviteFor(request.token, now)
+
+        val waiting = seats.findById(invite.seatId).orElse(null) ?: throw InviteNotFoundException()
+        // A wedding the couple deleted keeps its seats, so this is the same second
+        // condition [accept] and [WeddingService.scopeFor] both carry.
+        val wedding = weddings.findByIdAndDeletedAtIsNull(waiting.weddingId) ?: throw InviteNotFoundException()
+        if (waiting.userId != null) throw PartnerAlreadyJoinedException()
+        // The other live seat: the person who sent the link. `null` would mean a
+        // wedding with one seat, which no path of ours can create — and an invite into
+        // a wedding we cannot describe is one we refuse to describe.
+        val inviter =
+            seats.findAllByWeddingIdAndDeletedAtIsNull(waiting.weddingId).firstOrNull { it.id != waiting.id }
+                ?: throw InviteNotFoundException()
+
+        return InvitePreviewResponse(
+            weddingName = wedding.name,
+            weddingDate = wedding.weddingDate,
+            invitedBy = inviter.toWeddingSeatResponse(),
+        )
+    }
+
+    /**
+     * The token walk both ends of the link share: parse, find by selector, compare the
+     * verifier, then the three deaths.
+     *
+     * **One copy, because two would drift into two answers for one token** — and the
+     * one that drifted would be the read, which is written second and tested less. The
+     * comparison order is [accept]'s and is load-bearing: everything wrong with a token
+     * answers [InviteNotFoundException] except the two the holder recovers from by
+     * asking their partner for the current link, and both of those are asked only
+     * AFTER the verifier matched, which is the whole of why saying them is safe
+     * (notes/2026-08-22-decision-the-superseded-link-speaks.md).
+     */
+    private fun liveInviteFor(
+        token: String,
+        now: Instant,
+    ): WeddingInvite {
+        val presented = InviteToken.parse(token) ?: throw InviteNotFoundException()
+        val invite = invites.findBySelector(presented.selector) ?: throw InviteNotFoundException()
+        // The gate: the selector is a public handle and this is the only thing between
+        // a guessed one and a stranger's ledger.
+        if (!presented.matches(invite.verifierHash)) throw InviteNotFoundException()
+        if (invite.wasSpent()) throw InviteNotFoundException()
+        if (invite.wasSuperseded()) throw InviteSupersededException()
+        if (invite.hasExpiredAt(now)) throw InviteExpiredException()
+        return invite
+    }
+
+    /**
      * 초대 수락 — **an UPDATE of one identified row**, because both seats exist from
      * the moment the wedding does (notes/2026-08-22-decision-the-couples-two-seats.md
      * §2). That is what makes "two people opened the same link" a lost update rather
@@ -121,14 +200,7 @@ internal class WeddingInviteService(
     ): WeddingResponse {
         weddingService.claimSoleSeat(callerId)
 
-        val presented = InviteToken.parse(request.token) ?: throw InviteNotFoundException()
-        val invite = invites.findBySelector(presented.selector) ?: throw InviteNotFoundException()
-        // The gate: the selector is a public handle and this is the only thing between
-        // a guessed one and a stranger's ledger.
-        if (!presented.matches(invite.verifierHash)) throw InviteNotFoundException()
-        if (invite.wasSpent()) throw InviteNotFoundException()
-        if (invite.wasSuperseded()) throw InviteSupersededException()
-        if (invite.hasExpiredAt(now)) throw InviteExpiredException()
+        val invite = liveInviteFor(request.token, now)
 
         val seat = seats.lockSeat(invite.seatId) ?: throw InviteNotFoundException()
         // A wedding the couple deleted keeps its seats — the partial indexes filter the

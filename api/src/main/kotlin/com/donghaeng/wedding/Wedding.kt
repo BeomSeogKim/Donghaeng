@@ -22,6 +22,12 @@ import java.time.LocalDate
  * rather than left in place because a name column nothing reads is a name column
  * someone writes to.
  *
+ * **[name] is the WEDDING's name and not either person's** (added 2026-08-23, `#214`)
+ * — 범석 희주의 가을, free text the couple writes. The paragraph above still holds and
+ * the two are not in tension: what moved onto the seats was a person's name, and what
+ * arrived here is the screen's title, which the ledger renders in place of 원장
+ * (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+ *
  * **[createdBy] is a `Long`, not an `AppUser`.** A mapping would make this class
  * depend on `auth/`'s rows, which the architecture forbids; the foreign key still
  * exists in the database and nothing here needs to load the person.
@@ -60,6 +66,13 @@ internal class Wedding(
     val createdAt: Instant,
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant,
+    // 결혼식 이름 — free text the couple writes, NULL until they do and NULL again if
+    // they take it away (#214). Free text rather than a composition of the two seats'
+    // names: v1 records the partner's name only when they accept, so a composed name
+    // would be half a name for the whole span the ledger is used most
+    // (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+    @Column(name = "name", length = 100)
+    var name: String? = null,
     // 보증인원 — the VENUE's number, never ours, and nullable because a couple signs
     // up before booking one, and because a couple who has un-signed goes back to
     // having none: `PATCH /weddings/{weddingId}` sets it and clears it (#173).

@@ -19,21 +19,32 @@ import java.time.LocalDate
  * `Wedding` is `@DynamicUpdate` in the first place
  * (notes/2026-08-20-decision-row-concurrency-and-the-audit-trail.md).
  *
- * **The two members differ on `null` because the columns do.** 보증인원 has a real
+ * **The members differ on `null` because the columns do.** 보증인원 has a real
  * unset state — a couple who has not signed with a venue, or has un-signed — so
- * `null` clears it. A wedding always has a date, so [weddingDate] wears
- * [NotCleared] and `null` is a 400 rather than a `not null` violation arriving as a
- * masked 500.
+ * `null` clears it, and 결혼식 이름 is the same shape of answer: a wedding with no name
+ * is an ordinary wedding and a couple may take one back. A wedding always has a date,
+ * so [weddingDate] wears [NotCleared] and `null` is a 400 rather than a `not null`
+ * violation arriving as a masked 500.
  *
- * **The couple's names are not here.** After 2026-08-22 a name belongs to a
- * `wedding_party` seat and not to the wedding, so editing one is `#175` and not this
- * endpoint (notes/2026-08-22-decision-the-couples-two-seats.md).
+ * **The couple's names are not here — the WEDDING's is** (added 2026-08-23, `#214`).
+ * A person's name belongs to a `wedding_party` seat, so editing one is `#175` and not
+ * this endpoint (notes/2026-08-22-decision-the-couples-two-seats.md); [weddingName] is
+ * the screen's title and belongs to the row this endpoint writes.
  *
  * The `@Schema` overrides are the seam, not decoration: `Patch` is a sealed
  * hierarchy, and left alone springdoc would publish its cases to `web/` as the shape
  * of a wedding date.
  */
 data class UpdateWeddingRequest(
+    @field:WeddingName
+    @param:Schema(
+        implementation = String::class,
+        requiredMode = RequiredMode.NOT_REQUIRED,
+        nullable = true,
+        description = "결혼식 이름. Omit to leave it alone, send `null` to go back to having none",
+        example = "범석 희주의 가을",
+    )
+    val weddingName: Patch<String> = Patch.Absent,
     @field:NotCleared
     @field:StorableDate
     @param:Schema(

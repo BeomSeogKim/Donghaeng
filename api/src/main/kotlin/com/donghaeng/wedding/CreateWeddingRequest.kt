@@ -23,6 +23,14 @@ import java.time.LocalDate
  * building the ledger after the fact — and refusing one would be a domain policy no
  * record makes. [StorableDate] bounds it only where the column does.
  *
+ * **[weddingName] is the only optional member, and it is the WEDDING's name rather
+ * than anybody's** (added 2026-08-23, `#214`). Nullable AND defaulted, so omitting it
+ * and sending `null` mean the same thing — a wedding with no name is the ordinary
+ * state of one created in a hurry, and 설정 adds one later
+ * (notes/2026-08-23-decision-the-wedding-has-a-name.md). It carries [WeddingName]
+ * rather than [SeatName] because `#8`'s PATCH carries the same member inside a
+ * `Patch`, which a composed `@Size` cannot read — that file has the argument.
+ *
  * [SeatName] is the whole of the name rule — the `varchar(100)` it lands in, measured
  * as sent and before [WeddingService.create] trims it, and a refusal of a name the
  * trim would empty. It is one annotation rather than two written out here because
@@ -40,4 +48,11 @@ data class CreateWeddingRequest(
     @field:SeatName
     @param:Schema(description = "The caller's own name, as it should read on the ledger", example = "김신랑")
     val name: String,
+    @field:WeddingName
+    @param:Schema(
+        description = "결혼식 이름 — the couple's own words, at most 100 characters. Omitted or null, the wedding has none",
+        example = "범석 희주의 가을",
+        nullable = true,
+    )
+    val weddingName: String? = null,
 )

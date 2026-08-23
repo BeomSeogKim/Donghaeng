@@ -41,30 +41,12 @@ private const val MAX_LENGTH = 100
  * `"\u200b"`, `"\ufeff"` and `"\u00ad"` are stripped by no trim in either language and
  * would have landed as a seat labelled with nothing.
  *
- * **It walks CODE POINTS, not `Char`s, and that is load-bearing rather than pedantic.**
- * A supplementary-plane character is a surrogate PAIR, so a per-`Char` version reads two
- * `Cs` and calls the whole name invisible: 🙂 and CJK Ext B hanja — which do appear in
- * real names — were both refused by the first draft. Measured, not reasoned about.
- * `Character.isSpaceChar` is here beside `isWhitespace` for the mirror-image reason: the
- * `Character` predicate excludes U+00A0 where Kotlin's `Char.isWhitespace()` includes
- * it, so without it a name of one NBSP passes.
- *
- * **`Co` (private use) is refused deliberately.** Nothing guarantees it renders, and it
- * is not a character a couple types; a name we cannot draw is not a name they can read
- * on their own ledger.
- *
- * **`Cn` (unassigned) is NOT refused, and that is the same question answered the other
- * way.** `Cn` does not mean "assigned to nothing" — it means "not in THIS JVM's Unicode
- * tables", which is a fact about our runtime and not about the character. **JDK 21
- * carries Unicode 15.0, and CJK Extension I (U+2EBF0–U+2EE5D) arrived in 15.1**:
- * unified ideographs, so hanja, so name-bearing by definition. Measured on this build —
- * every Extension I code point reads `Cn` here while rendering on the phone that typed
- * it, and Extensions B through H read as letters. Including `Cn` would refuse a
- * legitimate 이름 whose only fault is being newer than our JDK, and it would get worse
- * the longer a runtime stays put — the failure gets *quieter* over time, not louder.
- * The cost of leaving it out is that a name of one never-assigned code point (U+0378)
- * is accepted; that is not something a couple types, and it is a far smaller wrong than
- * refusing a real surname.
+ * **The predicate itself lives in [VisibleCharacters]**, which is where its two
+ * measured implementation facts are written down — it walks code points rather than
+ * `Char`s, and it does not refuse `Cn`. It moved there on 2026-08-23 when
+ * [WeddingName] arrived needing the same rule: an annotation says which field is
+ * bound and what width it lands in, the predicate says what a name is, and one rule
+ * with two copies is what §4 of the record above exists to prevent.
  *
  * **[Size] stays a composed constraint and measures the value AS SENT**, which is a
  * bound the write point's `trim()` can only make slacker: trimming shortens, so a value
@@ -93,25 +75,5 @@ internal class SeatNameValidator : ConstraintValidator<SeatName, String> {
     override fun isValid(
         value: String?,
         context: ConstraintValidatorContext,
-    ): Boolean = value == null || value.codePoints().anyMatch(::isVisible)
-
-    private fun isVisible(codePoint: Int): Boolean =
-        !Character.isWhitespace(codePoint) &&
-            !Character.isSpaceChar(codePoint) &&
-            Character.getType(codePoint) !in INVISIBLE_CATEGORIES
-
-    private companion object {
-        /**
-         * Category C **without `Cn`** — see the KDoc above. `Cn` is the one member of the
-         * category that means "this JDK has not heard of it" rather than "this draws
-         * nothing", and on JDK 21 that includes CJK Extension I.
-         */
-        val INVISIBLE_CATEGORIES: Set<Int> =
-            setOf(
-                CharCategory.CONTROL,
-                CharCategory.FORMAT,
-                CharCategory.SURROGATE,
-                CharCategory.PRIVATE_USE,
-            ).map { it.value.toInt() }.toSet()
-    }
+    ): Boolean = value == null || VisibleCharacters.presentIn(value)
 }

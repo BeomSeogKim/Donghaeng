@@ -22,7 +22,9 @@ import org.springframework.web.bind.annotation.RestController
 /**
  * 파트너 초대의 두 끝 (`#181`, the backend half of `#9`) — and the two are deliberately
  * one controller, because reading them together is what makes the asymmetry visible:
- * **issuing is wedding-scoped and accepting cannot be.**
+ * **issuing is wedding-scoped and accepting cannot be.** [preview] joined them on
+ * 2026-08-23 (`#214`) on the accepting side, where it inherits every one of that
+ * side's properties.
  */
 @RestController
 class WeddingInviteController internal constructor(
@@ -79,9 +81,53 @@ class WeddingInviteController internal constructor(
     ): IssuedInviteResponse = invites.issue(wedding)
 
     /**
-     * 초대 수락 — **the third endpoint in the product that is not scoped to a wedding**,
-     * after `POST /weddings` and `GET /weddings`, and the only one that could not be:
-     * the caller holds no seat yet, so `user → seat → wedding` has nothing to resolve.
+     * 초대 수락 화면의 미리보기 (`#214`) — 결혼식 이름, 예식일, 초대한 사람, and nothing
+     * else. **A fourth scopeless endpoint**, named in `ScopelessWeddingEndpointTest`
+     * with its reason; the token stands in for the scope exactly as it does for
+     * [join], because the caller holds no seat yet.
+     *
+     * **A POST that reads nothing back into the database and writes nothing.** The
+     * method is the token's doing rather than the operation's: a token may not travel
+     * in a path or a query string, so it travels in a body, and a body means POST
+     * (notes/2026-08-22-decision-the-invite-link.md §2). The `consumes` that comes with
+     * it forces the CORS preflight that stands in for a CSRF token in v1.
+     *
+     * **It is authenticated, like [join] and for the same two reasons.** Under
+     * `permitAll` the session is the only thing in front of an endpoint that takes no
+     * scope, and this endpoint answers with somebody else's wedding — so an anonymous
+     * request is refused before the body is read. It also keeps the whole invite flow
+     * one flow: the person signs in first, and the screen shows them what they are
+     * about to accept.
+     */
+    @Operation(operationId = "previewInvite", summary = "What an invite link opens — before taking the seat")
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "The wedding the token would join, named but not identified."),
+        ApiResponse(
+            responseCode = "401",
+            description = "No session, or an expired or revoked one.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "404",
+            description = "The token is not usable — unknown, wrong, already spent, replaced by a reissue, or expired.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "409",
+            description = "The caller already belongs to a wedding, or the seat has been taken.",
+            content = [Content(schema = Schema(implementation = ProblemDetail::class))],
+        ),
+    )
+    @PostMapping("/weddings/join/preview", consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun preview(
+        @CurrentUser caller: AuthenticatedUser,
+        @Valid @RequestBody request: InvitePreviewRequest,
+    ): InvitePreviewResponse = invites.preview(caller.id, request)
+
+    /**
+     * 초대 수락 — **not scoped to a wedding**, like `POST /weddings`, `GET /weddings`
+     * and [preview], and the first of them that could not be: the caller holds no seat
+     * yet, so `user → seat → wedding` has nothing to resolve.
      * The exemption is written down in `ScopelessWeddingEndpointTest` rather than
      * inferred from this path lacking a `{weddingId}`.
      *

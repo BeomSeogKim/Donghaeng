@@ -100,7 +100,8 @@ internal class WeddingListContractTest : ApiFixture() {
         assertThat(entry["weddingDate"].asText()).isEqualTo("2026-10-10")
         assertThat(entry["seats"].map { it["side"].asText() }).containsExactly("GROOM", "BRIDE")
         assertThat(entry["seats"][0]["name"].asText()).isEqualTo("김신랑")
-        assertThat(entry.fieldNames().asSequence().toList()).containsExactlyInAnyOrder("id", "weddingDate", "seats")
+        assertThat(entry.fieldNames().asSequence().toList())
+            .containsExactlyInAnyOrder("id", "weddingName", "weddingDate", "seats")
     }
 
     @Test
