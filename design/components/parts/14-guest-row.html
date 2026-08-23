@@ -1,115 +1,179 @@
-<!-- @dsCard group="Components" name="05 GuestRow" subtitle="모바일 카드 / PC 표 행 — 구조가 갈리는 유일한 컴포넌트" width="820" height="640" -->
+<!-- @dsCard group="Components" name="05 GuestRow" subtitle="모바일 카드 / PC 표 행 — 구조가 갈리는 유일한 컴포넌트" width="880" height="720" -->
 <style>
-.gr-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: var(--dh-space-5); align-items: start; }
+/* 2026-08-23 — 형태 규정(notes/2026-08-23-decision-the-form-language.md).
+   가로 행선이 없습니다. 분리는 44px 높이와 이름 17/500 대 장치 13/400의
+   굵기 차가 집니다. 걷어낸 가로선을 대신하는 것은 열 묶음 사이의 세로 괘선입니다. */
+.gr-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: var(--dh-space-6); align-items: start; }
 
-/* 모바일 — 60px 카드 행 */
-.gr-m { border: 1px solid var(--dh-line); background: var(--dh-surface); max-width: 22rem; }
-.gr-m .row {
-  display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--dh-space-3);
-  min-height: var(--dh-row-h-mobile);
-  padding: var(--dh-space-2) var(--dh-gutter-mobile);
-  border-bottom: 1px solid var(--dh-line);
-}
-.gr-m .row:last-child { border-bottom: 0; }
-.gr-m .row[aria-selected="true"] { background: var(--dh-primary-soft); }
-.gr-name { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); line-height: var(--dh-leading-snug); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gr-meta { display: flex; align-items: center; gap: 6px; font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: var(--dh-leading-snug); }
+.slab { border: var(--dh-rim-w) solid var(--dh-gold); background: var(--dh-surface); }
 
-/* PC — 44px 표 행 */
-.gr-d { border: 1px solid var(--dh-line); background: var(--dh-surface); overflow-x: auto; }
-.gr-d table { border-collapse: collapse; width: 100%; font-size: var(--dh-text-body); }
-.gr-d th {
-  text-align: left; font-size: var(--dh-text-label); font-weight: var(--dh-weight-semibold);
-  letter-spacing: var(--dh-tracking-label); text-transform: uppercase; color: var(--dh-ink-faint);
-  padding: var(--dh-space-2) var(--dh-space-4); border-bottom: 1px solid var(--dh-line-strong); white-space: nowrap;
-}
-.gr-d td { height: var(--dh-row-h-desktop); padding: 0 var(--dh-space-4); border-bottom: 1px solid var(--dh-line); white-space: nowrap; }
-.gr-d tr:last-child td { border-bottom: 0; }
-.gr-d .muted { color: var(--dh-ink-muted); }
-.gr-d .n { font-variant-numeric: tabular-nums; text-align: right; }
+/* 도구 — 필터는 칩이 아니라 밑줄 가진 단어 */
+.tools { display: flex; align-items: flex-end; gap: var(--dh-space-4); padding: var(--dh-space-3) var(--dh-gutter-mobile) 0; }
+.fx { font-family: inherit; font-size: var(--dh-text-meta); border: 0; background: transparent; cursor: pointer;
+  padding: 0 0 5px; color: var(--dh-ink-muted); border-bottom: var(--dh-mark-w) solid transparent; }
+.fx[aria-pressed="true"] { color: var(--dh-primary); font-weight: var(--dh-weight-semibold); border-bottom-color: var(--dh-primary); }
 
-.tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: var(--dh-radius-chip); font-size: var(--dh-text-meta); background: var(--dh-surface-sunken); color: var(--dh-ink-muted); white-space: nowrap; }
-.tag-side { background: transparent; border: 1px solid var(--dh-line-strong); }
+/* 머리글 — 표에서 유일하게 남은 가로선 */
+.head { display: flex; align-items: center; height: var(--dh-row-h-head);
+  margin: var(--dh-space-3) var(--dh-gutter-mobile) 0;
+  border-bottom: 1px solid var(--dh-line-strong);
+  font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); color: var(--dh-ink-muted); }
 
-.att { font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); line-height: 1; min-width: 3.5rem; min-height: 2.25rem; padding: 0 var(--dh-space-3); border-radius: var(--dh-radius-chip); border: 1px solid transparent; cursor: pointer; }
-.att[data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
-.att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
-.att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
-.att-sm { min-height: 1.75rem; min-width: 3rem; font-size: var(--dh-text-meta); }
-.tools { display: flex; gap: var(--dh-space-2); align-items: center; padding: var(--dh-space-2) var(--dh-gutter-mobile); border-bottom: 1px solid var(--dh-line); }
-.tools .s { flex: 1; min-width: 0; display: flex; align-items: center; min-height: 2rem; padding: 0 var(--dh-space-2); border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-chip); font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
-.tools .f { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-height: 2rem; padding: 0 var(--dh-space-2); border-radius: var(--dh-radius-chip); background: var(--dh-surface-sunken); color: var(--dh-ink-muted); border: 0; white-space: nowrap; }
-.tools .f[aria-pressed="true"] { background: var(--dh-primary); color: var(--dh-ink-on-accent); }
+/* 모바일 — 60px 두 줄 행 */
+.gr-m .row { display: flex; align-items: center; min-height: var(--dh-row-h-mobile);
+  padding: 0 var(--dh-gutter-mobile); border-bottom: var(--dh-rule-row) solid var(--dh-line); }
+.gr-m .caret { width: 1.25rem; flex-shrink: 0; color: var(--dh-ink-faint); font-size: 11px; }
+.gr-name { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); letter-spacing: var(--dh-tracking-name);
+  line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-meta { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); line-height: 1.4; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* PC — 44px 표 행, 열 간격 32 · 16 · 24 */
+.gr-d .tr { display: flex; align-items: center; height: var(--dh-row-h-desktop); padding-right: var(--dh-gutter-mobile); }
+.gr-d .tick { width: 3px; height: 18px; flex-shrink: 0; background: transparent; }
+.gr-d .tr:hover .tick { background: var(--dh-primary); }
+.gr-d .tr:hover .nm { font-weight: var(--dh-weight-semibold); }
+.gr-d .caret { width: 1.25rem; flex-shrink: 0; text-align: center; color: var(--dh-ink-faint); font-size: 11px; }
+.gr-d .nm { width: 6.5rem; font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); letter-spacing: var(--dh-tracking-name);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-d .dev { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-d .faint { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gr-d .side { width: 2.75rem; }
+.gr-d .grp { width: 4.5rem; }
+.gr-d .size { width: 2.5rem; text-align: right; font-size: var(--dh-text-lead); font-variant-numeric: tabular-nums; }
+
+/* 세 가지 열 간격. 균등하면 스프레드시트입니다. */
+.g-name { width: var(--dh-col-gap-name); flex-shrink: 0; }
+.g-app { width: var(--dh-col-gap-apparatus); flex-shrink: 0; }
+.g-fig { width: var(--dh-col-gap-figure); flex-shrink: 0; }
+.rule { align-self: stretch; width: var(--dh-rule-column); background: var(--dh-line); flex-shrink: 0; }
+
+.st { width: var(--dh-col-w-att); flex-shrink: 0; border: 0; background: transparent; padding: 0;
+  font-family: inherit; font-size: var(--dh-text-meta); text-align: right; cursor: pointer; font-variant-numeric: tabular-nums; }
+.st[data-s="yes"] { color: var(--dh-att-yes-fg); font-weight: var(--dh-weight-semibold); }
+.st[data-s="no"] { color: var(--dh-ink-muted); }
+.st[data-s="mixed"] { color: var(--dh-ink); font-weight: var(--dh-weight-semibold); }
+
+/* 펼친 동반 행 — 판보다 한 단 내려간 면 */
+.member { display: flex; align-items: center; height: 2.375rem; padding: 0 var(--dh-gutter-mobile); background: var(--dh-ground); }
+.member .who { flex: 1; min-width: 0; font-size: var(--dh-text-body); color: var(--dh-ink-muted); }
+.member .who.self { color: var(--dh-ink); }
 </style>
 
 <div class="pv-grid">
   <div class="gr-wrap">
     <div class="pv-set">
-      <div class="pv-label">모바일 — 60px · 이름 줄 + 메타 줄</div>
-      <div class="gr-m">
+      <div class="pv-label">모바일 — 60px · 이름 줄 + 장치 줄</div>
+      <div class="slab gr-m" style="max-width: 22rem">
         <div class="tools">
-          <span class="s">이름 검색</span>
-          <button class="f" type="button" aria-pressed="true">신부</button>
-          <button class="f" type="button" aria-pressed="false">미정</button>
+          <button class="fx" type="button" aria-pressed="true">신랑</button>
+          <button class="fx" type="button" aria-pressed="false">신부</button>
+          <span style="flex:1"></span>
+          <button class="fx" type="button" aria-pressed="false">참석</button>
+          <button class="fx" type="button" aria-pressed="false">불참</button>
+        </div>
+        <div class="head">
+          <span style="width:1.25rem"></span>
+          <span style="flex:1">이름</span>
+          <span style="width:2.25rem;text-align:right">인원</span>
+          <span class="g-fig"></span>
+          <span style="width:var(--dh-col-w-att);text-align:right">참석</span>
         </div>
         <div class="row">
-          <div>
-            <div class="gr-name">김영수</div>
-            <div class="gr-meta"><span class="tag tag-side">신랑</span><span class="tag">혼주 손님</span><span>· <span style="font-variant-numeric:tabular-nums">2</span>명</span></div>
-          </div>
-          <button class="att" data-s="yes" type="button">참석</button>
-        </div>
-        <div class="row" aria-selected="true">
-          <div>
-            <div class="gr-name">박지민</div>
-            <div class="gr-meta"><span class="tag tag-side">신부</span><span class="tag">직장동료</span><span>· <span style="font-variant-numeric:tabular-nums">1</span>명</span></div>
-          </div>
-          <button class="att" data-s="maybe" type="button">미정</button>
+          <span class="caret"></span>
+          <span style="min-width:0;flex:1">
+            <span class="gr-name" style="display:block">김영수</span>
+            <span class="gr-meta" style="display:block">신랑 · 혼주 손님 · 아버지 직장 · 2명</span>
+          </span>
+          <span style="width:2.25rem;text-align:right;font-size:var(--dh-text-lead);font-variant-numeric:tabular-nums">2</span>
+          <span class="g-fig"></span>
+          <button class="st" data-s="yes" type="button">참석</button>
         </div>
         <div class="row">
-          <div>
-            <div class="gr-name">이서연</div>
-            <div class="gr-meta"><span class="tag tag-side">신부</span><span class="tag">가족</span><span>· <span style="font-variant-numeric:tabular-nums">4</span>명</span></div>
-          </div>
-          <button class="att" data-s="yes" type="button">참석</button>
+          <span class="caret">▸</span>
+          <span style="min-width:0;flex:1">
+            <span class="gr-name" style="display:block">박영희</span>
+            <span class="gr-meta" style="display:block">신랑 · 혼주 손님 · 어머니 계모임 · 4명</span>
+          </span>
+          <span style="width:2.25rem;text-align:right;font-size:var(--dh-text-lead);font-variant-numeric:tabular-nums">4</span>
+          <span class="g-fig"></span>
+          <button class="st" data-s="mixed" type="button">3 / 4</button>
         </div>
         <div class="row">
-          <div>
-            <div class="gr-name">윤채원</div>
-            <div class="gr-meta"><span class="tag tag-side">신부</span><span class="tag">친척</span><span>· <span style="font-variant-numeric:tabular-nums">2</span>명</span></div>
-          </div>
-          <button class="att" data-s="no" type="button">불참</button>
+          <span class="caret"></span>
+          <span style="min-width:0;flex:1">
+            <span class="gr-name" style="display:block">윤채원</span>
+            <span class="gr-meta" style="display:block">신부 · 친척 · 2명</span>
+          </span>
+          <span style="width:2.25rem;text-align:right;font-size:var(--dh-text-lead);font-variant-numeric:tabular-nums">2</span>
+          <span class="g-fig"></span>
+          <button class="st" data-s="no" type="button">불참</button>
         </div>
       </div>
     </div>
 
     <div class="pv-set">
-      <div class="pv-label">PC — 44px 표 행</div>
-      <div class="gr-d">
-        <table>
-          <thead>
-            <tr><th>이름</th><th>측</th><th>분류</th><th class="n">인원</th><th>참석</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>김영수</td><td class="muted">신랑</td><td class="muted">혼주 손님</td><td class="n">2</td><td><button class="att att-sm" data-s="yes" type="button">참석</button></td></tr>
-            <tr><td>박지민</td><td class="muted">신부</td><td class="muted">직장동료</td><td class="n">1</td><td><button class="att att-sm" data-s="maybe" type="button">미정</button></td></tr>
-            <tr><td>이서연</td><td class="muted">신부</td><td class="muted">가족</td><td class="n">4</td><td><button class="att att-sm" data-s="yes" type="button">참석</button></td></tr>
-            <tr><td>윤채원</td><td class="muted">신부</td><td class="muted">친척</td><td class="n">2</td><td><button class="att att-sm" data-s="no" type="button">불참</button></td></tr>
-          </tbody>
-        </table>
+      <div class="pv-label">PC — 44px 표 행 · 열 간격 32 · 16 · 24</div>
+      <div class="slab gr-d">
+        <div class="head">
+          <span style="width:3px"></span><span style="width:1.25rem"></span>
+          <span style="width:6.5rem">이름</span><span class="g-name"></span>
+          <span style="width:2.75rem">측</span><span class="g-app"></span>
+          <span style="width:4.5rem">그룹</span><span class="g-app"></span><span class="rule"></span><span class="g-app"></span>
+          <span style="flex:1;min-width:0">그룹 라벨</span><span class="g-fig"></span><span class="rule"></span><span class="g-fig"></span>
+          <span style="width:2.5rem;text-align:right">인원</span><span class="g-fig"></span>
+          <span style="width:var(--dh-col-w-att);text-align:right">참석</span>
+        </div>
+        <div class="tr">
+          <span class="tick"></span><span class="caret"></span>
+          <span class="nm">김영수</span><span class="g-name"></span>
+          <span class="dev side">신랑</span><span class="g-app"></span>
+          <span class="dev grp">혼주 손님</span><span class="g-app"></span><span class="rule"></span><span class="g-app"></span>
+          <span class="faint">아버지 직장</span><span class="g-fig"></span><span class="rule"></span><span class="g-fig"></span>
+          <span class="size">2</span><span class="g-fig"></span>
+          <button class="st" data-s="yes" type="button">참석</button>
+        </div>
+        <div class="tr">
+          <span class="tick"></span><span class="caret">▾</span>
+          <span class="nm">박영희</span><span class="g-name"></span>
+          <span class="dev side">신랑</span><span class="g-app"></span>
+          <span class="dev grp">혼주 손님</span><span class="g-app"></span><span class="rule"></span><span class="g-app"></span>
+          <span class="faint">어머니 계모임</span><span class="g-fig"></span><span class="rule"></span><span class="g-fig"></span>
+          <span class="size">4</span><span class="g-fig"></span>
+          <button class="st" data-s="mixed" type="button">3 / 4</button>
+        </div>
+        <div class="member"><span class="who self">박영희</span><button class="st" data-s="yes" type="button">참석</button></div>
+        <div class="member"><span class="who">박영희 동반 1</span><button class="st" data-s="yes" type="button">참석</button></div>
+        <div class="member"><span class="who">박영희 동반 2</span><button class="st" data-s="yes" type="button">참석</button></div>
+        <div class="member"><span class="who">박영희 동반 3</span><button class="st" data-s="no" type="button">불참</button></div>
+        <div class="tr">
+          <span class="tick"></span><span class="caret"></span>
+          <span class="nm">윤채원</span><span class="g-name"></span>
+          <span class="dev side">신부</span><span class="g-app"></span>
+          <span class="dev grp">친척</span><span class="g-app"></span><span class="rule"></span><span class="g-app"></span>
+          <span class="faint"></span><span class="g-fig"></span><span class="rule"></span><span class="g-fig"></span>
+          <span class="size">2</span><span class="g-fig"></span>
+          <button class="st" data-s="no" type="button">불참</button>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="pv-note">
+    <b>가로 행선이 없습니다.</b> 44px 높이와 이름 500 대 장치 400의 굵기 차가 분리를 집니다.
+    대신 열 묶음 사이에 세로 괘선 1px이 섭니다 — 조선 장부의 괘선이고,
+    이 시스템에서 이름이 아니라 <b>형태가</b> 한국적인 첫 번째 것입니다.
+  </div>
+  <div class="pv-note">
     <b>구조가 갈리는 유일한 컴포넌트입니다.</b> 2026-07-30에 정한 대로, 화면을 축소해서 맞추는 게 아니라
-    PC는 표·모바일은 카드 목록으로 <b>구조 자체를 나눕니다</b>. 다만 라우트와 데이터 계층은 하나로 공유합니다 —
+    PC는 표·모바일은 두 줄 행으로 <b>구조 자체를 나눕니다</b>. 다만 라우트와 데이터 계층은 하나로 공유합니다 —
     잎이 둘일 뿐 앱이 둘은 아닙니다.
   </div>
   <div class="pv-note">
-    <b>목록 위 순서는 숫자 → 도구 → 목록입니다.</b> 부부의 실제 순서고요 —
-    숫자를 보고, 사람을 찾고, 탭합니다. 검색이 필터보다 넓은 자리를 차지하는 건
-    <b>찾는 일이 좁히는 일보다 자주</b> 일어나기 때문입니다.
+    <b>펼친 동반 행은 접힌 팀에만 있습니다</b>(<code>#213</code>·<code>#211</code>).
+    일부만 오는 팀은 <b>3 / 4</b>로 읽히고, 눌러도 참석·불참을 고르지 않고 줄이 펼쳐집니다 —
+    애매하면 추측하지 않습니다.
   </div>
   <div class="pv-note">
     <b>800행에서는 가상 스크롤이 필요합니다.</b> 대형 호텔 예식이면 하객이 800명까지 갑니다.

@@ -101,14 +101,16 @@ export function AddGuestSheet({
   const failure = add.isError ? failureMessage(add.error) : null
 
   return (
-    // The one thing in this product that floats, so the one place the overlay
-    // shadow and the sheet radius are used. It rises from the bottom edge on a
-    // phone and is centred on a laptop.
+    // The one thing in this product that still floats, so the one place the
+    // overlay shadow is used. It rises from the bottom edge on a phone and is
+    // centred on a laptop. Its CORNERS ARE SQUARE as of 2026-08-23 — radius is
+    // 0 and `--dh-radius-sheet` is deleted with the rest — and `#216` is where
+    // it stops floating at all and becomes the slab widening.
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-scrim md:items-center">
       <div
         aria-labelledby={TITLE_ID}
         aria-modal="true"
-        className="flex max-h-[92dvh] w-full max-w-96 flex-col rounded-t-sheet border border-line bg-surface shadow-overlay md:max-h-[88dvh] md:rounded-sheet"
+        className="flex max-h-[92dvh] w-full max-w-96 flex-col border border-line bg-surface shadow-overlay md:max-h-[88dvh]"
         onKeyDown={(event) => {
           // Escape closes it. The event reaches here from whatever inside the
           // sheet has focus, and something always does — the name field takes
@@ -117,10 +119,7 @@ export function AddGuestSheet({
         }}
         role="dialog"
       >
-        <div
-          aria-hidden="true"
-          className="mx-auto mt-2 h-1 w-9 rounded-chip bg-line-strong"
-        />
+        <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 bg-line-strong" />
         <div className="border-b border-line px-4 py-3">
           <h2
             className="font-display text-title leading-tight tracking-display"

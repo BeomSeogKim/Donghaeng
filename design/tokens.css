@@ -36,7 +36,17 @@
   --dh-font-display:
     "RIDIBatang", var(--dh-font-sans);
 
-  --dh-text-display: 2.5rem;    /* 40px — the headcount, and nothing else      */
+  /* THREE VOICES PER SCREEN AND NEVER A FOURTH: the headcount (display,
+   * the only one), the name (17/500), the apparatus (12–13/400). The
+   * figure grew into the 자적 굽 on 2026-08-23 — it is the face of the
+   * 굽 rather than a KPI beside the list — and the ledger's own 22px
+   * screen title was deleted to pay for it: a second display face makes
+   * the headcount look smaller and tips the screen toward stationery.
+   * `--dh-text-title` survives for 설정 and 마이페이지, which are trips a
+   * couple takes and comes back from and so still say where they are. */
+  --dh-text-display: 4rem;      /* 64px — the headcount, and nothing else      */
+  --dh-text-display-compact: 3.25rem; /* 52px — the same figure, on a phone    */
+  --dh-text-face: 2.125rem;     /* 34px — 자적 面 위의 표제, 진입 화면에만       */
   --dh-text-title: 1.375rem;    /* 22px — screen title                         */
   --dh-text-lead: 1.0625rem;    /* 17px — guest name, primary row content      */
   --dh-text-body: 0.9375rem;    /* 15px — body floor                           */
@@ -53,6 +63,8 @@
   --dh-weight-bold: 700;
 
   --dh-tracking-display: -0.02em;
+  --dh-tracking-figure: -0.03em; /* the headcount only — 64px needs more than 22px */
+  --dh-tracking-name: -0.01em;   /* the name voice, 17/500                         */
   --dh-tracking-label: 0.06em;
 
   /* Korean has no italic tradition; a synthesised oblique looks broken.
@@ -141,14 +153,71 @@
   --dh-gutter-desktop: var(--dh-space-6);
 
   /* ────────────────────────────────────────────────────────────
-   * Radius
-   * Ledger rows are FLUSH — edge to edge, separated by hairlines.
-   * Radius belongs only to things that are genuinely detached.
+   * Radius — and there is only one value, which is why the family is
+   * still here rather than deleted outright: `--dh-radius-control: 0`
+   * says a control's corner is square ON PURPOSE, where no token at all
+   * would say only that nobody had decided.
+   *
+   * 8px was Tailwind's default and never this system's; 999px was a pill,
+   * and the pill was 62% of a 44px row repeated 400 times — the one thing
+   * that made 원장 read as an issue tracker. Both are deleted, along with
+   * the 16px sheet: the phone's 하객 추가 panel is the slab's own square
+   * edge under a gold 구연, not a card floating over it.
+   * (notes/2026-08-23-decision-the-form-language.md)
    * ──────────────────────────────────────────────────────────── */
   --dh-radius-flush: 0;
-  --dh-radius-control: 0.5rem;
-  --dh-radius-chip: 999px;
-  --dh-radius-sheet: 1rem;
+  --dh-radius-control: 0;
+
+  /* ────────────────────────────────────────────────────────────
+   * Form — 기물 (器物)
+   *
+   * Added 2026-08-23. Until then this file was a system in colour and in
+   * meaning and a mood board in FORM: the only shape it forced was
+   * `8 / 1 / 999`, which is Tailwind's fingerprint rather than ours, so
+   * every screen drawn from it came out an empty SaaS however much the
+   * type grew. These are the values that were missing, and most of them
+   * are a deletion written down as a number.
+   * (notes/2026-08-23-decision-the-form-language.md)
+   *
+   * The screen is an object: a 백자 slab on a 보자기 ground, its outer
+   * edge a gold 구연, its 굽 the 자적 面 the headcount lives in.
+   * ──────────────────────────────────────────────────────────── */
+
+  /* Gold's three jobs, and gold has no fourth. Each one has AREA — a gold
+   * hairline laid over a beige hairline makes gold the beige line's
+   * ornament, which is what these replace. Measured 2026-08-23: gold's
+   * decorative area outweighed its data by more than 2:1. */
+  --dh-rim-w: 2px;              /* 구연 — the slab's outer edge, one per screen */
+  --dh-seal-h: 2px;             /* 인장 — the rule under the wordmark          */
+  --dh-meter-h: 0.625rem;       /* 기준선 — 10px, the face filling toward 보증 */
+
+  /* The ledger's ruling. A Joseon ledger separates COLUMNS and not rows,
+   * and this is the first form in the system that is Korean rather than
+   * named Korean. The row rule is 0 — that is the deletion, and it is a
+   * value so that a row drawn tomorrow has to overrule it rather than
+   * merely forget it. 44px of height and 17px/500 against 13px/400 are
+   * what separate instead. */
+  --dh-rule-column: 1px;        /* 세로 괘선, painted --dh-line                */
+  --dh-rule-row: 0;             /* 가로 행선 — none, and that is the rule      */
+
+  /* 자적's own 2px, which is the same thickness as gold's and a different
+   * job: it MARKS — the chosen filter's underline, a focused field's
+   * border. Three names for two values is on purpose. A token names a
+   * job, not a number, which is the first rule in this file. */
+  --dh-mark-w: 2px;
+
+  /* Column gaps are UNEVEN, and evenly spaced columns are a spreadsheet.
+   * Named for the join they open, because the sequence 32 · 16 · 24 means
+   * nothing without knowing which is which. */
+  --dh-col-gap-name: 2rem;      /* 32px — after the name, the widest join     */
+  --dh-col-gap-apparatus: 1rem; /* 16px — between 측 · 그룹 · 라벨             */
+  --dh-col-gap-figure: 1.5rem;  /* 24px — around the 괘선 and before a figure */
+
+  /* 참석 is a WORD IN A COLUMN, never a badge, so the column has a width
+   * and the word does not have a pill. The tap target is the whole row —
+   * that is what makes the badge unnecessary rather than merely smaller. */
+  --dh-col-w-att: 3rem;         /* 48px                                       */
+  --dh-row-h-head: 1.875rem;    /* 30px — the column headings                 */
 
   /* One shadow, for overlays only. Instruments do not float. */
   --dh-shadow-overlay: 0 8px 32px -8px rgb(36 31 26 / 0.24);
@@ -222,6 +291,17 @@
 /* ────────────────────────────────────────────────────────────
  * Base rules that are part of the system, not of any component
  * ──────────────────────────────────────────────────────────── */
+
+/* Korean breaks at the SYLLABLE by default, so a browser will happily
+ * split 마지막 across two lines. It is legal and it looks cheap, and it
+ * was visible on the very first screen this system drew properly — the
+ * one the founder had already rejected twice for not reading premium.
+ * `keep-all` breaks at spaces instead, which is what Korean typesetting
+ * does. Set once, on the root, because there is no screen it is wrong
+ * for; a call site that genuinely needs the default says so itself. */
+:root {
+  word-break: keep-all;
+}
 
 /* Every digit that can change in place is tabular. A headcount whose
  * width shifts as it counts reads as unstable, and this product's

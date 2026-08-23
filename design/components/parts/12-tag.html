@@ -1,24 +1,38 @@
-<!-- @dsCard group="Components" name="03 Tag" subtitle="7개 고정 분류 + 자유 라벨 · 신랑/신부측 · 필터 칩" width="720" height="560" -->
+<!-- @dsCard group="Components" name="03 Tag" subtitle="열 안의 단어 — 7개 고정 분류 · 측 · 자유 라벨 · 필터" width="720" height="620" -->
 <style>
+/* 2026-08-23: 알약이 삭제되었습니다. 태그는 채운 캡슐이 아니라 열 안의 단어이고,
+   구분은 배경이 아니라 굵기와 먹의 농도가 집니다.
+   (notes/2026-08-23-decision-the-form-language.md) */
 .tag {
   display: inline-flex; align-items: center;
-  padding: 2px 8px;
-  border-radius: var(--dh-radius-chip);
   font-size: var(--dh-text-meta);
   line-height: 1.45;
-  background: var(--dh-surface-sunken);
   color: var(--dh-ink-muted);
   white-space: nowrap;
 }
-.tag-side { background: transparent; border: 1px solid var(--dh-line-strong); }
-.tag-free { background: transparent; color: var(--dh-ink-faint); padding-left: 0; }
-.tag-flag { background: var(--dh-attention-soft); color: var(--dh-attention); }
-.filter { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
-  min-height: 2rem; padding: 0 var(--dh-space-3); border-radius: var(--dh-radius-chip);
-  background: var(--dh-surface-sunken); color: var(--dh-ink-muted);
-  border: 1px solid transparent; cursor: pointer; }
-.filter[aria-pressed="true"] { background: var(--dh-primary); color: var(--dh-ink-on-accent); }
-.filter:hover { border-color: var(--dh-line-strong); }
+.tag-free { color: var(--dh-ink-faint); }
+.tag-flag { color: var(--dh-attention); font-weight: var(--dh-weight-semibold); }
+
+/* 열 — 태그가 실제로 사는 자리. 사이를 가르는 것은 세로 괘선입니다. */
+.cols { display: flex; align-items: center; height: var(--dh-row-h-desktop); }
+.cols .nm { width: 7rem; font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); letter-spacing: var(--dh-tracking-name); }
+.cols .g-name { width: var(--dh-col-gap-name); flex-shrink: 0; }
+.cols .g-app { width: var(--dh-col-gap-apparatus); flex-shrink: 0; }
+.cols .g-fig { width: var(--dh-col-gap-figure); flex-shrink: 0; }
+.cols .rule { align-self: stretch; width: var(--dh-rule-column); background: var(--dh-line); flex-shrink: 0; }
+.cols .side { width: 3.25rem; }
+.cols .grp { width: 5.25rem; }
+
+/* 필터 — 같은 단어, 상태를 가짐. 선택은 채움이 아니라 자적 2px 밑줄입니다. */
+.fx {
+  font-family: inherit; font-size: var(--dh-text-meta);
+  border: 0; background: transparent; cursor: pointer;
+  padding: 0 0 5px; color: var(--dh-ink-muted);
+  border-bottom: var(--dh-mark-w) solid transparent;
+}
+.fx:hover { color: var(--dh-ink); }
+.fx[aria-pressed="true"] { color: var(--dh-primary); font-weight: var(--dh-weight-semibold); border-bottom-color: var(--dh-primary); }
+.fx-row { display: flex; gap: var(--dh-space-4); align-items: flex-end; }
 </style>
 
 <div class="pv-grid">
@@ -36,21 +50,24 @@
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">측 — 테두리로 구분, 채우지 않음</div>
-    <div class="pv-row">
-      <span class="tag tag-side">신랑</span>
-      <span class="tag tag-side">신부</span>
+    <div class="pv-label">행 안에서 — 측 · 그룹 · 자유 라벨은 각자의 열에 산다</div>
+    <div class="pv-stage" style="padding: 0 var(--dh-space-4)">
+      <div class="cols">
+        <span class="nm">김영수</span><span class="g-name"></span>
+        <span class="tag side">신랑</span><span class="g-app"></span>
+        <span class="tag grp">혼주 손님</span><span class="g-app"></span><span class="rule"></span><span class="g-app"></span>
+        <span class="tag tag-free">아버지 직장</span>
+      </div>
+      <div class="cols">
+        <span class="nm">박지민</span><span class="g-name"></span>
+        <span class="tag side">신부</span><span class="g-app"></span>
+        <span class="tag grp">직장동료</span><span class="g-app"></span><span class="rule"></span><span class="g-app"></span>
+        <span class="tag tag-free">현 직장 팀</span>
+      </div>
     </div>
-  </div>
-
-  <div class="pv-set">
-    <div class="pv-label">고정 분류 + 자유 라벨</div>
-    <div class="pv-row">
-      <span class="tag">친구</span><span class="tag-free">대학교 동아리 친구들</span>
-    </div>
-    <div class="pv-row">
-      <span class="tag">가족</span><span class="tag-free">외조부모</span>
-    </div>
+    <p class="pv-note">테두리도 채움도 없습니다. <b>이름 17/500 대 장치 13/400</b>의 굵기 차가
+      구분을 지고, 열 묶음 사이만 세로 괘선 1px이 가릅니다. 열 간격은 32 · 16 · 24로
+      균등하지 않습니다 — 균등하면 스프레드시트입니다.</p>
   </div>
 
   <div class="pv-set">
@@ -62,18 +79,20 @@
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">필터 칩 — 같은 모양, 상태를 가짐</div>
-    <div class="pv-row">
-      <button class="filter" type="button" aria-pressed="true">신부</button>
-      <button class="filter" type="button" aria-pressed="false">신랑</button>
-      <button class="filter" type="button" aria-pressed="true">미정</button>
-      <button class="filter" type="button" aria-pressed="false">불참</button>
+    <div class="pv-label">필터 — 같은 단어, 상태를 가짐</div>
+    <div class="fx-row">
+      <button class="fx" type="button" aria-pressed="true">신랑</button>
+      <button class="fx" type="button" aria-pressed="false">신부</button>
+      <span style="width: var(--dh-space-6)"></span>
+      <button class="fx" type="button" aria-pressed="false">참석</button>
+      <button class="fx" type="button" aria-pressed="false">불참</button>
     </div>
     <p class="pv-note"><b>필터는 측과 참석 상태 둘뿐입니다.</b> 그룹 필터는 넣지 않습니다 —
       그룹은 <b>집계로 읽는 것</b>이지 목록을 좁히는 축이 아닙니다. 그룹별 숫자는 PC 원장의
       집계 레일에서 봅니다.</p>
-    <p class="pv-note">위쪽 태그와 같은 알약 모양이지만 <b>누를 수 있고 상태를 가집니다.</b>
-      선택된 칩은 주색으로 채웁니다 — 원장에서 색을 채워 쓰는 몇 안 되는 자리입니다.</p>
+    <p class="pv-note">선택은 자적 <b>2px 밑줄</b>이 집니다(<code>--dh-mark-w</code>).
+      채운 알약이었을 때는 목록 위에 색 덩어리 네 개가 얹혀 있었고, 그게 도구 줄을
+      화면의 두 번째 주인공으로 만들었습니다. 밑줄은 같은 말을 하면서 면적을 쓰지 않습니다.</p>
   </div>
 
   <div class="pv-note">

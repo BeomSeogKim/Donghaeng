@@ -1,73 +1,101 @@
-<!-- @dsCard group="Components" name="04 AttendanceControl" subtitle="참석 / 미정 / 불참 — 가장 많이 눌리는 컨트롤" width="720" height="560" -->
+<!-- @dsCard group="Components" name="04 AttendanceControl" subtitle="참석 · 불참 — 배지가 아니라 48px 열 안의 단어" width="720" height="640" -->
 <style>
-.att {
-  font-family: inherit;
-  font-size: var(--dh-text-body);
-  font-weight: var(--dh-weight-semibold);
-  line-height: 1;
-  min-width: 3.5rem;
-  min-height: 2.25rem;
-  padding: 0 var(--dh-space-3);
-  border-radius: var(--dh-radius-chip);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background var(--dh-dur-fast) var(--dh-ease), color var(--dh-dur-fast) var(--dh-ease);
-}
-.att[data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
-.att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
-.att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
-.att:hover { border-color: var(--dh-line-strong); }
+/* 2026-08-23: 알약이 삭제되었습니다. 참석은 배지가 아니라 데이터 상태이고,
+   눌리는 것은 단어가 아니라 행 전체입니다 — 그게 배지를 더 작게 만드는 대신
+   불필요하게 만든 이유입니다. (notes/2026-08-23-decision-the-form-language.md)
 
-.seg { display: inline-flex; border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-chip); overflow: hidden; }
+   그리고 미정은 2026-08-21에 철회되었습니다: 참석 여부는 참석·불참 둘뿐입니다
+   (notes/2026-08-21-decision-attendance-is-two-states.md, #177). */
+
+.tbl { border-top: 1px solid var(--dh-line-strong); }
+.tr { display: flex; align-items: center; height: var(--dh-row-h-desktop); cursor: pointer; }
+.tr .tick { width: 3px; height: 18px; background: transparent; flex-shrink: 0; }
+.tr:hover .tick { background: var(--dh-primary); }
+.tr:hover .nm { font-weight: var(--dh-weight-semibold); }
+.nm { flex: 1; min-width: 0; font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); letter-spacing: var(--dh-tracking-name); padding-left: var(--dh-space-3); }
+.size { width: 2.5rem; text-align: right; font-size: var(--dh-text-lead); font-variant-numeric: tabular-nums; }
+.g-fig { width: var(--dh-col-gap-figure); flex-shrink: 0; }
+
+/* 참석은 열 안의 단어입니다. 폭은 토큰이 정합니다. */
+.st {
+  width: var(--dh-col-w-att); flex-shrink: 0;
+  border: 0; background: transparent; padding: 0;
+  font-family: inherit; font-size: var(--dh-text-meta);
+  text-align: right; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--dh-dur-fast) var(--dh-ease);
+}
+.st[data-s="yes"] { color: var(--dh-att-yes-fg); font-weight: var(--dh-weight-semibold); }
+.st[data-s="no"] { color: var(--dh-ink-muted); font-weight: var(--dh-weight-regular); }
+.st[data-s="mixed"] { color: var(--dh-ink); font-weight: var(--dh-weight-semibold); }
+
+/* 시트 안에서 — 두 갈래를 한 번에. 모서리는 0입니다. */
+.seg { display: inline-flex; border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-control); overflow: hidden; }
 .seg button {
-  font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
-  min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4);
+  font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold);
+  min-height: var(--dh-tap-min); padding: 0 var(--dh-space-6);
   background: var(--dh-surface); color: var(--dh-ink-muted);
   border: 0; border-right: 1px solid var(--dh-line); cursor: pointer;
 }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"][data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
-.seg button[aria-pressed="true"][data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
 .seg button[aria-pressed="true"][data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-ink); }
 
-.rej { display: inline-flex; gap: var(--dh-space-2); }
-.rej span { padding: 4px 10px; border-radius: var(--dh-radius-chip); font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); }
+/* 기각된 값은 리터럴로 그릴 수밖에 없습니다 — 토큰이 삭제되었기 때문입니다.
+   이 파일에서 999px과 #fdeaea가 사는 유일한 자리이고, 사는 이유는
+   "지워진 것을 지워진 채로 보여주기 위해"입니다. */
+.rej { display: inline-flex; gap: var(--dh-space-4); align-items: center; }
+.rej .pill { padding: 4px 12px; border-radius: 999px; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
+  background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); opacity: .55; }
+.rej .red { padding: 4px 12px; border-radius: 999px; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold);
+  background: #fdeaea; color: #b3261e; opacity: .55; }
 </style>
 
 <div class="pv-grid">
   <div class="pv-set">
-    <div class="pv-label">원장 행 안에서 — 탭하면 순환</div>
-    <div class="pv-row">
-      <button class="att" data-s="yes" type="button">참석</button>
-      <button class="att" data-s="maybe" type="button">미정</button>
-      <button class="att" data-s="no" type="button">불참</button>
+    <div class="pv-label">원장 행 안에서 — 열 안의 단어, 탭 타깃은 행 전체</div>
+    <div class="pv-stage" style="padding: 0 var(--dh-space-4)">
+      <div class="tbl">
+        <div class="tr"><span class="tick"></span><span class="nm">김서연</span><span class="size">3</span><span class="g-fig"></span><button class="st" data-s="yes" type="button">참석</button></div>
+        <div class="tr"><span class="tick"></span><span class="nm">최민수</span><span class="size">1</span><span class="g-fig"></span><button class="st" data-s="no" type="button">불참</button></div>
+        <div class="tr"><span class="tick"></span><span class="nm">박영희</span><span class="size">4</span><span class="g-fig"></span><button class="st" data-s="mixed" type="button">3 / 4</button></div>
+      </div>
     </div>
+    <p class="pv-note"><b>일부만 오는 팀은 참석도 불참도 아닙니다.</b> 추측하는 대신 아는 숫자를
+      보여주고, 누르면 줄이 펼쳐집니다 — 애매하면 추측하지 않는다는 규칙을, 임포트가 아니라
+      컨트롤에 적용한 것입니다
+      (notes/2026-08-23-decision-companions-become-guests.md).</p>
+    <p class="pv-note">호버는 면을 칠하지 않습니다. 좌측 자적 3px과 이름의 굵기만 움직입니다 —
+      400행에서 면이 칠해지면 훑는 눈이 매 행 멈춥니다.</p>
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">상세 시트 안에서 — 세 갈래를 한 번에</div>
-    <div class="seg" role="group" aria-label="참석 여부">
+    <div class="pv-label">시트 안에서 — 예상 참석 여부는 두 갈래</div>
+    <div class="seg" role="group" aria-label="예상 참석 여부">
       <button type="button" data-s="yes" aria-pressed="true">참석</button>
-      <button type="button" data-s="maybe" aria-pressed="false">미정</button>
       <button type="button" data-s="no" aria-pressed="false">불참</button>
     </div>
+    <p class="pv-note"><b>미정 칸은 2026-08-21에 철회되었습니다.</b> 참석 여부는 참석·불참
+      둘뿐이고, "아직 모르는 N명"이라는 숫자는 없습니다. 모르는 하객은 부부가 예상한 값으로
+      들어옵니다.</p>
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">기각된 대안 — 신호등의 빨강</div>
+    <div class="pv-label">기각된 대안 — 알약, 그리고 신호등의 빨강</div>
     <div class="rej">
-      <span style="background:var(--dh-att-yes-bg);color:var(--dh-att-yes-fg)">참석</span>
-      <span style="background:#fdeaea;color:#b3261e">불참</span>
+      <span class="pill">참석</span>
+      <span class="red">불참</span>
+      <span style="font-size: var(--dh-text-meta); color: var(--dh-ink-faint)">둘 다 버렸습니다</span>
     </div>
     <p class="pv-note warn" style="margin-top:var(--dh-space-2)">
-      기각한 것은 <b>불참의 빨강</b>이지 참석의 초록이 아닙니다. 참석은 초록원삼의 초록으로
-      그대로 갑니다 — 위 왼쪽이 채택된 것이고, 오른쪽만 버린 것입니다.
+      <b>알약을 버린 것은 크기 문제가 아닙니다.</b> 30×60 캡슐은 44px 행 높이의 62%였고,
+      400행에서 그것 하나가 화면을 이슈 트래커로 만들었습니다. 탭 타깃을 행 전체로 옮기면
+      배지는 더 작아질 필요가 아니라 <b>없어질 이유</b>가 생깁니다.
     </p>
     <p class="pv-note warn">
       <b>못 오시는 하객은 오류가 아니라 사실입니다.</b> 빨강을 칠하면 부부는 결혼식 몇 달 전부터
       수백 번 열어볼 화면에서 자기 하객 명단을 <b>실패의 목록</b>으로 읽게 됩니다.
-      게다가 고칠 수 있는 것도 아닙니다 — 행동할 수 없는 상태를 문제처럼 칠하는 건
-      사용자가 할 수 있는 일에 대한 거짓말입니다. 빨강은 데이터를 지우는 동작에만 남깁니다.
+      불참은 중립이고, 빨강은 데이터를 지우는 동작에만 남습니다.
     </p>
   </div>
 

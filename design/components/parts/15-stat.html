@@ -1,73 +1,104 @@
-<!-- @dsCard group="Components" name="06 Stat" subtitle="인원수 × 보증인원 — 원장과 같은 화면에 산다" width="760" height="600" -->
+<!-- @dsCard group="Components" name="06 Stat" subtitle="식대 인원 × 보증인원 — 옆에 붙은 KPI가 아니라 그릇의 굽" width="820" height="640" -->
 <style>
-.stat-card { border: 1px solid var(--dh-line); background: var(--dh-surface); padding: var(--dh-space-4); max-width: 22rem; }
-.stat-eyebrow { font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
-.stat-line { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+/* 2026-08-23 — 식대 인원은 판 옆의 카드가 아니라 판이 놓인 굽(자적 面)입니다.
+   금박은 여기서 선이 아니라 10px 면적으로 일합니다: 기준선(--dh-meter-h)이
+   예식장이 정한 보증인원을 채웁니다.
+   (notes/2026-08-23-decision-the-form-language.md) */
+.foot { background: var(--dh-primary); color: var(--dh-ink-on-accent); padding: var(--dh-space-6); }
+.foot.rail { width: 15.25rem; }
+.stat-eyebrow { font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); color: var(--dh-primary-soft); margin: 0; }
+.stat-line { display: flex; align-items: baseline; gap: 7px; margin: var(--dh-space-3) 0 0; }
 .stat-n {
-  font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold);
-  letter-spacing: var(--dh-tracking-display); line-height: var(--dh-leading-tight);
-  color: var(--dh-primary); font-variant-numeric: tabular-nums;
   font-family: var(--dh-font-display);
+  font-size: var(--dh-text-display); font-weight: var(--dh-weight-bold);
+  letter-spacing: var(--dh-tracking-figure); line-height: var(--dh-leading-tight);
+  font-variant-numeric: tabular-nums;
 }
-.stat-unit { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); color: var(--dh-ink-muted); }
-.stat-sub { display: flex; flex-wrap: wrap; gap: 0 var(--dh-space-3); margin-top: var(--dh-space-2); font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
-.stat-sub b { font-weight: var(--dh-weight-semibold); color: var(--dh-ink); font-variant-numeric: tabular-nums; }
-.stat-sub .over { color: var(--dh-attention); }
-.meter { margin-top: var(--dh-space-3); height: 4px; background: var(--dh-surface-sunken); border-radius: var(--dh-radius-chip); overflow: hidden; }
-.meter i { display: block; height: 100%; background: var(--dh-primary); transition: width var(--dh-dur-count) var(--dh-ease); }
+.stat-n.compact { font-size: var(--dh-text-display-compact); }
+.stat-unit { font-size: var(--dh-text-body); color: var(--dh-primary-soft); }
+
+/* 기준선 — 금박의 세 번째 일. 10px 면이고, 초과하면 치자가 됩니다. */
+.meter { margin-top: var(--dh-space-6); height: var(--dh-meter-h); background: var(--dh-primary-hover); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--dh-gold); transition: width var(--dh-dur-count) var(--dh-ease); }
 .meter i.over { background: var(--dh-attention); }
-.stat-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--dh-space-4); }
+.foot .sub { display: flex; justify-content: space-between; margin-top: 11px; font-size: var(--dh-text-meta); color: var(--dh-primary-soft); }
+.foot .sub b { font-weight: var(--dh-weight-semibold); color: var(--dh-ink-on-accent); font-variant-numeric: tabular-nums; }
+
+.brk { margin-top: var(--dh-space-8); padding-top: var(--dh-space-6); border-top: 1px solid var(--dh-focus);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--dh-space-5) var(--dh-space-4); }
+.brk span > span { display: block; font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); color: var(--dh-primary-soft); }
+.brk b { display: block; margin-top: 6px; font-size: var(--dh-text-lead); font-weight: var(--dh-weight-semibold); font-variant-numeric: tabular-nums; }
+
+.stage2 { display: flex; gap: var(--dh-space-6); flex-wrap: wrap; align-items: flex-start; }
+.slab { border: var(--dh-rim-w) solid var(--dh-gold); background: var(--dh-surface); display: flex; }
+.slab .body { flex: 1; min-width: 12rem; padding: var(--dh-space-5); font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
 </style>
 
 <div class="pv-grid">
   <div class="pv-set">
-    <div class="pv-label">기본 — 보증인원 아래</div>
-    <div class="stat-card">
-      <div class="stat-eyebrow">2026년 11월 8일 · 예상 인원</div>
-      <div class="stat-line"><span class="stat-n">245</span><span class="stat-unit">명</span></div>
-      <div class="stat-sub">
-        <span>확정 <b>181</b></span><span>미정 <b>64</b></span>
-        <span>보증 <b>250</b></span><span>여유 <b>5</b></span>
+    <div class="pv-label">PC — 판의 오른쪽 굽</div>
+    <div class="slab">
+      <div class="body">하객 명부가 사는 면. 굽은 판에서 떨어져 있지 않습니다.</div>
+      <div class="foot rail">
+        <p class="stat-eyebrow">식대 인원</p>
+        <p class="stat-line"><span class="stat-n">28</span><span class="stat-unit">명</span></p>
+        <div class="meter"><i style="width:93%"></i></div>
+        <div class="sub"><span>보증 <b>30</b></span><span>여유 <b>2</b></span></div>
+        <div class="brk">
+          <span><span>신랑측</span><b>16</b></span>
+          <span><span>신부측</span><b>12</b></span>
+          <span><span>참석</span><b>28</b></span>
+          <span><span>불참</span><b>4</b></span>
+        </div>
       </div>
-      <div class="meter"><i style="width:98%"></i></div>
     </div>
   </div>
 
-  <div class="pv-set">
-    <div class="pv-label">보증인원 초과 — 경고는 이게 전부</div>
-    <div class="stat-card">
-      <div class="stat-eyebrow">2026년 11월 8일 · 예상 인원</div>
-      <div class="stat-line"><span class="stat-n">268</span><span class="stat-unit">명</span></div>
-      <div class="stat-sub">
-        <span>확정 <b>204</b></span><span>미정 <b>64</b></span>
-        <span>보증 <b>250</b></span><span class="over">초과 <b>18</b></span>
+  <div class="stage2">
+    <div class="pv-set">
+      <div class="pv-label">모바일 — 굽이 판의 머리로 올라온다</div>
+      <div class="foot" style="width: 20rem">
+        <p class="stat-eyebrow">식대 인원</p>
+        <p class="stat-line"><span class="stat-n compact">28</span><span class="stat-unit">명</span></p>
+        <div class="meter"><i style="width:93%"></i></div>
+        <div class="sub"><span>보증 <b>30</b></span><span>여유 <b>2</b></span></div>
       </div>
-      <div class="meter"><i class="over" style="width:100%"></i></div>
     </div>
-  </div>
 
-  <div class="pv-set">
-    <div class="pv-label">식사 종류별 — 웨딩마다 다르게 설정됨</div>
-    <div class="stat-2">
-      <div class="stat-card">
-        <div class="stat-eyebrow">식사</div>
-        <div class="stat-line"><span class="stat-n" style="font-size:var(--dh-text-title)">238</span><span class="stat-unit">일반</span></div>
-        <div class="stat-sub"><span>유아식 <b>5</b></span><span>채식 <b>2</b></span></div>
+    <div class="pv-set">
+      <div class="pv-label">보증인원 초과 — 경고는 이게 전부</div>
+      <div class="foot" style="width: 20rem">
+        <p class="stat-eyebrow">식대 인원</p>
+        <p class="stat-line"><span class="stat-n compact">31</span><span class="stat-unit">명</span></p>
+        <div class="meter"><i class="over" style="width:100%"></i></div>
+        <div class="sub"><span>보증 <b>30</b></span><span>초과 <b>1</b></span></div>
       </div>
     </div>
   </div>
 
   <div class="pv-note">
     <b>보증인원은 식장의 숫자입니다.</b> 우리는 추천하지도, 통계로 보정하지도 않습니다.
-    계약된 값을 옆에 놓고 비교만 보여줍니다.
+    계약된 값을 옆에 놓고 비교만 보여줍니다. <b>보증인원이 없으면 미터도 없습니다</b> —
+    부부는 예식장을 잡기 전에 가입하고, 없는 숫자와의 비교는 우리 숫자가 됩니다.
+  </div>
+  <div class="pv-note">
+    <b>금박은 선이 아니라 면적입니다.</b> 전폭 1px 금선은 베이지 선 위에 얹히는 순간
+    그 선의 장식이 됩니다. 금박이 하는 일은 셋뿐입니다 — 인장 2px, 구연 2px,
+    그리고 이 10px 기준선.
+  </div>
+  <div class="pv-note">
+    <b>디스플레이 서체는 이 숫자 하나입니다.</b> 원장의 22px 명조 제목은 삭제되었습니다 —
+    명조가 식대 인원 말고 또 있으면 숫자가 작아 보이고 화면이 청첩장으로 기웁니다.
+    결혼식 이름은 13px 러닝헤드로 갑니다.
   </div>
   <div class="pv-note">
     <b>숫자는 뒤로 가지 않습니다.</b> 모든 변경 응답이 재계산된 집계를 싣고 오고, 클라이언트는
-    순서가 뒤바뀐 응답을 견딥니다. 숫자는 260ms에 걸쳐 정착하고 칩은 120ms에 반응합니다 —
+    순서가 뒤바뀐 응답을 견딥니다. 숫자는 260ms에 걸쳐 정착하고 컨트롤은 120ms에 반응합니다 —
     부부가 <b>어느</b> 숫자가 움직였는지 볼 수 있어야 하니까요. 탭보다 살짝 늦는 숫자는 괜찮습니다.
     이유 없이 튀는 숫자는 안 됩니다.
   </div>
   <div class="pv-note">
-    <b>예상 인원 = 확정 참석 + 아직 미정.</b> 불참만 빠집니다. 부부가 직접 넣은 예상값도 같이 셉니다.
+    <b>식대 인원은 참석 하객 레코드의 개수입니다.</b> 팀 크기를 더하고 불참 동반을 빼는 게 아닙니다
+    (<code>#211</code>). 미정은 없습니다 — 참석 여부는 참석·불참 둘뿐입니다.
   </div>
 </div>

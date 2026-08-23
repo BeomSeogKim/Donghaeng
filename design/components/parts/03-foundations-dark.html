@@ -15,16 +15,16 @@
 .led-sub b { color: var(--dh-ink); font-weight: var(--dh-weight-semibold); font-variant-numeric: tabular-nums; }
 .led-meter { margin-top: var(--dh-space-2); height: 3px; background: var(--dh-surface-sunken); }
 .led-meter i { display: block; height: 100%; width: 98%; background: var(--dh-gold); }
-.led-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--dh-space-2); min-height: var(--dh-row-h-mobile); padding: var(--dh-space-2) var(--dh-space-3); border-bottom: 1px solid var(--dh-line); }
-.led-row:last-child { border-bottom: 0; }
+/* 가로 행선은 없습니다 — 2026-08-23 형태 규정. 밤에도 같은 규칙입니다. */
+.led-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--dh-space-2); min-height: var(--dh-row-h-mobile); padding: var(--dh-space-2) var(--dh-space-3); border-bottom: var(--dh-rule-row) solid var(--dh-line); }
 .led-name { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-medium); }
 .led-meta { display: flex; gap: 6px; align-items: center; font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
-.tag { padding: 1px 7px; border-radius: var(--dh-radius-chip); background: var(--dh-surface-sunken); color: var(--dh-ink-muted); }
-.tag.side { background: transparent; border: 1px solid var(--dh-line-strong); }
-.att { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-width: 3.2rem; min-height: 2rem; padding: 0 var(--dh-space-2); border-radius: var(--dh-radius-chip); border: 1px solid transparent; }
-.att[data-s="yes"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
-.att[data-s="maybe"] { background: var(--dh-att-maybe-bg); color: var(--dh-att-maybe-fg); }
-.att[data-s="no"] { background: var(--dh-att-no-bg); color: var(--dh-att-no-fg); }
+.tag { color: var(--dh-ink-muted); }
+.tag.side { color: var(--dh-ink-muted); }
+.att { font-family: inherit; font-size: var(--dh-text-meta); width: var(--dh-col-w-att); text-align: right;
+  padding: 0; background: transparent; border: 0; font-variant-numeric: tabular-nums; }
+.att[data-s="yes"] { color: var(--dh-att-yes-fg); font-weight: var(--dh-weight-semibold); }
+.att[data-s="no"] { color: var(--dh-ink-muted); }
 
 .btnrow { display: flex; gap: var(--dh-space-2); margin-top: var(--dh-space-3); }
 .b { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); border: 1px solid transparent; border-radius: var(--dh-radius-control); }
@@ -39,7 +39,7 @@
       <div class="led-top">
         <div class="led-eyebrow">2026년 11월 8일 · 예상 인원</div>
         <div class="led-line"><span class="led-n">245</span><span class="led-unit">명</span></div>
-        <div class="led-sub"><span>확정 <b>181</b></span><span>미정 <b>64</b></span><span>보증 <b>250</b></span></div>
+        <div class="led-sub"><span>보증 <b>250</b></span><span>여유 <b>5</b></span></div>
         <div class="led-meter"><i></i></div>
       </div>
       <div class="led-row">
@@ -54,7 +54,7 @@
           <div class="led-name">박지민</div>
           <div class="led-meta"><span class="tag side">신부</span><span class="tag">직장동료</span></div>
         </div>
-        <span class="att" data-s="maybe">미정</span>
+        <span class="att" data-s="no">불참</span>
       </div>
       <div class="led-row">
         <div>

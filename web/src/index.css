@@ -71,6 +71,8 @@
 
   --text-*: initial;
   --text-display: var(--dh-text-display);
+  --text-display-compact: var(--dh-text-display-compact);
+  --text-face: var(--dh-text-face);
   --text-title: var(--dh-text-title);
   --text-lead: var(--dh-text-lead);
   --text-body: var(--dh-text-body);
@@ -90,6 +92,8 @@
 
   --tracking-*: initial;
   --tracking-display: var(--dh-tracking-display);
+  --tracking-figure: var(--dh-tracking-figure);
+  --tracking-name: var(--dh-tracking-name);
   --tracking-label: var(--dh-tracking-label);
 
   /* The whole 4px grid derives from one token: p-4 is 4 × --dh-space-1.
@@ -106,11 +110,18 @@
    * reason to reopen this bridge, not to write the value at a call site. */
   --spacing: var(--dh-space-1);
 
+  /* Two names, one value, and the value is 0 (decided 2026-08-23,
+   * notes/2026-08-23-decision-the-form-language.md). `rounded-chip` and
+   * `rounded-sheet` are gone with the tokens behind them, so a pill or a
+   * 16px sheet corner no longer compiles at all.
+   *
+   * `rounded-full` DOES still compile — Tailwind emits it from a static
+   * rule rather than from this namespace, so clearing --radius-* cannot
+   * reach it. That hole is closed by scripts/design-values.mjs, which is
+   * also why the checker had to be widened in the same change. */
   --radius-*: initial;
   --radius-flush: var(--dh-radius-flush);
   --radius-control: var(--dh-radius-control);
-  --radius-chip: var(--dh-radius-chip);
-  --radius-sheet: var(--dh-radius-sheet);
 
   --shadow-*: initial;
   --shadow-overlay: var(--dh-shadow-overlay);
@@ -120,4 +131,20 @@
 }
 
 /* Duration has no theme namespace in Tailwind v4, so a transition reads the
- * token at the call site: `duration-(--dh-dur-count)`, never `duration-260`. */
+ * token at the call site: `duration-(--dh-dur-count)`, never `duration-260`.
+ *
+ * THE FORM FAMILY IS THE SAME CASE, and it is listed here so nobody reads its
+ * absence above as an oversight. The 2026-08-23 form tokens are border widths
+ * and one-off lengths — 구연 `--dh-rim-w`, 인장 `--dh-seal-h`, 괘선
+ * `--dh-rule-column`, the deleted row rule `--dh-rule-row`, the 10px meter
+ * `--dh-meter-h`, the uneven column gaps and the 참석 column's width. Tailwind
+ * v4 has no border-width namespace at all, and the lengths are single values
+ * rather than a scale (10px is deliberately off the 4px grid, which is the
+ * whole reason it needs a name). So they are read at the call site the way the
+ * height tokens already are:
+ *
+ *     border-(length:--dh-rim-w)   h-(--dh-meter-h)   gap-(--dh-col-gap-name)
+ *
+ * scripts/design-values.mjs accepts that spelling and refuses `border-2`,
+ * `h-[10px]` and `gap-[32px]`, which is what keeps this from being a
+ * convention nobody follows. */

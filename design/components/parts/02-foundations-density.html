@@ -1,4 +1,4 @@
-<!-- @dsCard group="Foundations" name="간격 · 밀도 · 반경" subtitle="4px 격자 · 행은 카드가 아니다" width="760" height="640" -->
+<!-- @dsCard group="Foundations" name="간격 · 밀도 · 형태" subtitle="4px 격자 · 행은 카드가 아니고, 모서리는 0이다" width="760" height="760" -->
 <style>
 .sp-row { display: flex; align-items: center; gap: var(--dh-space-4); padding: 6px 0; }
 .sp-key { width: 6rem; font-size: 11px; font-family: ui-monospace, Menlo, monospace; color: var(--dh-ink-faint); font-variant-numeric: tabular-nums; }
@@ -23,6 +23,18 @@
 .rad figure { margin: 0; text-align: center; }
 .rad .box { width: 5rem; height: 3rem; background: var(--dh-primary-soft); border: 1px solid var(--dh-primary); }
 .rad figcaption { margin-top: 6px; font-size: 11px; color: var(--dh-ink-faint); font-family: ui-monospace, Menlo, monospace; }
+.rad .box.dead { background: transparent; border-style: dashed; border-color: var(--dh-line-strong); opacity: .55; }
+.rad figcaption.dead { text-decoration: line-through; }
+
+.fm { display: flex; align-items: baseline; gap: var(--dh-space-4); padding: 7px 0; }
+.fm + .fm { border-top: 1px solid var(--dh-line); }
+.fm .k { width: 13rem; flex-shrink: 0; font-size: 11px; font-family: ui-monospace, Menlo, monospace; color: var(--dh-ink-faint); }
+.fm .v { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); display: flex; align-items: center; gap: var(--dh-space-2); }
+.fm i { display: inline-block; flex-shrink: 0; }
+.fm i.rim { width: 2.5rem; height: 1.25rem; border: var(--dh-rim-w) solid var(--dh-gold); }
+.fm i.seal { width: 2.5rem; height: var(--dh-seal-h); background: var(--dh-gold); }
+.fm i.meter { width: 2.5rem; height: var(--dh-meter-h); background: var(--dh-gold); }
+.fm i.col { width: var(--dh-rule-column); height: 1.25rem; background: var(--dh-line); }
 </style>
 
 <div class="pv-grid">
@@ -70,13 +82,32 @@
   </div>
 
   <div class="pv-set">
-    <div class="pv-label">반경 — 실제로 떨어져 있는 것에만</div>
+    <div class="pv-label">모서리 — 0이다</div>
     <div class="rad">
       <figure><div class="box" style="border-radius:var(--dh-radius-flush)"></div><figcaption>flush · 0<br>행 · 표</figcaption></figure>
-      <figure><div class="box" style="border-radius:var(--dh-radius-control)"></div><figcaption>control · 8<br>버튼 · 입력</figcaption></figure>
-      <figure><div class="box" style="border-radius:var(--dh-radius-chip)"></div><figcaption>chip · 999<br>칩 · 태그</figcaption></figure>
-      <figure><div class="box" style="border-radius:var(--dh-radius-sheet)"></div><figcaption>sheet · 16<br>시트 · 대화상자</figcaption></figure>
+      <figure><div class="box" style="border-radius:var(--dh-radius-control)"></div><figcaption>control · 0<br>버튼 · 입력 · 필터</figcaption></figure>
+      <figure><div class="box dead" style="border-radius:8px"></div><figcaption class="dead">삭제 · 8<br>Tailwind 기본값</figcaption></figure>
+      <figure><div class="box dead" style="border-radius:999px"></div><figcaption class="dead">삭제 · 999<br>알약</figcaption></figure>
     </div>
+    <p class="cap"><b>8px은 이 시스템의 지문이 아니라 Tailwind의 것입니다.</b>
+      999px 알약은 44px 행의 62%였고, 400행에서 그것 하나가 원장을 이슈 트래커로
+      읽히게 했습니다. 둘 다 2026-08-23에 지웠고, 온전한 원은 브랜드 표식에만 남습니다.</p>
+  </div>
+
+  <div class="pv-set">
+    <div class="pv-label">형태 — 기물(器物)의 치수</div>
+    <div class="pv-stage" style="padding: var(--dh-space-4)">
+      <div class="fm"><span class="k">구연 · --dh-rim-w</span><span class="v"><i class="rim"></i>2px · 판의 바깥 가장자리, 화면당 하나</span></div>
+      <div class="fm"><span class="k">인장 · --dh-seal-h</span><span class="v"><i class="seal"></i>2px · 길이는 글자 너비</span></div>
+      <div class="fm"><span class="k">기준선 · --dh-meter-h</span><span class="v"><i class="meter"></i>10px · 보증인원을 채우는 면</span></div>
+      <div class="fm"><span class="k">세로 괘선 · --dh-rule-column</span><span class="v"><i class="col"></i>1px · 열 묶음 사이</span></div>
+      <div class="fm"><span class="k">가로 행선 · --dh-rule-row</span><span class="v">0 · <b>없음</b>, 그게 규칙입니다</span></div>
+      <div class="fm"><span class="k">열 간격</span><span class="v">32 · 16 · 24 — <b>균등하면 스프레드시트입니다</b></span></div>
+      <div class="fm"><span class="k">참석 열 · --dh-col-w-att</span><span class="v">48px · 배지가 아니라 <b>열 안의 단어</b></span></div>
+      <div class="fm"><span class="k">행 높이</span><span class="v">머리글 30 · PC 행 44 · 모바일 행 60</span></div>
+    </div>
+    <p class="cap"><b>분리는 선이 아니라 44px 높이와 굵기 차가 집니다</b> — 이름 17/500 대 장치 13/400.
+      세로 괘선은 조선 장부의 괘선이고, 걷어낸 가로선을 대신합니다.</p>
   </div>
 
   <div class="pv-note">

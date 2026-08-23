@@ -1,56 +1,158 @@
-<!-- @dsCard group="Components" name="07 Sheet" subtitle="하객 상세 · 식사 수 입력 — 유일하게 떠 있는 것" width="720" height="620" -->
+<!-- @dsCard group="Components" name="07 Sheet" subtitle="하객 상세 · 하객 추가 — PC에서는 판이 넓어지고, 폰에서는 판이 올라온다" width="840" height="700" -->
 <style>
-.sh-stage { background: var(--dh-ground); border: 1px solid var(--dh-line); padding: var(--dh-space-6) var(--dh-space-4) 0; display: flex; justify-content: center; }
-.sheet {
-  width: 100%; max-width: 22rem;
-  background: var(--dh-surface);
-  border: 1px solid var(--dh-line);
-  border-bottom: 0;
-  border-radius: var(--dh-radius-sheet) var(--dh-radius-sheet) 0 0;
-  box-shadow: var(--dh-shadow-overlay);
-  overflow: hidden;
-}
-.sh-grip { width: 2.25rem; height: 4px; background: var(--dh-line-strong); border-radius: 999px; margin: var(--dh-space-2) auto 0; }
-.sh-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--dh-space-3); padding: var(--dh-space-3) var(--dh-space-4) var(--dh-space-3); border-bottom: 1px solid var(--dh-line); }
-.sh-head h3 { font-family: var(--dh-font-display); margin: 0; font-size: var(--dh-text-title); font-weight: var(--dh-weight-bold); letter-spacing: -0.015em; }
+/* 2026-08-23 — 형태 규정(notes/2026-08-23-decision-the-form-language.md).
+   모서리는 0입니다: --dh-radius-sheet는 삭제되었습니다.
+   그리고 PC에서 이것은 판 위에 뜬 카드가 아니라 판이 오른쪽으로 늘어난 칸입니다 —
+   그래서 딤도 그림자도 필요 없고, 넣는 동안 굽의 숫자가 계속 보입니다.
+   미정 칸은 2026-08-21에 철회되었습니다(#177). */
+
+.slab { display: flex; border: var(--dh-rim-w) solid var(--dh-gold); background: var(--dh-surface); }
+.slab .list { flex: 1; min-width: 9rem; padding: var(--dh-space-5); font-size: var(--dh-text-meta); color: var(--dh-ink-faint); }
+.panel { width: 19rem; flex-shrink: 0; display: flex; flex-direction: column; border-left: 1px solid var(--dh-line-strong); }
+.foot-rail { width: 9rem; flex-shrink: 0; background: var(--dh-primary); color: var(--dh-ink-on-accent); padding: var(--dh-space-5); }
+.foot-rail p { margin: 0; font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); color: var(--dh-primary-soft); }
+.foot-rail b { display: block; margin-top: var(--dh-space-3); font-family: var(--dh-font-display); font-size: var(--dh-text-display-compact);
+  font-weight: var(--dh-weight-bold); line-height: var(--dh-leading-tight); letter-spacing: var(--dh-tracking-figure); font-variant-numeric: tabular-nums; }
+
+/* 폰 — 아래에서 올라오지만, 올라오는 것도 판입니다. 덮지 않고 남긴 만큼이 숫자입니다. */
+.sh-stage { background: var(--dh-ground); padding: var(--dh-space-3); width: 20rem; display: flex; flex-direction: column; gap: var(--dh-space-2); }
+.sh-foot-head { background: var(--dh-primary); color: var(--dh-ink-on-accent); padding: var(--dh-space-4); }
+.sheet { background: var(--dh-surface); border: var(--dh-rim-w) solid var(--dh-gold); border-bottom: 0; overflow: hidden; }
+.sh-grip { width: 2.25rem; height: 3px; background: var(--dh-line-strong); margin: var(--dh-space-2) auto 0; }
+
+.sh-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--dh-space-3); padding: var(--dh-space-3) var(--dh-space-4); }
+.sh-head h3 { margin: 0; font-size: var(--dh-text-title); font-weight: var(--dh-weight-semibold); letter-spacing: var(--dh-tracking-display); }
 .sh-head span { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); }
-.sh-body { padding: var(--dh-space-4); display: flex; flex-direction: column; gap: var(--dh-space-4); }
-.sh-foot { padding: var(--dh-space-3) var(--dh-space-4) var(--dh-space-5); border-top: 1px solid var(--dh-line); display: flex; gap: var(--dh-space-2); }
+.sh-body { padding: 0 var(--dh-space-4) var(--dh-space-4); display: flex; flex-direction: column; gap: var(--dh-space-4); }
+.sh-foot { padding: var(--dh-space-3) var(--dh-space-4) var(--dh-space-5); border-top: 1px solid var(--dh-line); display: flex; gap: var(--dh-space-2); align-items: center; }
 
 .sh-field { display: flex; flex-direction: column; gap: 6px; }
-.sh-field > label { font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); }
+.sh-field > label { font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); color: var(--dh-ink-muted); }
 
-.seg { display: inline-flex; border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-chip); overflow: hidden; }
-.seg button { font-family: inherit; font-size: var(--dh-text-meta); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); background: var(--dh-surface); color: var(--dh-ink-muted); border: 0; border-right: 1px solid var(--dh-line); cursor: pointer; flex: 1; }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--dh-att-yes-bg); color: var(--dh-att-yes-fg); }
+.in { display: flex; align-items: center; min-height: var(--dh-tap-min); padding: 0 var(--dh-space-3);
+  background: var(--dh-surface); border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-control);
+  font-size: var(--dh-text-body); }
+.in.focused { border-color: var(--dh-primary); border-width: var(--dh-mark-w); }
+
+.seg { display: flex; gap: var(--dh-space-2); }
+.seg button { flex: 1; font-family: inherit; font-size: var(--dh-text-body); min-height: var(--dh-tap-min);
+  background: var(--dh-surface); color: var(--dh-ink-muted); border: 1px solid var(--dh-line-strong);
+  border-radius: var(--dh-radius-control); cursor: pointer; }
+.seg button[aria-pressed="true"] { border-color: var(--dh-primary); background: var(--dh-primary-soft); color: var(--dh-primary); font-weight: var(--dh-weight-semibold); }
 
 .stepper { display: flex; align-items: center; gap: var(--dh-space-2); }
-.stepper button { font-family: inherit; font-size: var(--dh-text-lead); width: var(--dh-tap-min); height: var(--dh-tap-min); background: var(--dh-surface); border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-control); color: var(--dh-ink); cursor: pointer; }
-.stepper output { font-size: var(--dh-text-lead); font-weight: var(--dh-weight-semibold); font-variant-numeric: tabular-nums; min-width: 2rem; text-align: center; }
-.stepper .lab { font-size: var(--dh-text-meta); color: var(--dh-ink-muted); margin-left: auto; }
+.stepper button { font-family: inherit; font-size: var(--dh-text-lead); width: var(--dh-tap-min); height: var(--dh-tap-min);
+  background: var(--dh-surface); border: 1px solid var(--dh-line-strong); border-radius: var(--dh-radius-control); color: var(--dh-ink-muted); cursor: pointer; }
+.stepper .val { flex: 1; display: flex; align-items: center; justify-content: center; min-height: var(--dh-tap-min);
+  border: 1px solid var(--dh-line-strong); font-size: var(--dh-text-lead); font-weight: var(--dh-weight-semibold); font-variant-numeric: tabular-nums; }
 
-.btn { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: var(--dh-text-body); font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-4); border: 1px solid transparent; border-radius: var(--dh-radius-control); cursor: pointer; }
-.btn-primary { background: var(--dh-primary); color: var(--dh-ink-on-accent); flex: 1; }
+.party { margin-top: var(--dh-space-3); background: var(--dh-ground); }
+.party div { display: flex; align-items: center; justify-content: space-between; gap: var(--dh-space-3); height: 2.5rem; padding: 0 var(--dh-space-3); }
+.party .who { font-size: var(--dh-text-body); color: var(--dh-ink-muted); }
+.party .who.self { color: var(--dh-ink); }
+.party .mark { font-size: var(--dh-text-label); letter-spacing: var(--dh-tracking-label); color: var(--dh-ink-faint); }
+
+.said { margin: 0 var(--dh-space-4) var(--dh-space-4); padding-left: 11px; border-left: 3px solid var(--dh-att-yes-fg);
+  font-size: var(--dh-text-meta); line-height: 1.6; color: var(--dh-att-yes-fg); font-variant-numeric: tabular-nums; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; font-family: inherit; font-size: var(--dh-text-body);
+  font-weight: var(--dh-weight-semibold); min-height: var(--dh-tap-min); padding: 0 var(--dh-space-6);
+  border: 1px solid transparent; border-radius: var(--dh-radius-control); cursor: pointer; }
+.btn-primary { background: var(--dh-primary); color: var(--dh-ink-on-accent); }
 .btn-secondary { background: var(--dh-surface); color: var(--dh-ink); border-color: var(--dh-line-strong); }
+
+.stage2 { display: flex; gap: var(--dh-space-6); flex-wrap: wrap; align-items: flex-start; }
 </style>
 
 <div class="pv-grid">
   <div class="pv-set">
-    <div class="pv-label">하객 상세 — 아래에서 올라오는 시트</div>
-    <div class="sh-stage">
-      <div class="sheet" role="dialog" aria-label="하객 상세">
-        <div class="sh-grip"></div>
-        <div class="sh-head">
-          <h3>이서연</h3>
-          <span>신부 · 가족</span>
+    <div class="pv-label">PC — 새 카드가 아니라 판이 늘어난 칸</div>
+    <div class="slab">
+      <div class="list">하객 명부는 그대로 보입니다. 딤도 그림자도 없습니다.</div>
+      <div class="panel">
+        <div class="sh-head"><h3>하객 추가</h3><span>✕</span></div>
+        <p class="said">한지우님 외 2명을 추가했습니다</p>
+        <div class="sh-body">
+          <div class="sh-field"><label>이름</label><div class="in focused">한지우</div></div>
+          <div class="sh-field">
+            <label>측</label>
+            <div class="seg" role="group" aria-label="측">
+              <button type="button" aria-pressed="true">신랑</button>
+              <button type="button" aria-pressed="false">신부</button>
+            </div>
+          </div>
+          <div class="sh-field">
+            <label>예상 참석 여부</label>
+            <div class="seg" role="group" aria-label="예상 참석 여부">
+              <button type="button" aria-pressed="true">참석</button>
+              <button type="button" aria-pressed="false">불참</button>
+            </div>
+          </div>
         </div>
+        <div class="sh-foot">
+          <span style="font-size: var(--dh-text-meta); color: var(--dh-ink-faint)">계속 이어서 넣을 수 있습니다</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-primary" type="button">추가</button>
+        </div>
+      </div>
+      <div class="foot-rail">
+        <p>식대 인원</p><b>31</b>
+      </div>
+    </div>
+    <p class="pv-note"><b>굽이 그대로 보이는 것이 딤을 걷은 진짜 이유입니다.</b>
+      하객을 넣는 동안 부부가 봐야 할 것은 방금 넣은 사람이 아니라
+      그 사람 때문에 움직인 숫자입니다.</p>
+  </div>
+
+  <div class="stage2">
+    <div class="pv-set">
+      <div class="pv-label">폰 — 올라오는 것도 판이다</div>
+      <div class="sh-stage">
+        <div class="sh-foot-head">
+          <p style="margin:0;font-size:var(--dh-text-label);letter-spacing:var(--dh-tracking-label);color:var(--dh-primary-soft)">식대 인원</p>
+          <p style="margin:var(--dh-space-2) 0 0;display:flex;align-items:baseline;gap:6px">
+            <span style="font-family:var(--dh-font-display);font-size:var(--dh-text-display-compact);font-weight:var(--dh-weight-bold);line-height:1;letter-spacing:var(--dh-tracking-figure);font-variant-numeric:tabular-nums">31</span>
+            <span style="font-size:var(--dh-text-body);color:var(--dh-primary-soft)">명</span>
+          </p>
+          <div style="margin-top:var(--dh-space-3);height:var(--dh-meter-h);background:var(--dh-primary-hover)"><div style="height:100%;width:100%;background:var(--dh-attention)"></div></div>
+        </div>
+        <div class="sheet" role="dialog" aria-label="하객 추가">
+          <div class="sh-grip"></div>
+          <div class="sh-head"><h3>하객 추가</h3><span>✕</span></div>
+          <div class="sh-body">
+            <div class="sh-field">
+              <label>인원</label>
+              <div class="stepper">
+                <button type="button" aria-label="인원 줄이기">−</button>
+                <span class="val">3</span>
+                <button type="button" aria-label="인원 늘리기">＋</button>
+              </div>
+              <div class="party">
+                <div><span class="who self">한지우</span><span class="mark">본인</span></div>
+                <div><span class="who">한지우 동반 1</span><span class="mark">이름 넣기</span></div>
+                <div><span class="who">한지우 동반 2</span><span class="mark">이름 넣기</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="sh-foot">
+            <button class="btn btn-secondary" type="button">닫기</button>
+            <span style="flex:1"></span>
+            <button class="btn btn-primary" type="button">추가</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-set">
+      <div class="pv-label">하객 상세 — 참석 여부는 두 갈래</div>
+      <div class="sheet" style="width: 18rem">
+        <div class="sh-grip"></div>
+        <div class="sh-head"><h3>이서연</h3><span>신부 · 가족</span></div>
         <div class="sh-body">
           <div class="sh-field">
             <label>참석 여부</label>
-            <div class="seg" role="group">
+            <div class="seg" role="group" aria-label="참석 여부">
               <button type="button" aria-pressed="true">참석</button>
-              <button type="button" aria-pressed="false">미정</button>
               <button type="button" aria-pressed="false">불참</button>
             </div>
           </div>
@@ -58,20 +160,14 @@
             <label>식사</label>
             <div class="stepper">
               <button type="button" aria-label="일반 줄이기">−</button>
-              <output>3</output>
+              <span class="val">3</span>
               <button type="button" aria-label="일반 늘리기">＋</button>
-              <span class="lab">일반</span>
-            </div>
-            <div class="stepper">
-              <button type="button" aria-label="유아식 줄이기">−</button>
-              <output>1</output>
-              <button type="button" aria-label="유아식 늘리기">＋</button>
-              <span class="lab">유아식</span>
             </div>
           </div>
         </div>
         <div class="sh-foot">
           <button class="btn btn-secondary" type="button">취소</button>
+          <span style="flex:1"></span>
           <button class="btn btn-primary" type="button">저장</button>
         </div>
       </div>
@@ -79,8 +175,13 @@
   </div>
 
   <div class="pv-note">
-    <b>제품에서 유일하게 떠 있는 것입니다.</b> 그림자는 오버레이 하나만 쓰고, 반경 16px도
-    여기와 대화상자에만 씁니다 — 시트는 실제로 화면에서 떨어져 있는 물체라서요.
+    <b>동반 인원은 이름이 주어진 하객 레코드입니다</b>(<code>#211</code>).
+    입력은 숫자로 하되, 세 명짜리 팀은 <b>세 건의 하객</b>이 됩니다. 이름은 나중에
+    명부에서 고칠 수 있고, 고친 뒤에는 다시 만들어지지 않습니다.
+  </div>
+  <div class="pv-note">
+    <b>미정 칸은 2026-08-21에 철회되었습니다.</b> 참석 여부는 참석·불참 둘뿐이고,
+    이 부품이 마지막까지 3분할을 그리고 있었습니다(<code>#177</code>).
   </div>
   <div class="pv-note">
     <b>식사는 종류별 정수입니다.</b> 응답은 파티 단위 참·불참만 주고, 종류별 배분은 부부가 합니다.

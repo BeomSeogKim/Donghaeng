@@ -140,7 +140,7 @@ function Comparison({ guaranteed, meal }: { guaranteed: number; meal: number }) 
        */}
       <div
         aria-hidden="true"
-        className="mt-3 h-1 overflow-hidden rounded-chip bg-surface-sunken"
+        className="mt-3 h-1 overflow-hidden bg-surface-sunken"
         data-testid="guarantee-meter"
       >
         <div
