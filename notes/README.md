@@ -18,6 +18,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-23-decision-the-customer-word-is-결혼식.md` | 고객 화면은 결혼식, 코드·주석·기록은 웨딩 — 웨딩은 업자의 말이다; 화면의 말과 코드의 말이 갈리는 두 번째 쌍이라 규칙으로 적는다 (원장/하객 명부, 웨딩/결혼식) |
 | `2026-08-23-decision-companions-become-guests.md` | 동반인원은 같은 `하객` 레코드다 — `2026-08-20` §2를 뒤집는다; 가상 이름은 주어지고 고쳐지며 재생성되지 않는다; 원장은 팀 단위로 접히고 섞인 팀은 `3 / 4`로 읽힌다; 식대 인원은 참석 하객 레코드의 개수가 된다 |
 | `2026-08-23-decision-the-wedding-has-a-name.md` | 결혼식 이름은 커플이 쓰는 자유 입력이다 — 자동 조립은 파트너가 오기 전까지 반쪽 이름이라 거절됐다; 이름이 생기면서 화면의 "원장"은 설 자리를 잃고 "하객 명부"가 된다 |
 | `2026-08-22-decision-the-couples-two-seats.md` | 웨딩엔 자리가 둘 — `membership`과 이름 두 컬럼은 한 개념이었다; 초대는 빈 자리를 채운다; 부모·플래너는 지원자지 주체가 아니다 |
