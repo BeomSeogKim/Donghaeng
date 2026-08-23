@@ -6,6 +6,11 @@
  * column the same way for both, and says so in as many words: "one client-side
  * rule covers both screens" (docs/api-spec.md § POST /weddings/join). Two
  * copies of a limit is how the two screens start disagreeing about it.
+ *
+ * 결혼식 이름 IS HERE TOO, AND IT IS THE SAME COLUMN RULE. The API says so in as
+ * many words — "it obeys the same name rule the seat's `name` does" — so it is
+ * the same limit read by a second function rather than a second limit
+ * (docs/api-spec.md § POST /weddings).
  */
 
 /** The column's limit, and the API's. */
@@ -37,5 +42,27 @@ export function nameError(name: string): string | undefined {
   if (name === '') return '이름을 입력해 주세요.'
   // In UTF-16 code units, which is the unit the server's own limit is in.
   if (name.length > NAME_MAX) return `이름은 ${NAME_MAX}자까지 쓸 수 있습니다.`
+  return undefined
+}
+
+/**
+ * The same rule for 결혼식 이름, with the one difference that matters: **empty is
+ * an answer here.**
+ *
+ * A WEDDING WITH NO NAME IS AN ORDINARY WEDDING. The field is optional at
+ * creation and stays optional in 설정 — a couple who named theirs and would
+ * rather not have can empty the box — so a blank one is "none" rather than
+ * something wrong, and the screens spell it by omitting the member or sending
+ * `null` (docs/api-spec.md § POST /weddings, § PATCH /weddings/{weddingId}).
+ *
+ * EVERYTHING ELSE IS THE COLUMN'S RULE, unchanged: 100 characters measured on
+ * what is sent, before the server's own trim, and the invisible-character rule
+ * left to the server exactly as `nameError` leaves it. This is not a second copy
+ * of that rule — it is the same one, asked of a value that may be absent.
+ */
+export function weddingNameError(weddingName: string): string | undefined {
+  if (weddingName === '') return undefined
+  if (weddingName.length > NAME_MAX)
+    return `결혼식 이름은 ${NAME_MAX}자까지 쓸 수 있습니다.`
   return undefined
 }

@@ -91,10 +91,13 @@ function weddingStore(...stored: Wedding[]) {
      * stay green.
      */
     create: (body: unknown) => {
-      const { name, side, weddingDate } = body as CreateWeddingRequest
+      const { name, side, weddingDate, weddingName } = body as CreateWeddingRequest
       const wedding: Wedding = {
         id: 12,
         weddingDate,
+        // `null` when the couple gave none, which is an ordinary wedding rather
+        // than a half-made one (docs/api-spec.md § POST /weddings).
+        weddingName: weddingName ?? null,
         // 신랑 먼저, always — the array's order is contract.
         seats: [
           { side: 'GROOM', name: side === 'GROOM' ? name : null },
@@ -147,14 +150,19 @@ async function fillForm({
   date = '2026-10-10',
   side = '신랑',
   name = '김신랑',
+  weddingName = '',
 }: {
   date?: string
   side?: '신랑' | '신부' | ''
   name?: string
+  /** 결혼식 이름 — left blank by default, because it is the one optional answer. */
+  weddingName?: string
 } = {}) {
   // Awaited unconditionally: the session resolves before any screen renders, so
   // a test that leaves a field empty still has to wait for the form to exist.
   const dateField = await screen.findByLabelText('예식일')
+  if (weddingName !== '')
+    await userEvent.type(screen.getByLabelText('결혼식 이름'), weddingName)
   if (date !== '') await userEvent.type(dateField, date)
   if (side !== '')
     await userEvent.click(screen.getByRole('radio', { name: `${side}입니다` }))
@@ -285,6 +293,99 @@ it("creates a wedding from a date, a side and the caller's own name", async () =
   // than being bounced back here by a wedding list the client fetched one
   // request ago and which still says they have none.
   expect(await screen.findByRole('region', { name: '인원수' })).toBeVisible()
+})
+
+/*
+ * 결혼식 이름 — the one optional answer on this form, and the only member of the
+ * body that may be absent (docs/api-spec.md § POST /weddings,
+ * notes/2026-08-23-decision-the-wedding-has-a-name.md).
+ */
+
+it('carries 결혼식 이름 when the couple wrote one', async () => {
+  const calls = recording()
+  const store = weddingStore()
+  server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm({ weddingName: '범석 희주의 가을' })
+  await submit()
+
+  await waitFor(() => expect(calls.created).toHaveLength(1))
+  expect(calls.created[0]?.body).toEqual({
+    weddingDate: '2026-10-10',
+    side: 'GROOM',
+    name: '김신랑',
+    weddingName: '범석 희주의 가을',
+  })
+
+  // And it is what the ledger they land on is called, in place of the two seats
+  // — one of which is empty on the day a wedding is made.
+  expect(await screen.findByText(/범석 희주의 가을/)).toBeVisible()
+  expect(screen.queryByText(/신부 자리 비어 있음/)).not.toBeInTheDocument()
+})
+
+it('leaves 결혼식 이름 out of the body entirely when the couple wrote none', async () => {
+  const calls = recording()
+  const store = weddingStore()
+  server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm()
+  await submit()
+
+  // Omitting it and sending `null` mean the same thing here, and omitting is
+  // what an untouched optional field is. Asserted as an equality so a
+  // `weddingName: ''` — which the API refuses with a 400 — cannot creep in.
+  await waitFor(() => expect(calls.created).toHaveLength(1))
+  expect(calls.created[0]?.body).toEqual({
+    weddingDate: '2026-10-10',
+    side: 'GROOM',
+    name: '김신랑',
+  })
+})
+
+it('treats a 결혼식 이름 of nothing but spaces as no name, not as a refusal', async () => {
+  const calls = recording()
+  const store = weddingStore()
+  server.use(calls.me(signedIn), calls.weddings(store.create), store.list(), guests())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm({ weddingName: '   ' })
+  await submit()
+
+  // The server would answer 400 VALIDATION_FAILED for a name with no visible
+  // character in it — but this field is optional, so what the couple wrote is
+  // "none" rather than something wrong (docs/api-spec.md § POST /weddings).
+  await waitFor(() => expect(calls.created).toHaveLength(1))
+  expect(calls.created[0]?.body).toEqual({
+    weddingDate: '2026-10-10',
+    side: 'GROOM',
+    name: '김신랑',
+  })
+})
+
+it('trims 결혼식 이름 too, for the same reason it trims the name', async () => {
+  const calls = recording()
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm({ weddingName: '  범석 희주의 가을 ' })
+  await submit()
+
+  await waitFor(() => expect(calls.created).toHaveLength(1))
+  expect(calls.created[0]?.body).toMatchObject({ weddingName: '범석 희주의 가을' })
+})
+
+it('holds 결혼식 이름 to the same 100 characters the server does', async () => {
+  const calls = recording()
+  server.use(calls.me(signedIn), calls.weddings(weddingStore().create), noWedding())
+
+  renderWithProviders(<App />, { initialEntries: ['/weddings/new'] })
+  await fillForm({ weddingName: '가'.repeat(101) })
+  await submit()
+
+  expect(await screen.findByText('결혼식 이름은 100자까지 쓸 수 있습니다.')).toBeVisible()
+  expect(calls.created).toHaveLength(0)
 })
 
 it('trims the name it sends, because the server measures length before trimming', async () => {

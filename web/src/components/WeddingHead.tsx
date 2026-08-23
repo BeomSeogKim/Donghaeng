@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useSession } from '../hooks/useSession'
-import { useWeddings } from '../hooks/useWeddings'
+import { useWeddings, type Wedding } from '../hooks/useWeddings'
+import { SEAT_SIDE } from '../lib/seat'
 import { daysUntil, formatWeddingDate } from '../lib/weddingDate'
 import { RunningHead } from './Slab'
 
@@ -13,12 +14,17 @@ import { RunningHead } from './Slab'
  * what `components/SubScreen` was made for when 마이페이지 turned out to be
  * wearing 설정's header by hand.
  *
- * 결혼식 이름 IS NOT IN THE SPEC YET AND ITS SLOT IS HERE. `docs/api-spec.md`
- * carries `weddingDate` and `seats` and no `name` (`#212`, backend first), so
- * the slot holds what the spec does have: the couple, read off the two seats.
- * When the field lands it replaces `title` below and nothing else on any of the
- * three screens moves. The rule when the spec is silent is to render what it
- * has, never to guess a field name.
+ * 결혼식 이름 TOOK THE SLOT THAT WAS LEFT FOR IT (`#212`), and nothing else on
+ * any of the three screens moved. It is the couple's own words for their own
+ * wedding, so it says more than the two names do — and it says it on the day
+ * the second seat is still empty, which is most of the days a ledger is used.
+ *
+ * THE COUPLE IS WHAT IS THERE UNTIL THE NAME IS. `weddingName` is `null` for a
+ * wedding nobody has named, which is an ordinary wedding rather than an error,
+ * and **what the head renders in that case is ours to decide — the API has no
+ * copy for it** (docs/api-spec.md § GET /weddings/{weddingId}). So the slot
+ * falls back to what it held before: the two seats. A placeholder would be a
+ * line about a feature; the seats are a line about this couple.
  *
  * D-N IS COMPUTED HERE AND IT IS NOT AN AGGREGATE. Calendar arithmetic on a
  * date the API already published, pinned to Seoul so two phones cannot disagree
@@ -35,7 +41,7 @@ export function WeddingHead({ action }: { action: ReactNode }) {
   const wedding = weddings.data?.[0]
 
   const title = [
-    wedding === undefined ? null : wedding.seats.map(seatLabel).join(' · '),
+    wedding === undefined ? null : weddingLabel(wedding),
     wedding === undefined ? null : formatWeddingDate(wedding.weddingDate),
     wedding === undefined ? null : daysUntil(wedding.weddingDate, new Date()),
     session.data?.name,
@@ -46,7 +52,16 @@ export function WeddingHead({ action }: { action: ReactNode }) {
   return <RunningHead action={action} title={title} />
 }
 
-const SEAT_SIDE = { GROOM: '신랑', BRIDE: '신부' } as const
+/**
+ * What the running head calls this wedding: its name, or the couple in it.
+ *
+ * IT IS ONE SLOT AND NEVER BOTH. Putting the name beside the two seats would
+ * spend the head's whole width on things the couple already knows, and the head
+ * truncates — 예식일, D-N and 내 이름 are what would fall off the end.
+ */
+function weddingLabel(wedding: Wedding): string {
+  return wedding.weddingName ?? wedding.seats.map(seatLabel).join(' · ')
+}
 
 /**
  * What the running head calls one seat.

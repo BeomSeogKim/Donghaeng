@@ -22,3 +22,6 @@ venv/
 
 # claude code (local settings are not shared)
 .claude/settings.local.json
+
+# claude code worktrees (agent scratch checkouts, never committed)
+.claude/worktrees/

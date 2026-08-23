@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { answerAlreadyInAWedding } from '../lib/alreadyInAWedding'
-import { ApiError, apiError, apiFetch } from '../lib/api'
+import { apiError, apiFetch } from '../lib/api'
 import type { paths } from '../lib/api-types.gen'
-import { forgetInvite } from '../lib/invite'
+import { forgetInvite, forgetSpentInvite } from '../lib/invite'
 import { setWedding, type Wedding, weddingsQueryKey } from './useWeddings'
 
 // Reached through `paths[...]` rather than through the schema name, so the path
@@ -41,28 +41,10 @@ export type JoinWeddingRequest =
  * the one screen an invited partner may never reach (`#158`). The response is
  * the wedding they just joined, so the client never has to ask who they are.
  *
- * THE TOKEN IS DROPPED HERE RATHER THAN ON THE SCREEN, because it is a fact
- * about the token and not about a screen — and **it is decided by `code`, never
- * by status.** A token's life ends when it was unknown, when it went stale,
- * when a 재발급 replaced it, or when the seat it pointed at got filled — the
- * set below and nothing else.
- *
- * `ALREADY_IN_A_WEDDING` IS THE 409 THAT KEEPS ITS TOKEN, and the spec says so
- * in as many words: "**The token is not spent**, so the real partner can still
- * use it." Dropping it looked like tidiness and was the opposite — this is
- * exactly what somebody who signed in with the wrong Google account is told,
- * and nothing on the accept screen names which account that was, so **the 409
- * is the only signal they get.** Their recovery is 로그아웃 → sign back in as
- * the right person → this same screen with the invite still waiting, and that
- * only works if the token is still here. Wiping it lands them on an empty
- * `GET /weddings` with nothing pending, which is 웨딩 만들기 — the one screen an
- * invited partner may never fill in (`#158`).
- *
- * A `code` OF `null` KEEPS IT TOO, and that is the same rule rather than a
- * second one. `apiError` reports `null` for a 4xx that is not a problem
- * document — a proxy or the servlet container answered, not the application
- * (`lib/api.ts`) — so it is not an answer about the token at all, and a 404
- * from a load balancer must not destroy a live invite.
+ * THE TOKEN IS DROPPED BY `lib/invite.ts` RATHER THAN HERE, because it is a
+ * fact about the token and not about this call — and the preview learns the
+ * same fact, from the same codes, before anybody taps anything (`#212`). Which
+ * refusals end a token's life is that module's decision and is stated there.
  *
  * A 400 KEEPS IT for the reason the spec gives: the token is NOT spent by a
  * refused name, so correcting it and tapping again works.
@@ -79,30 +61,6 @@ export type JoinWeddingRequest =
  * ledger and headcount key, and it is not awaited — query-core waits on
  * whatever `onSettled` returns before releasing the next mutation.
  */
-/**
- * The answers that mean this token can never work again — read off `code`,
- * which is the only member of a problem document anything may branch on.
- *
- * `INVITE_NOT_FOUND` covers unknown, wrong and already spent as one answer;
- * `INVITE_EXPIRED` is the day-old link; `INVITE_SUPERSEDED` is the one a
- * 재발급 replaced; and `PARTNER_ALREADY_JOINED` is the seat being filled by
- * somebody else. Every other refusal leaves a token that may still be good.
- *
- * **`INVITE_SUPERSEDED` IS HERE BECAUSE `INVITE_NOT_FOUND` STOPPED CARRYING
- * IT.** A replaced token used to arrive as `INVITE_NOT_FOUND` and was dropped
- * by this set; `#201` split it out so the person could be told a newer link
- * exists (docs/api-spec.md § POST /weddings/join), and leaving it out here
- * would have kept a token that can never work again — which diverts every empty
- * ledger this person opens back into the accept screen (`lib/invite.ts`). A
- * code told apart on screen is still the same death underneath.
- */
-const SPENT: ReadonlySet<string | null> = new Set([
-  'INVITE_NOT_FOUND',
-  'INVITE_EXPIRED',
-  'INVITE_SUPERSEDED',
-  'PARTNER_ALREADY_JOINED',
-])
-
 export function useJoinWedding() {
   const queryClient = useQueryClient()
 
@@ -123,12 +81,12 @@ export function useJoinWedding() {
       setWedding(queryClient, wedding)
     },
     onError: (error) => {
-      if (error instanceof ApiError && SPENT.has(error.code)) forgetInvite()
+      forgetSpentInvite(error)
 
       // The other thing a refusal can be about: the CALLER rather than the
-      // token. `ALREADY_IN_A_WEDDING` is deliberately absent from the set above
-      // and present here — the invite is still good for the real partner, and
-      // it is this person who cannot use it (`lib/alreadyInAWedding.ts`).
+      // token. `ALREADY_IN_A_WEDDING` is deliberately absent from that set and
+      // present here — the invite is still good for the real partner, and it
+      // is this person who cannot use it (`lib/alreadyInAWedding.ts`).
       answerAlreadyInAWedding(queryClient, error)
     },
     onSettled: () => {

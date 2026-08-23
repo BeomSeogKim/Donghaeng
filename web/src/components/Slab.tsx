@@ -45,10 +45,9 @@ export function Slab({
 /**
  * The line above the slab: the 인장, then what this ledger is.
  *
- * 결혼식 이름 IS NOT HERE YET AND ITS SLOT IS. `docs/api-spec.md` does not carry
- * `wedding.name` — that is `#212`, backend first — so `title` holds what the
- * spec does have: the couple, read off the two seats. When the field lands, the
- * name replaces the argument and nothing else on this screen moves.
+ * 결혼식 이름 IS WHAT `title` HOLDS (`#212`), and this component did not change
+ * when it landed — `WeddingHead` decides what goes in the slot, including what
+ * stands there for a wedding nobody has named.
  *
  * IT IS ONE LINE AND IT TRUNCATES. A running head that wraps pushes the slab
  * down on the device 원장 is mostly read on, and everything after 결혼식 이름 is

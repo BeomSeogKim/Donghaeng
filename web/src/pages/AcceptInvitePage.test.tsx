@@ -36,6 +36,10 @@ const TOKEN = 'sel3ct0r.v3r1f13r'
 type JoinWedding = paths['/weddings/join']['post']
 type JoinWeddingRequest = JoinWedding['requestBody']['content']['application/json']
 
+type PreviewInvite = paths['/weddings/join/preview']['post']
+type PreviewRequest = PreviewInvite['requestBody']['content']['application/json']
+type PreviewResponse = PreviewInvite['responses'][200]['content']['*/*']
+
 const SEATS: Wedding['seats'] = [
   { side: 'GROOM', name: '김신랑' },
   { side: 'BRIDE', name: null },
@@ -53,13 +57,20 @@ function inviteApi({
   weddings = [],
   held: hold = false,
   holdWeddings = false,
+  weddingName = '범석 희주의 가을',
+  preview,
 }: {
   signedIn?: boolean
   weddings?: Wedding[]
   held?: boolean
   holdWeddings?: boolean
+  /** 결혼식 이름 as the preview publishes it — `null` for a wedding with none. */
+  weddingName?: string | null
+  /** What the preview answers instead of naming the wedding. */
+  preview?: () => Response
 } = {}) {
   const joins: { body: JoinWeddingRequest; contentType: string | null }[] = []
+  const previews: { body: PreviewRequest; contentType: string | null }[] = []
   // The list this person's `GET /weddings` answers, which a successful join
   // changes exactly as the server would.
   let held = weddings
@@ -92,6 +103,7 @@ function inviteApi({
 
   return {
     joins,
+    previews,
     release,
     releaseWeddings,
     handlers: (respond?: () => Response) => [
@@ -112,6 +124,26 @@ function inviteApi({
       http.get(`${API}/weddings/:weddingId/headcount`, () =>
         HttpResponse.json<Headcount>({ mealHeadcount: 0 }),
       ),
+      /*
+       * The read the accept screen makes before anybody taps anything: what
+       * this link opens. It writes nothing and spends nothing, so it may be
+       * called twice and the token still joins afterwards
+       * (docs/api-spec.md § POST /weddings/join/preview).
+       */
+      http.post(`${API}/weddings/join/preview`, async ({ request }) => {
+        previews.push({
+          body: (await request.clone().json()) as PreviewRequest,
+          contentType: request.headers.get('Content-Type'),
+        })
+        if (preview !== undefined) return preview()
+        return HttpResponse.json<PreviewResponse>({
+          weddingName,
+          weddingDate: '2026-10-10',
+          // The seat that is already TAKEN — the partner who sent the link, and
+          // never the empty one this token would fill.
+          invitedBy: SEATS[0],
+        })
+      }),
       http.post(`${API}/weddings/join`, async ({ request }) => {
         joins.push({
           body: (await request.clone().json()) as JoinWeddingRequest,
@@ -264,6 +296,131 @@ it('says nothing of the sort in an ordinary browser', async () => {
 
   expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeInTheDocument()
   expect(screen.queryByText(/구글 로그인이 막힙니다/)).not.toBeInTheDocument()
+})
+
+/*
+ * 무엇을 수락하는지 먼저 보여준다 — `POST /weddings/join/preview`, which names the
+ * wedding the token opens and writes nothing at all
+ * (notes/2026-08-23-decision-the-wedding-has-a-name.md).
+ */
+
+it('names the wedding the link opens, once there is a session to ask with', async () => {
+  const api = inviteApi()
+  server.use(...api.handlers())
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  // The one irreversible choice in the product: a seat cannot be released, and
+  // a person belongs to exactly one wedding. This is what makes it informed.
+  expect(await screen.findByText('범석 희주의 가을')).toBeInTheDocument()
+  expect(screen.getByText('2026. 10. 10. (토)')).toBeInTheDocument()
+  expect(screen.getByText('김신랑')).toBeInTheDocument()
+
+  // A POST that reads, because the token may not travel in a path or a query
+  // string — ours or anyone's (docs/api-spec.md § POST /weddings/join/preview).
+  await waitFor(() => expect(api.previews).toHaveLength(1))
+  expect(api.previews[0].body).toEqual({ token: TOKEN })
+  expect(api.previews[0].contentType).toBe('application/json')
+
+  // It spends nothing: the token is still here and the form is still there.
+  expect(stored()).toBe(TOKEN)
+  expect(screen.getByRole('button', { name: '수락' })).toBeInTheDocument()
+})
+
+it('does not ask what the link opens before the person has signed in', async () => {
+  const api = inviteApi({ signedIn: false })
+  server.use(...api.handlers())
+
+  renderWithProviders(<App />, { initialEntries: [`/invite#t=${TOKEN}`] })
+
+  // An anonymous request is a 401 whatever it sends, so the pre-sign-in screen
+  // cannot name the wedding it is inviting somebody into — and must not try.
+  expect(await screen.findByRole('link', { name: '구글로 로그인' })).toBeInTheDocument()
+  expect(api.previews).toHaveLength(0)
+  expect(screen.queryByText('범석 희주의 가을')).not.toBeInTheDocument()
+})
+
+it('says nothing where a name would go when the couple gave their wedding none', async () => {
+  const api = inviteApi({ weddingName: null })
+  server.use(...api.handlers())
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  // `null` is the ordinary state of a wedding, not a gap to fill with copy the
+  // API has none for — so the row is simply not there, and 예식일 and 초대한
+  // 사람 still say whose wedding this is.
+  expect(await screen.findByText('2026. 10. 10. (토)')).toBeInTheDocument()
+  expect(screen.queryByText('결혼식')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '수락' })).toBeInTheDocument()
+})
+
+it('states before the tap the answer the tap would have had', async () => {
+  const api = inviteApi({ preview: () => problem(404, 'INVITE_EXPIRED') })
+  server.use(...api.handlers())
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  /*
+   * The preview answers the SAME SET of errors as the accept, in the same
+   * order, precisely so the screen can say this before anybody fills a name in
+   * (docs/api-spec.md § POST /weddings/join/preview).
+   */
+  expect(await screen.findByText('링크가 만료되었습니다')).toBeInTheDocument()
+  expect(screen.getByText('파트너에게 새 링크를 요청하세요.')).toBeInTheDocument()
+  expect(screen.queryByLabelText('내 이름')).not.toBeInTheDocument()
+  expect(api.joins).toHaveLength(0)
+
+  /*
+   * AND THE DEAD TOKEN GOES, exactly as it does when the accept learns the same
+   * thing. Without this the preview would be a regression rather than a
+   * kindness: the token would outlive the answer and divert every empty ledger
+   * this person opens back to this screen (`lib/invite.ts`).
+   */
+  await waitFor(() => expect(stored()).toBeNull())
+})
+
+it('keeps the form when the preview failed in a way that decides nothing', async () => {
+  const api = inviteApi({
+    preview: () => problem(500, 'INTERNAL_ERROR'),
+  })
+  server.use(...api.handlers())
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  // A 5xx says nothing about the token, so the accept is still the authority
+  // and taking the form away would be a dead end we invented.
+  expect(await screen.findByLabelText('내 이름')).toBeInTheDocument()
+  expect(screen.queryByText('범석 희주의 가을')).not.toBeInTheDocument()
+  expect(stored()).toBe(TOKEN)
+  // And it does not report a failure either: nothing has been attempted yet, so
+  // "초대를 수락하지 못했습니다" would be about something that did not happen.
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+  await accept('이신부')
+  expect(await screen.findByRole('region', { name: '인원수' })).toBeInTheDocument()
+})
+
+it('says the same thing about a caller who already has a ledger, whichever call learned it', async () => {
+  const api = inviteApi({
+    weddings: [{ id: 3, weddingDate: '2026-09-09', seats: SEATS }],
+    preview: () => problem(409, 'ALREADY_IN_A_WEDDING'),
+  })
+  server.use(...api.handlers())
+  sessionStorage.setItem(INVITE_STORAGE_KEY, TOKEN)
+
+  renderWithProviders(<App />, { initialEntries: ['/invite'] })
+
+  // The API checks this FIRST, before the token is looked at, so somebody who
+  // could never use this link is told about their own account rather than shown
+  // a wedding. One 409, one component, one sentence — a preview that invented a
+  // third answer would be the drift `lib/alreadyInAWedding.ts` exists to stop.
+  expect(await screen.findByText('이미 다른 결혼식에 속해 있습니다')).toBeInTheDocument()
+  // And the invite survives, because it is still good for the real partner.
+  expect(stored()).toBe(TOKEN)
 })
 
 it('sends the token in the body and the name the person typed, and seats them', async () => {
