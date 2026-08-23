@@ -1,5 +1,10 @@
 # Decision — what a guest entry requires, and that companions follow the head (2026-08-20)
 
+> **Superseded in part (2026-08-23).** §2 chose to keep companions as a
+> count rather than rows, and named what that gave up. The founder has since
+> asked for those things back: a companion is now its own 하객 record.
+> See `2026-08-23-decision-companions-become-guests.md`. §1, §3 and §4 stand.
+
 `#134`/`#11`. The founder settled four questions the first guest-write endpoint
 raised. Three of them are about defaults; the fourth is a model choice wearing a
 default's clothes.

@@ -18,6 +18,8 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-23-decision-companions-become-guests.md` | 동반인원은 같은 `하객` 레코드다 — `2026-08-20` §2를 뒤집는다; 가상 이름은 주어지고 고쳐지며 재생성되지 않는다; 원장은 팀 단위로 접히고 섞인 팀은 `3 / 4`로 읽힌다; 식대 인원은 참석 하객 레코드의 개수가 된다 |
+| `2026-08-23-decision-the-wedding-has-a-name.md` | 결혼식 이름은 커플이 쓰는 자유 입력이다 — 자동 조립은 파트너가 오기 전까지 반쪽 이름이라 거절됐다; 이름이 생기면서 화면의 "원장"은 설 자리를 잃고 "하객 명부"가 된다 |
 | `2026-08-22-decision-the-couples-two-seats.md` | 웨딩엔 자리가 둘 — `membership`과 이름 두 컬럼은 한 개념이었다; 초대는 빈 자리를 채운다; 부모·플래너는 지원자지 주체가 아니다 |
 | `2026-08-22-decision-entitlement-belongs-to-the-wedding.md` | 권리는 웨딩에, 결제 주체만 사람에; 구독 행은 상태가 아니라 텀이다; 웨딩당 활성 1건은 인덱스가 지킨다 |
 | `2026-08-22-decision-the-invite-link.md` | 초대 링크는 하루 살고 재발급된다; 토큰은 URL 프래그먼트로만 다니고 서버 로그에 남지 않는다; `sessionStorage`가 OAuth 왕복을 건너므로 `returnTo`를 만들지 않는다 |
@@ -85,6 +87,7 @@ see that file's `Rules` section for the admission test.
 
 | Record | What it settles |
 |---|---|
+| `2026-08-23-decision-the-form-language.md` | 색과 의미는 시스템이었고 형태는 무드보드였다 — 토큰이 강제한 건 `8 / 1 / 999`뿐이었다; radius 0 · 알약 없음 · 가로 행선 없음 · 세로 괘선 · 목소리 셋; 금박은 인장·구연·기준선 셋만 하고 면적을 갖는다 |
 | `2026-08-22-decision-the-sheet-carries-both.md` | 하객 추가 시트는 측과 그룹을 둘 다 이월한다 — 비대칭이 유일하게 변호 불가능했고, 부모님 명단은 블록으로 온다; `#12`가 v1이라는 전제가 하중을 받는다 |
 | `2026-08-22-decision-the-409-recovery-loop.md` | 409를 두 번째로 만나면 화면이 말한다 — 옳은 수정 둘이 만든 고리라 어느 쪽도 되돌리지 않는다; 표시는 로그아웃과 함께 죽고 토큰은 건드리지 않는다 |
 | `2026-08-22-decision-logout-leaves-the-ledger.md` | 로그아웃이 원장 고정 헤더를 떠나 마이페이지로 간다 (`#195`를 `#159`에 흡수); 수락 화면과 웨딩 만들기의 로그아웃은 출구라서 남는다 |
@@ -110,7 +113,7 @@ see that file's `Rules` section for the admission test.
 | `2026-08-19-decision-openapi-artifact.md` | The seam's document is a test artifact at `api/build/openapi.json`; a test-source controller is a `@TestComponent` or it is published |
 | `2026-08-08-decision-development-tempo.md` | *Superseded* — vertical slices; one stop; the comprehension gate |
 | `2026-08-08-decision-work-tracking.md` | GitHub Issues via `gh`; two milestones, four labels |
-| `2026-08-20-decision-guest-entry-side-and-companions.md` | 측은 기본값을 갖지 않는다; 동반인원은 대표자를 따르므로 행이 아니라 숫자다 |
+| `2026-08-20-decision-guest-entry-side-and-companions.md` | *§2 superseded* — 측은 기본값을 갖지 않는다; 동반인원 §2는 `2026-08-23`이 뒤집었다 |
 | `2026-08-20-decision-mutation-response-envelope.md` | 뮤테이션 응답은 `{resource, headcount}` — 봉투 금지 규칙이 좁혀진다 |
 | `2026-08-20-decision-merge-order-gate.md` | 두 PR이 따로는 초록, 합치면 빨강 — 무엇을 사고 무엇을 안 샀나 |
 | `2026-08-08-decision-build-workflow.md` | *Partly superseded* — the CI jobs; never merge a red check |
