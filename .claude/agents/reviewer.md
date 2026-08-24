@@ -104,3 +104,22 @@ items as questions. If a pass produced nothing, say the pass ran and was clean
 — an unmentioned pass reads as a skipped one.
 
 Do not rewrite the code. Do not produce a patch. Do not congratulate.
+
+## Record the verdict on the PR
+
+When what you reviewed is a PR, post your verdict to it before you finish:
+
+    gh pr comment <n> --body "Reviewed-at: $(gh pr view <n> --json headRefOid -q .headRefOid)
+
+    <one line per pass: what it found, or that it ran clean>"
+
+`merge-gate.sh` refuses a merge without that line, matched against the head's
+tree — so **you are the source of the thing the gate checks.** Written by the
+implementor instead, it attests to nothing: the same hand that wrote the code
+would be signing that it was read.
+
+Post it whether you found problems or not. A verdict naming three open findings
+is not a clearance — it is a record, and the merge is still blocked by the
+findings themselves until they are answered. Re-post after the content changes;
+a review of a diff that no longer exists carries to nothing. A rebase or an
+amend does carry, because the content is what you read.

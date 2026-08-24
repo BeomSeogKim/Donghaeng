@@ -21,6 +21,7 @@ command=$(jq -r '.tool_input.command // empty') || {
 }
 
 GH=${GH:-gh}
+GIT=${GIT:-git}
 
 # Match the invocation, not the words. A plain substring test blocked this
 # hook's own commit, because the message *described* the rule — and every
@@ -138,23 +139,28 @@ if [ "$status" -ne 0 ]; then
   exit 2
 fi
 
-# Green. Now the second question, which the green cannot answer:
-# was it green against today's `main`?
+# Green. Everything left is one question with three parts, and one `gh pr view`
+# answers all of them. It used to be four separate calls for fields a single
+# call returns — seven network round trips before a merge.
+meta=$("$GH" pr view ${pr:+"$pr"} \
+  --json baseRefName,headRefName,headRefOid,files,comments,reviews 2>/dev/null)
+
+base=$(printf '%s' "$meta" | jq -r '.baseRefName // empty' 2>/dev/null)
+head=$(printf '%s' "$meta" | jq -r '.headRefName // empty' 2>/dev/null)
+head_oid=$(printf '%s' "$meta" | jq -r '.headRefOid // empty' 2>/dev/null | tr 'A-Z' 'a-z')
+repo=$("$GH" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
+
+# -- 1. Was the green against today's `main`?
 #
 # Nothing re-checks an open PR when `main` moves under it, and re-running is a
 # trap because it replays the recorded merge SHA. It cost a red `main` on
 # 2026-08-20 (#138); the rule was written the same day and three of the next
 # eight merges went in stale anyway. AGENTS.md says a mechanically checkable
 # rule belongs in a hook rather than in prose — this is the hook.
-repo=$("$GH" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
-refs=$("$GH" pr view ${pr:+"$pr"} --json baseRefName,headRefName 2>/dev/null)
-base=$(printf '%s' "$refs" | jq -r '.baseRefName // empty' 2>/dev/null)
-head=$(printf '%s' "$refs" | jq -r '.headRefName // empty' 2>/dev/null)
-
 if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head" ]; then
   {
     echo "Merge blocked: cannot read this PR's base and head branches, so"
-    echo "whether it is behind $([ -n "$base" ] && printf '%s' "$base" || printf 'main') is unknown."
+    echo "whether it is behind ${base:-main} is unknown."
     echo "Unknown is refused, not assumed current."
   } >&2
   exit 2
@@ -186,10 +192,8 @@ case "$behind" in
     exit 2 ;;
 esac
 
-# Green, and green against today's `main`. Last question: is this a diff the
-# agent may merge at all? Four surfaces stay the founder's, and the list lives
-# in reserved-surfaces.sh rather than here so it has one home and a suite.
-files=$("$GH" pr view ${pr:+"$pr"} --json files -q '.files[].path' 2>/dev/null)
+# -- 2. Is this a diff the agent may merge at all?
+files=$(printf '%s' "$meta" | jq -r '.files[]?.path // empty' 2>/dev/null)
 
 if [ -z "$files" ]; then
   {
@@ -216,24 +220,21 @@ if [ "$status" -ne 0 ]; then
   exit 2
 fi
 
-# Green, current, and ordinary. Last question, and the only one that is not
-# mechanical in origin: did a reviewer actually look at THIS?
+# -- 3. Did a reviewer look at THIS, and say something about it?
 #
-# The other three were mechanical before the agent started merging. The
-# condition that replaced the founder — "a reviewer has cleared it" — was the
-# one left as prose, which AGENTS.md says is where a checkable rule goes to die.
+# The other two were mechanical before the agent started merging. The condition
+# that replaced the founder — "a reviewer has cleared it" — was the one left as
+# prose, which AGENTS.md says is where a checkable rule goes to die.
 #
-# The marker is tied to the head commit on purpose. A label, or a bare "looks
-# good", still stands after three more commits are pushed under it; this goes
-# stale by itself. It is a signature, not a proof — whoever writes the line
-# could have skipped the review — but it turns skipping from an invisible
-# omission into a recorded claim, answerable from the PR long after the session
-# that made it is gone.
-head_oid=$("$GH" pr view ${pr:+"$pr"} --json headRefOid -q '.headRefOid' 2>/dev/null)
-verdicts=$("$GH" pr view ${pr:+"$pr"} --json comments -q '.comments[].body' 2>/dev/null |
-  grep -oiE '^Reviewed-at:[[:space:]]*[0-9a-f]{7,40}' |
-  sed -E 's/^[Rr]eviewed-at:[[:space:]]*//')
-
+# The verdict is matched against the head's TREE, not its commit id. Keying it
+# to the commit was the first cut and it defeats itself: the merge-order rule
+# above mandates a rebase of every open PR after every merge, a rebase always
+# yields a new commit id, and the gate would then demand a fresh review of a
+# diff that had not changed by one byte — several times a day, with the block
+# message handing over the very line to paste. A control everyone learns to
+# satisfy without performing is worse than a documented absence, because it
+# reads as coverage. A content change still goes stale; a replay of the same
+# content does not. (Found in review on #230.)
 if [ -z "$head_oid" ]; then
   {
     echo "Merge blocked: cannot read this PR's head commit, so whether the"
@@ -242,29 +243,73 @@ if [ -z "$head_oid" ]; then
   exit 2
 fi
 
-for v in $verdicts; do
-  case "$head_oid" in
-    "$v"*) exit 0 ;;
-  esac
+# Reviews as well as comments: a verdict left through `gh pr review` or the web
+# UI's Files-changed flow lands in a different list, and reporting "none" beside
+# a review visibly sitting on the PR is a lie the hook can avoid.
+#
+# Each body is judged whole, because two things about it matter. A marker inside
+# a fence is a quotation, not a verdict — this file already strips heredoc
+# bodies for exactly that reason, and the new check had not been given the
+# lesson. And a body that is ONLY the marker states a sha and nothing about a
+# review.
+markers=$(printf '%s' "$meta" |
+  jq -r '[(.comments[]?.body // ""), (.reviews[]?.body // "")]
+         | map(. + "\nxx-end-of-body-xx") | .[]' 2>/dev/null |
+  tr 'A-Z' 'a-z' |
+  awk '
+    function flush_it() {
+      if (sha != "" && said > 0) print sha
+      sha = ""; said = 0; fenced = 0
+    }
+    /^xx-end-of-body-xx$/ { flush_it(); next }
+    /^[ \t]*```/          { fenced = !fenced; next }
+    fenced                { next }
+    /^reviewed-at:[ \t]*[0-9a-f]{7,40}[ \t]*$/ {
+      line = $0
+      sub(/^reviewed-at:[ \t]*/, "", line)
+      sub(/[ \t]*$/, "", line)
+      sha = line
+      next
+    }
+    /[^ \t]/ { said++ }
+    END { flush_it() }
+  ')
+
+head_tree=$("$GIT" rev-parse "$head_oid^{tree}" 2>/dev/null)
+
+cleared=""
+for v in $markers; do
+  case "$head_oid" in "$v"*) cleared=$v; break ;; esac
+  if [ -n "$head_tree" ]; then
+    vt=$("$GIT" rev-parse "$v^{tree}" 2>/dev/null)
+    if [ -n "$vt" ] && [ "$vt" = "$head_tree" ]; then cleared=$v; break; fi
+  fi
 done
 
+[ -n "$cleared" ] && exit 0
+
 {
-  echo "Merge blocked: no review is recorded against this PR's current head."
+  echo "Merge blocked: no review is recorded against this PR's current content."
   echo
-  echo "  head       ${head_oid:0:12}"
-  if [ -n "$verdicts" ]; then
-    echo "  recorded   $(printf '%s ' $verdicts)"
+  echo "  head       $head_oid"
+  if [ -n "$markers" ]; then
+    echo "  recorded   $(printf '%s ' $markers)"
     echo
-    echo "A review that predates the last push does not carry to it. Review the"
-    echo "current diff and record that."
+    echo "None of those name this head or a commit with the same tree. A review"
+    echo "that predates a real change does not carry to it — though a rebase or"
+    echo "an amend does carry, because the content is what was read."
   else
     echo "  recorded   (none)"
+    echo
+    echo "A verdict is a comment or a review with a line of its own reading"
+    echo "Reviewed-at: <sha>, plus at least one more line saying what was found."
+    echo "A marker inside a fence is a quotation and does not count."
   fi
   echo
-  echo "Run the reviewer, act on what it says, then leave the verdict on the PR:"
-  echo "    gh pr comment $pr --body \"Reviewed-at: $head_oid"
+  echo "Run the reviewer, act on what it says, then record the verdict:"
+  echo "    gh pr comment ${pr:-<n>} --body \"Reviewed-at: $head_oid"
   echo ""
-  echo "<what the review found, and what was done about it>\""
+  echo "<what it found, and what was done about it>\""
   echo
   echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
 } >&2

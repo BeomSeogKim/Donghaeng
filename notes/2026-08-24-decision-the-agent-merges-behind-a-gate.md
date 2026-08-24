@@ -145,20 +145,31 @@ started merging.** The one condition that actually replaced the founder, "a
 reviewer has cleared it", was the one left as prose. The reviewer said so; this
 record's own quotation of `AGENTS.md` says so.
 
-So the gate now also asks the PR. A comment carrying
+So the gate now also asks the PR. A comment or a review carrying a line of its
+own that reads `Reviewed-at: <sha>`, plus at least one more line saying what was
+found, must match the head's **tree**.
 
-```
-Reviewed-at: <sha>
-```
+**The tree, not the commit — and the first cut got that wrong.** Keying to the
+commit id defeats itself, because the merge-order rule four days earlier
+mandates a rebase of every open PR after every merge, and a rebase always yields
+a new commit id. The gate would then demand a fresh review of a diff that had not
+changed by one byte, several times a day, with the block message handing over the
+exact line to paste. It would have manufactured the false signature it exists to
+make meaningful, as the *normal* path. A control everyone learns to satisfy
+without performing is worse than a documented absence, because it reads as
+coverage. Found in review before it merged.
 
-must match the PR's **current head**. Tying it to the commit is the whole design:
-a label, an approving review, or a bare "looks good" all keep standing after
-three more commits are pushed under them, and this goes stale by itself.
+**And the reviewer writes it, not the implementor.** As first delivered nothing
+said who produces the artifact, so the default was: the implementor attempts a
+merge, is blocked, and pastes the suggested line itself — the same hand signing
+that its own work was read. `reviewer.md` now owns it.
 
-It is a signature, not a proof. Whoever writes the line could have skipped the
-review entirely. What it buys is that skipping stops being an invisible omission
-and becomes a recorded claim — answerable from the PR long after the session that
-made it is gone. That is the same reason `notes/` exists.
+What it is worth, stated honestly because the first version of this paragraph
+overstated it: the line asserts a tree, not an act. Whoever writes it could have
+skipped the review, and every agent here shares one `gh` identity, so no author
+check can tell. What the gate buys is that the claim is **on the PR** — durable
+past the session that made it, and stale the moment the content moves. It does
+not make skipping impossible; it makes skipping something you can look up.
 
 No label was added: `AGENTS.md` caps them at four and means it.
 
