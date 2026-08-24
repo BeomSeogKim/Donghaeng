@@ -175,16 +175,28 @@ run_env "marker mid-line is prose"       2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHI
   STUB_REVIEW="a line saying Reviewed-at: $oid must start the line
 so this one does not count"
 
-# A sha and nothing else says nothing about a review.
 # A verdict whose findings are all in a code block still said something. The
 # fence rule is there to disqualify a marker, not the prose around it — and
-# quoting the offending line is what a reviewer normally does.
+# quoting the offending line is what a reviewer normally does. The guard on
+# that arm needs its false side asserted too, or it can be deleted with the
+# suite staying green while an empty fence starts clearing.
 run_env "findings inside a fence still count" 0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
   STUB_REVIEW="Reviewed-at: $oid
 \`\`\`
 api/Foo.kt:12 — off by one
 \`\`\`"
 
+run_env "marker plus an empty fence"      2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: $oid
+\`\`\`
+\`\`\`"
+run_env "marker plus a blank fence"       2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: $oid
+\`\`\`
+
+\`\`\`"
+
+# A sha and nothing else says nothing about a review.
 run_env "marker with no verdict text"    2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
   STUB_REVIEW="Reviewed-at: $oid"
 

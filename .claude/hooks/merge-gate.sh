@@ -255,8 +255,15 @@ fi
 #
 # Each body is judged whole and on its own. Judged whole because two things
 # about it matter: a marker inside a fence is a quotation, not a verdict — this
-# file already strips heredoc bodies for exactly that reason — and a body that
-# is ONLY the marker states a sha and says nothing about a review.
+# file has stripped heredoc bodies since it was written for exactly that reason
+# — and a body that is ONLY the marker states a sha and says nothing about a
+# review.
+#
+# Fenced lines are disqualified as markers but still count as having *said*
+# something. Quoting the offending line in a fence is what a review normally
+# looks like, and the earlier arm skipped those lines entirely, so a verdict
+# whose findings were all in a code block came back as "no review recorded" —
+# the right refusal reported as the wrong defect.
 #
 # On its own because separating them is where this went wrong twice. A printable
 # sentinel can appear inside a comment and cut it in half; NUL cannot, but

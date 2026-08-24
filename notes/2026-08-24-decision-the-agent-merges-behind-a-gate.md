@@ -198,7 +198,7 @@ answered is a judgement the gate does not make.
 
 No label was added: `AGENTS.md` caps them at four and means it.
 
-## Three parsing bugs the review caught in the checker itself
+## Four parsing bugs the review caught in the checker itself
 
 Worth keeping because they are all the same bug — a rule about text applied to
 text that was not what it looked like.
@@ -216,6 +216,12 @@ text that was not what it looked like.
   Verified: `printf 'a\0b\0' | awk 'BEGIN{RS="\0"}'` prints one record.
   Bodies are now base64-encoded one per line and decoded one at a time, so there
   is no separator inside the data at all.
+- **And then the fence rule went too far the other way.** Disqualifying a marker
+  inside a fence also dropped fenced lines from the count of whether the body
+  said anything — so a verdict whose findings were all in a code block, which is
+  what a review that quotes the offending line looks like, came back as "no
+  review recorded". The right refusal reported as the wrong defect. Fenced lines
+  are disqualified as markers and still count as prose.
 
 ## How the slice disagreement was settled
 
