@@ -123,6 +123,9 @@ the thing the gate checks.** Written by the implementor instead it attests to
 nothing, because the same hand that wrote the code would be signing that it was
 read.
 
+The body needs at least one line besides the marker, or the gate reads it as a
+sha with nothing said.
+
 Post it whether you found problems or not. A verdict naming three open findings
 is not a clearance: the gate records that a review happened against this commit,
 and whether the findings are answered is a judgement it does not make.

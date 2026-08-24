@@ -19,7 +19,6 @@ cat > "$stub/gh" <<'STUB'
 [ -n "${STUB_LOG:-}" ] && printf '%s\n' "$*" >> "$STUB_LOG"
 case "$1 $2" in
   "pr checks") exit "${STUB_CHECKS:-1}" ;;
-  "repo view") printf '%s\n' "${STUB_REPO-o/r}"; exit 0 ;;
   "pr view")
     # One shape, answered whole. The previous stub recognised --json values by
     # scanning "$@" and fell through to a base/head object for anything it did
@@ -145,9 +144,7 @@ run_env "green, ordinary api change"     0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHI
 # -- The verdict: did a reviewer look at THIS content, and say something?
 oid=a1b2c3d4e5f60718293a4b5c6d7e8f9012345678
 old=0000000000000000000000000000000000000000
-E="GH=$stub/gh STUB_CHECKS=0 STUB_BEHIND=0"
 
-run_env "reviewed at the current head"   0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0
 run_env "no verdict recorded"            2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_REVIEW=
 run_env "verdict on different content"   2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
   STUB_REVIEW="Reviewed-at: $old
@@ -179,6 +176,15 @@ run_env "marker mid-line is prose"       2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHI
 so this one does not count"
 
 # A sha and nothing else says nothing about a review.
+# A verdict whose findings are all in a code block still said something. The
+# fence rule is there to disqualify a marker, not the prose around it — and
+# quoting the offending line is what a reviewer normally does.
+run_env "findings inside a fence still count" 0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: $oid
+\`\`\`
+api/Foo.kt:12 — off by one
+\`\`\`"
+
 run_env "marker with no verdict text"    2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
   STUB_REVIEW="Reviewed-at: $oid"
 

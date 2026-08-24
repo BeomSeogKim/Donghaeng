@@ -253,12 +253,6 @@ fi
 # a review visibly sitting on the PR is a lie the hook can avoid. That path is
 # also the one that submits CRLF, which is what the `tr -d` is for.
 #
-# Each body is judged whole, because two things about it matter. A marker inside
-# a fence is a quotation, not a verdict — this file already strips heredoc
-# bodies for exactly that reason — and a body that is ONLY the marker states a
-# sha and says nothing about a review. Bodies are separated by NUL, which a
-# GitHub comment cannot contain; a printable sentinel can appear inside one and
-# silently cut it in half.
 # Each body is judged whole and on its own. Judged whole because two things
 # about it matter: a marker inside a fence is a quotation, not a verdict — this
 # file already strips heredoc bodies for exactly that reason — and a body that
@@ -270,6 +264,11 @@ fi
 # at the NUL and the empty RS means paragraph mode. Both were caught before this
 # shipped. base64 has neither problem: one body per line, decoded one at a time,
 # no separator inside the data at all.
+#
+# `--json comments` is `comments(first: 100)`, so past a hundred issue comments
+# the newest verdict stops being visible. That fails closed, and at this repo's
+# PR size it is theoretical — recorded so it is a known limit rather than a
+# mystery the day it bites.
 markers=""
 while IFS= read -r encoded; do
   [ -n "$encoded" ] || continue
@@ -277,7 +276,7 @@ while IFS= read -r encoded; do
     tr -d '\r' | tr 'A-Z' 'a-z' |
     awk '
       /^[ \t]*(```|~~~)/ { fenced = !fenced; next }
-      fenced             { next }
+      fenced             { if ($0 ~ /[^ \t]/) said++; next }
       /^reviewed-at:[ \t]*[0-9a-f]{7,40}[ \t]*$/ {
         line = $0
         sub(/^reviewed-at:[ \t]*/, "", line)
