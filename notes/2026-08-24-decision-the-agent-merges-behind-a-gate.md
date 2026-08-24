@@ -137,6 +137,49 @@ wrong about one costs the token.
 
 A PR that touches one of them is not split up. The whole PR goes to the founder.
 
+## The fourth condition, added after the first merge
+
+The gate as first written enforced three things — green, not behind `main`, not
+a reserved surface — and **all three were already mechanical before the agent
+started merging.** The one condition that actually replaced the founder, "a
+reviewer has cleared it", was the one left as prose. The reviewer said so; this
+record's own quotation of `AGENTS.md` says so.
+
+So the gate now also asks the PR. A comment carrying
+
+```
+Reviewed-at: <sha>
+```
+
+must match the PR's **current head**. Tying it to the commit is the whole design:
+a label, an approving review, or a bare "looks good" all keep standing after
+three more commits are pushed under them, and this goes stale by itself.
+
+It is a signature, not a proof. Whoever writes the line could have skipped the
+review entirely. What it buys is that skipping stops being an invisible omission
+and becomes a recorded claim — answerable from the PR long after the session that
+made it is gone. That is the same reason `notes/` exists.
+
+No label was added: `AGENTS.md` caps them at four and means it.
+
+## How the slice disagreement was settled
+
+The reviewer held that `#228` should have been two PRs — the gate repairs first,
+green, then the policy — and by the one-issue-one-requirement rule it was right.
+The counter offered at the time was that the policy is inert while Actions cannot
+run, so "repairs first and green" was not available to buy. Actions came back
+before the merge, which took that counter away.
+
+Settled by merging `#228` whole anyway, for a reason that is about cost and not
+about principle: the review had already run against the whole thing and produced
+seven findings, all fixed, so splitting afterwards does not un-review anything.
+What it would cost is reconstructing five commits by hand — `rebase -i` is
+unavailable in the agent environment — seven days before launch.
+
+**The principle was taken prospectively instead**, which is why this fourth
+condition arrived as its own issue and its own PR rather than as another commit
+on that branch.
+
 ## Still open
 
 - **The Actions block is a quota, not a failed payment.** GitHub's annotation

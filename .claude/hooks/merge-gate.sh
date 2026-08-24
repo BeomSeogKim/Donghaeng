@@ -201,15 +201,70 @@ fi
 
 reserved=$(printf '%s\n' "$files" | "$(dirname "$0")/reserved-surfaces.sh")
 status=$?
-[ "$status" -eq 0 ] && exit 0
+
+if [ "$status" -ne 0 ]; then
+  {
+    echo "Merge blocked: this PR touches a surface the founder merges personally —"
+    printf '%s\n' "$reserved" | sed 's/^/  /'
+    echo
+    echo "Auth, sessions, tokens and migrations are carved out of agent merging"
+    echo "because a mistake there is expensive and quiet. Everything else on this"
+    echo "PR is fine; hand it over rather than splitting the change."
+    echo
+    echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
+  } >&2
+  exit 2
+fi
+
+# Green, current, and ordinary. Last question, and the only one that is not
+# mechanical in origin: did a reviewer actually look at THIS?
+#
+# The other three were mechanical before the agent started merging. The
+# condition that replaced the founder — "a reviewer has cleared it" — was the
+# one left as prose, which AGENTS.md says is where a checkable rule goes to die.
+#
+# The marker is tied to the head commit on purpose. A label, or a bare "looks
+# good", still stands after three more commits are pushed under it; this goes
+# stale by itself. It is a signature, not a proof — whoever writes the line
+# could have skipped the review — but it turns skipping from an invisible
+# omission into a recorded claim, answerable from the PR long after the session
+# that made it is gone.
+head_oid=$("$GH" pr view ${pr:+"$pr"} --json headRefOid -q '.headRefOid' 2>/dev/null)
+verdicts=$("$GH" pr view ${pr:+"$pr"} --json comments -q '.comments[].body' 2>/dev/null |
+  grep -oiE '^Reviewed-at:[[:space:]]*[0-9a-f]{7,40}' |
+  sed -E 's/^[Rr]eviewed-at:[[:space:]]*//')
+
+if [ -z "$head_oid" ]; then
+  {
+    echo "Merge blocked: cannot read this PR's head commit, so whether the"
+    echo "review on it is current is unknown. Unknown is refused."
+  } >&2
+  exit 2
+fi
+
+for v in $verdicts; do
+  case "$head_oid" in
+    "$v"*) exit 0 ;;
+  esac
+done
 
 {
-  echo "Merge blocked: this PR touches a surface the founder merges personally —"
-  printf '%s\n' "$reserved" | sed 's/^/  /'
+  echo "Merge blocked: no review is recorded against this PR's current head."
   echo
-  echo "Auth, sessions, tokens and migrations are carved out of agent merging"
-  echo "because a mistake there is expensive and quiet. Everything else on this"
-  echo "PR is fine; hand it over rather than splitting the change."
+  echo "  head       ${head_oid:0:12}"
+  if [ -n "$verdicts" ]; then
+    echo "  recorded   $(printf '%s ' $verdicts)"
+    echo
+    echo "A review that predates the last push does not carry to it. Review the"
+    echo "current diff and record that."
+  else
+    echo "  recorded   (none)"
+  fi
+  echo
+  echo "Run the reviewer, act on what it says, then leave the verdict on the PR:"
+  echo "    gh pr comment $pr --body \"Reviewed-at: $head_oid"
+  echo ""
+  echo "<what the review found, and what was done about it>\""
   echo
   echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
 } >&2

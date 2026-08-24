@@ -22,7 +22,11 @@ case "$1 $2" in
   "repo view") printf '%s\n' "${STUB_REPO-o/r}"; exit 0 ;;
   "pr view")
     for a in "$@"; do
-      [ "$a" = "files" ] && { printf '%s\n' ${STUB_FILES-web/src/x.tsx}; exit 0; }
+      case "$a" in
+        *files*)       printf '%s\n' ${STUB_FILES-web/src/x.tsx}; exit 0 ;;
+        *headRefOid*)  printf '%s\n' "${STUB_HEAD_OID-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678}"; exit 0 ;;
+        *comments*)    printf '%s\n' "${STUB_REVIEW-Reviewed-at: a1b2c3d4e5f60718293a4b5c6d7e8f9012345678}"; exit 0 ;;
+      esac
     done
     printf '{"baseRefName":"%s","headRefName":"%s"}\n' "${STUB_BASE-main}" "${STUB_HEAD-feat}"
     exit 0 ;;
@@ -116,5 +120,28 @@ run_env "green, touches auth"            2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHI
   STUB_FILES="api/src/main/kotlin/com/donghaeng/auth/SecurityConfig.kt"
 run_env "green, ordinary api change"     0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
   STUB_FILES="api/src/main/kotlin/com/donghaeng/guest/GuestService.kt"
+
+# ── And the one condition that is not mechanical in origin: did a reviewer look
+#    at THIS commit? Tied to the head oid so it goes stale by itself.
+oid=a1b2c3d4e5f60718293a4b5c6d7e8f9012345678
+run_env "reviewed at the current head"   0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0
+run_env "no review recorded"             2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_REVIEW=
+run_env "review predates the last push"  2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: 0000000000000000000000000000000000000000"
+run_env "short sha is enough"            0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: a1b2c3d"
+run_env "seven hex is the floor"         2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: a1b2c"
+run_env "lowercase key accepted"         0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="reviewed-at: $oid"
+run_env "prose mentioning it is not it"  2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="the rule is that a Reviewed-at: $oid line must start its own line"
+run_env "verdict among other comments"   0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="looks good to me
+Reviewed-at: $oid
+three findings, all fixed"
+run_env "head oid unreadable"            2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_HEAD_OID=
+run_env "reserved beats reviewed"        2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_FILES="api/src/main/resources/db/migration/V7__x.sql"
 
 exit $fail
