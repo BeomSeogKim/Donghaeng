@@ -21,7 +21,6 @@ command=$(jq -r '.tool_input.command // empty') || {
 }
 
 GH=${GH:-gh}
-GIT=${GIT:-git}
 
 # Match the invocation, not the words. A plain substring test blocked this
 # hook's own commit, because the message *described* the rule — and every
@@ -148,7 +147,6 @@ meta=$("$GH" pr view ${pr:+"$pr"} \
 base=$(printf '%s' "$meta" | jq -r '.baseRefName // empty' 2>/dev/null)
 head=$(printf '%s' "$meta" | jq -r '.headRefName // empty' 2>/dev/null)
 head_oid=$(printf '%s' "$meta" | jq -r '.headRefOid // empty' 2>/dev/null | tr 'A-Z' 'a-z')
-repo=$("$GH" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
 
 # -- 1. Was the green against today's `main`?
 #
@@ -157,7 +155,7 @@ repo=$("$GH" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
 # 2026-08-20 (#138); the rule was written the same day and three of the next
 # eight merges went in stale anyway. AGENTS.md says a mechanically checkable
 # rule belongs in a hook rather than in prose — this is the hook.
-if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head" ]; then
+if [ -z "$base" ] || [ -z "$head" ]; then
   {
     echo "Merge blocked: cannot read this PR's base and head branches, so"
     echo "whether it is behind ${base:-main} is unknown."
@@ -166,7 +164,7 @@ if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head" ]; then
   exit 2
 fi
 
-behind=$("$GH" api "repos/$repo/compare/$base...$head" -q '.behind_by' 2>/dev/null)
+behind=$("$GH" api "repos/{owner}/{repo}/compare/$base...$head" -q '.behind_by' 2>/dev/null)
 
 case "$behind" in
   0) ;;
@@ -223,18 +221,25 @@ fi
 # -- 3. Did a reviewer look at THIS, and say something about it?
 #
 # The other two were mechanical before the agent started merging. The condition
-# that replaced the founder — "a reviewer has cleared it" — was the one left as
-# prose, which AGENTS.md says is where a checkable rule goes to die.
+# that replaced the founder — "a reviewer has reported on it" — was the one left
+# as prose, which AGENTS.md says is where a checkable rule goes to die.
 #
-# The verdict is matched against the head's TREE, not its commit id. Keying it
-# to the commit was the first cut and it defeats itself: the merge-order rule
-# above mandates a rebase of every open PR after every merge, a rebase always
-# yields a new commit id, and the gate would then demand a fresh review of a
-# diff that had not changed by one byte — several times a day, with the block
-# message handing over the very line to paste. A control everyone learns to
-# satisfy without performing is worse than a documented absence, because it
-# reads as coverage. A content change still goes stale; a replay of the same
-# content does not. (Found in review on #230.)
+# Keyed to the head commit, so a rebase stales the verdict. That was argued both
+# ways before it landed: keying to the commit means the rebase this hook itself
+# mandates costs a fresh review of a byte-identical patch, and a control people
+# learn to satisfy without performing is worse than a documented absence.
+#
+# The counter, which is why it stands: `#138` was two independently green PRs
+# whose *combination* was broken. A change replayed onto a `main` that moved is
+# not the change that was read — CI re-runs for exactly that reason, and the
+# reviewer is the half of that pair that can see a semantic collision rather
+# than a compile error. So the re-review a rebase forces is the point, not the
+# cost. `git patch-id` would carry a verdict across a rebase and is deliberately
+# not used; neither is the head's tree, which does not survive a rebase anyway.
+#
+# What makes it cheap enough to mean it: the verdict is written by `reviewer`,
+# not by the hand that wrote the code, and running it again is an agent
+# invocation rather than somebody's afternoon.
 if [ -z "$head_oid" ]; then
   {
     echo "Merge blocked: cannot read this PR's head commit, so whether the"
@@ -245,59 +250,67 @@ fi
 
 # Reviews as well as comments: a verdict left through `gh pr review` or the web
 # UI's Files-changed flow lands in a different list, and reporting "none" beside
-# a review visibly sitting on the PR is a lie the hook can avoid.
+# a review visibly sitting on the PR is a lie the hook can avoid. That path is
+# also the one that submits CRLF, which is what the `tr -d` is for.
 #
 # Each body is judged whole, because two things about it matter. A marker inside
 # a fence is a quotation, not a verdict — this file already strips heredoc
-# bodies for exactly that reason, and the new check had not been given the
-# lesson. And a body that is ONLY the marker states a sha and nothing about a
-# review.
-markers=$(printf '%s' "$meta" |
-  jq -r '[(.comments[]?.body // ""), (.reviews[]?.body // "")]
-         | map(. + "\nxx-end-of-body-xx") | .[]' 2>/dev/null |
-  tr 'A-Z' 'a-z' |
-  awk '
-    function flush_it() {
-      if (sha != "" && said > 0) print sha
-      sha = ""; said = 0; fenced = 0
-    }
-    /^xx-end-of-body-xx$/ { flush_it(); next }
-    /^[ \t]*```/          { fenced = !fenced; next }
-    fenced                { next }
-    /^reviewed-at:[ \t]*[0-9a-f]{7,40}[ \t]*$/ {
-      line = $0
-      sub(/^reviewed-at:[ \t]*/, "", line)
-      sub(/[ \t]*$/, "", line)
-      sha = line
-      next
-    }
-    /[^ \t]/ { said++ }
-    END { flush_it() }
-  ')
-
-head_tree=$("$GIT" rev-parse "$head_oid^{tree}" 2>/dev/null)
+# bodies for exactly that reason — and a body that is ONLY the marker states a
+# sha and says nothing about a review. Bodies are separated by NUL, which a
+# GitHub comment cannot contain; a printable sentinel can appear inside one and
+# silently cut it in half.
+# Each body is judged whole and on its own. Judged whole because two things
+# about it matter: a marker inside a fence is a quotation, not a verdict — this
+# file already strips heredoc bodies for exactly that reason — and a body that
+# is ONLY the marker states a sha and says nothing about a review.
+#
+# On its own because separating them is where this went wrong twice. A printable
+# sentinel can appear inside a comment and cut it in half; NUL cannot, but
+# `awk RS="\0"` silently keeps only the first record, because an awk string ends
+# at the NUL and the empty RS means paragraph mode. Both were caught before this
+# shipped. base64 has neither problem: one body per line, decoded one at a time,
+# no separator inside the data at all.
+markers=""
+while IFS= read -r encoded; do
+  [ -n "$encoded" ] || continue
+  found=$(printf '%s' "$encoded" | base64 -d 2>/dev/null |
+    tr -d '\r' | tr 'A-Z' 'a-z' |
+    awk '
+      /^[ \t]*(```|~~~)/ { fenced = !fenced; next }
+      fenced             { next }
+      /^reviewed-at:[ \t]*[0-9a-f]{7,40}[ \t]*$/ {
+        line = $0
+        sub(/^reviewed-at:[ \t]*/, "", line)
+        sub(/[ \t]*$/, "", line)
+        shas = shas " " line
+        next
+      }
+      /[^ \t]/ { said++ }
+      END { if (shas != "" && said > 0) print shas }
+    ')
+  markers="$markers$found"
+done <<EOF
+$(printf '%s' "$meta" |
+  jq -r '[(.comments[]?.body // ""), (.reviews[]?.body // "")] | .[] | @base64' 2>/dev/null)
+EOF
 
 cleared=""
 for v in $markers; do
   case "$head_oid" in "$v"*) cleared=$v; break ;; esac
-  if [ -n "$head_tree" ]; then
-    vt=$("$GIT" rev-parse "$v^{tree}" 2>/dev/null)
-    if [ -n "$vt" ] && [ "$vt" = "$head_tree" ]; then cleared=$v; break; fi
-  fi
 done
 
 [ -n "$cleared" ] && exit 0
 
 {
-  echo "Merge blocked: no review is recorded against this PR's current content."
+  echo "Merge blocked: no review is recorded against this PR's head."
   echo
   echo "  head       $head_oid"
   if [ -n "$markers" ]; then
-    echo "  recorded   $(printf '%s ' $markers)"
+    echo "  recorded  $markers"
     echo
-    echo "None of those name this head or a commit with the same tree. A review"
-    echo "that predates a real change does not carry to it — though a rebase or"
-    echo "an amend does carry, because the content is what was read."
+    echo "None of those name this head. A review does not carry across a push —"
+    echo "the rebase this hook asks for when the base has moved included, because"
+    echo "a change replayed onto a different main is not the change that was read."
   else
     echo "  recorded   (none)"
     echo
@@ -306,10 +319,9 @@ done
     echo "A marker inside a fence is a quotation and does not count."
   fi
   echo
-  echo "Run the reviewer, act on what it says, then record the verdict:"
-  echo "    gh pr comment ${pr:-<n>} --body \"Reviewed-at: $head_oid"
-  echo ""
-  echo "<what it found, and what was done about it>\""
+  echo "Run the reviewer against this head. It records the verdict itself"
+  echo "(.claude/agents/reviewer.md) — that line written by hand is the same"
+  echo "hand signing that its own work was read."
   echo
   echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
 } >&2

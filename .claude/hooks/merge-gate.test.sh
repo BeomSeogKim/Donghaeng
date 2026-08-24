@@ -50,20 +50,7 @@ exit 1
 STUB
 chmod +x "$stub/gh"
 
-# The tree comparison talks to git. Stubbed for the same reason gh is: the suite
-# must be able to say "when the trees match, the gate accepts" without building
-# a scratch repository and moving the working directory out from under $0.
-cat > "$stub/git" <<'STUB'
-#!/usr/bin/env bash
-# rev-parse <sha>^{tree}
-sha=${2%%^*}
-case " ${STUB_UNKNOWN_OBJECTS-} " in *" $sha "*) exit 128 ;; esac
-eval "printf '%s\n' \"\${STUB_TREE_${sha}:-tree-of-$sha}\""
-STUB
-chmod +x "$stub/git"
-
 export GH="$stub/gh"
-export GIT="$stub/git"
 
 run() {
   printf '%s' "$2" | jq -Rs '{tool_input:{command:.}}' | ./.claude/hooks/merge-gate.sh >/dev/null 2>&1
@@ -135,7 +122,7 @@ green() { STUB_CHECKS=0 "$@"; }
 
 run_env() {
   name=$1; shift; expected=$1; shift
-  env GIT="$stub/git" "$@" ./.claude/hooks/merge-gate.sh < <(printf '%s' "gh pr merge 220" | jq -Rs '{tool_input:{command:.}}') >/dev/null 2>&1
+  env "$@" ./.claude/hooks/merge-gate.sh < <(printf '%s' "gh pr merge 220" | jq -Rs '{tool_input:{command:.}}') >/dev/null 2>&1
   got=$?
   if [ "$got" = "$expected" ]; then verdict="ok"; else verdict="MISMATCH"; fail=1; fi
   printf '%-40s exit %s  expected %s  %s\n' "$name" "$got" "$expected" "$verdict"
@@ -145,7 +132,6 @@ run_env "green, current, ordinary files" 0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHI
 run_env "green but 3 behind base"        2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=3
 run_env "green, behind_by unreadable"    2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=
 run_env "green, behind_by not a number"  2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=null
-run_env "green, repo slug unreadable"    2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_REPO=
 run_env "green, base branch unreadable"  2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_BASE=
 run_env "green, file list unreadable"    2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_FILES=
 run_env "green, touches a migration"     2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
@@ -208,23 +194,37 @@ run_env "verdict in reviews, not comments" 0 GH="$stub/gh" STUB_CHECKS=0 STUB_BE
   STUB_REVIEW= STUB_PRREVIEW="Reviewed-at: $oid
 found nothing"
 
-# -- Keyed to the TREE, not the commit. The merge-order rule forces a rebase of
-#    every open PR after every merge; keying to the commit would demand a fresh
-#    review of a byte-identical diff each time, which trains the false line.
-run_env "rebase keeps the verdict"       0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
-  STUB_TREE_a1b2c3d4e5f60718293a4b5c6d7e8f9012345678=T1 \
-  STUB_TREE_0000000000000000000000000000000000000000=T1 \
-  STUB_REVIEW="Reviewed-at: $old
-reviewed before the rebase"
-run_env "different content still stales"  2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
-  STUB_TREE_a1b2c3d4e5f60718293a4b5c6d7e8f9012345678=T2 \
-  STUB_TREE_0000000000000000000000000000000000000000=T1 \
-  STUB_REVIEW="Reviewed-at: $old
-reviewed before three more commits"
-run_env "unknown old object is not a pass" 2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
-  STUB_UNKNOWN_OBJECTS="$old" \
-  STUB_REVIEW="Reviewed-at: $old
-reviewed somewhere this clone never saw"
+# The verdict in the SECOND body, with a first body that carries none. The
+# NUL-separated parser kept only the first record and silently lost this.
+run_env "verdict in the second body"     0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="just a note, no verdict here" \
+  STUB_PRREVIEW="Reviewed-at: $oid
+found nothing"
+
+# A rebase stales the verdict, deliberately: a change replayed onto a moved
+# `main` is not the change that was read, and #138 was two green PRs whose
+# combination was broken. Keying to the tree does not help either — a rebase
+# changes the tree (verified) — and `git patch-id`, which would carry, is not
+# used on purpose.
+
+# -- Shapes the first cut of the parser got wrong (review on #230).
+run_env "CRLF body, as the web UI sends" 0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="$(printf 'Reviewed-at: %s\r\nall clean\r\n' "$oid")"
+run_env "tilde fence is a fence too"     2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="the rule is:
+~~~
+Reviewed-at: $oid
+~~~
+that is all"
+run_env "current marker is not last"     0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: $oid
+all fixed. the previous pass said:
+Reviewed-at: $old
+four findings"
+run_env "body containing the old sentinel" 0 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \
+  STUB_REVIEW="Reviewed-at: $oid
+xx-end-of-body-xx
+that line used to cut the body in half"
 
 run_env "head oid unreadable"            2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 STUB_HEAD_OID=
 run_env "reserved beats the verdict"     2 GH="$stub/gh" STUB_CHECKS=0 STUB_BEHIND=0 \

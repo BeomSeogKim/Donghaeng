@@ -109,17 +109,20 @@ Do not rewrite the code. Do not produce a patch. Do not congratulate.
 
 When what you reviewed is a PR, post your verdict to it before you finish:
 
-    gh pr comment <n> --body "Reviewed-at: $(gh pr view <n> --json headRefOid -q .headRefOid)
+    gh pr comment <n> --body "Reviewed-at: <the sha you diffed>
 
     <one line per pass: what it found, or that it ran clean>"
 
-`merge-gate.sh` refuses a merge without that line, matched against the head's
-tree — so **you are the source of the thing the gate checks.** Written by the
-implementor instead, it attests to nothing: the same hand that wrote the code
-would be signing that it was read.
+**The sha you diffed** — resolve it once at the start and use that, never
+`gh pr view` at post time. If the head has moved while you were reading, say so
+in the comment and do not write the marker: signing a commit you never opened
+manufactures exactly the false clearance this exists to prevent.
+
+`merge-gate.sh` refuses a merge without that line — so **you are the source of
+the thing the gate checks.** Written by the implementor instead it attests to
+nothing, because the same hand that wrote the code would be signing that it was
+read.
 
 Post it whether you found problems or not. A verdict naming three open findings
-is not a clearance — it is a record, and the merge is still blocked by the
-findings themselves until they are answered. Re-post after the content changes;
-a review of a diff that no longer exists carries to nothing. A rebase or an
-amend does carry, because the content is what you read.
+is not a clearance: the gate records that a review happened against this commit,
+and whether the findings are answered is a judgement it does not make.

@@ -147,31 +147,75 @@ record's own quotation of `AGENTS.md` says so.
 
 So the gate now also asks the PR. A comment or a review carrying a line of its
 own that reads `Reviewed-at: <sha>`, plus at least one more line saying what was
-found, must match the head's **tree**.
-
-**The tree, not the commit — and the first cut got that wrong.** Keying to the
-commit id defeats itself, because the merge-order rule four days earlier
-mandates a rebase of every open PR after every merge, and a rebase always yields
-a new commit id. The gate would then demand a fresh review of a diff that had not
-changed by one byte, several times a day, with the block message handing over the
-exact line to paste. It would have manufactured the false signature it exists to
-make meaningful, as the *normal* path. A control everyone learns to satisfy
-without performing is worse than a documented absence, because it reads as
-coverage. Found in review before it merged.
+found, must name the current head.
 
 **And the reviewer writes it, not the implementor.** As first delivered nothing
 said who produces the artifact, so the default was: the implementor attempts a
 merge, is blocked, and pastes the suggested line itself — the same hand signing
-that its own work was read. `reviewer.md` now owns it.
+that its own work was read. `reviewer.md` now owns it, and is told to record the
+sha it diffed rather than re-reading the head at post time, which would sign a
+commit it never opened.
 
-What it is worth, stated honestly because the first version of this paragraph
-overstated it: the line asserts a tree, not an act. Whoever writes it could have
-skipped the review, and every agent here shares one `gh` identity, so no author
-check can tell. What the gate buys is that the claim is **on the PR** — durable
-past the session that made it, and stale the moment the content moves. It does
-not make skipping impossible; it makes skipping something you can look up.
+## The key: the commit, argued twice
+
+The first cut keyed to the commit id. Review objected, correctly, that the
+merge-order rule four days earlier mandates a rebase of every open PR after
+every merge; a rebase always yields a new commit id; so the gate would demand a
+fresh review of a byte-identical patch several times a day, with the block
+message handing over the exact line to paste. **A control everyone learns to
+satisfy without performing is worse than a documented absence, because it reads
+as coverage.**
+
+The second cut keyed to the head's **tree**, and that was simply wrong. A rebase
+changes the tree — the tree is the whole snapshot, so it carries whatever else
+landed on `main`. Verified in a scratch repo: tree before `a259b10`, after
+`89f5f19`. `git patch-id` is the primitive that does survive (`697697f` both
+sides), and it is what "the diff had not changed by one byte" actually means.
+
+It keys to the commit anyway. The reason is `#138`: two independently green PRs
+whose *combination* was broken. **A change replayed onto a `main` that moved is
+not the change that was read.** CI re-runs after a rebase for exactly that
+reason, and between CI and the reviewer, the reviewer is the half that can see a
+semantic collision rather than a compile error. The re-review a rebase forces is
+the point, not the cost — and it is affordable precisely because the verdict is
+an agent's output, not a person's afternoon.
+
+That is a rejection of a finding the implementor had already accepted once, so
+it is written down rather than argued: the reviewer weighed re-review as pure
+ceremony, and `#138` is the case where it is not.
+
+## What it is worth, stated plainly
+
+The line asserts a commit, not an act. Whoever writes it could have skipped the
+review, and every agent here shares one `gh` identity, so no author check can
+tell. What the gate buys is that the claim is **on the PR** — durable past the
+session that made it, and stale the moment anything is pushed. It does not make
+skipping impossible; it makes skipping something you can look up.
+
+`AGENTS.md` was corrected to match: it said a reviewer "cleared" the PR, and
+nothing checks clearance. It says "reported on" now. Whether open findings are
+answered is a judgement the gate does not make.
 
 No label was added: `AGENTS.md` caps them at four and means it.
+
+## Three parsing bugs the review caught in the checker itself
+
+Worth keeping because they are all the same bug — a rule about text applied to
+text that was not what it looked like.
+
+- **A marker inside a fence is a quotation.** `merge-gate.sh` has stripped
+  heredoc bodies since it was written, for exactly this reason; the new check
+  did not get the lesson, and this record contains a fenced example. Fixed for
+  backticks, then found still open for `~~~`.
+- **Only the last marker in a body survived**, so a comment reading
+  "all fixed, the previous pass said: `Reviewed-at: <old>`" blocked its own PR.
+- **Bodies were separated by a printable sentinel**, which a comment can
+  contain. Moving to NUL looked like the fix and was worse: `awk RS="\0"` keeps
+  only the first record, because an awk string ends at the NUL and an empty `RS`
+  means paragraph mode — so every comment after the first was invisible.
+  Verified: `printf 'a\0b\0' | awk 'BEGIN{RS="\0"}'` prints one record.
+  Bodies are now base64-encoded one per line and decoded one at a time, so there
+  is no separator inside the data at all.
 
 ## How the slice disagreement was settled
 

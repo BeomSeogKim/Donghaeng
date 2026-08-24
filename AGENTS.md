@@ -97,8 +97,8 @@ what that costs. Everything below still binds.
   shipped image answers 404 on `/v3/api-docs`, `/swagger-ui`, `/actuator`. And a
   *skipped* job is unknown, never passed: `seam` is `needs: api`, so a red `api`
   hides it.
-- **An agent merges its own PR once a reviewer has cleared it and the check is
-  green** (2026-08-24, taken for speed to launch and reversible in one line).
+- **An agent merges its own PR once `reviewer` has reported on that head and the
+  check is green** (2026-08-24, for speed to launch, reversible in one line).
   `merge-gate.sh` holds all four conditions — green, not behind `main`, no auth ·
   session · token · migration (those stay yours), and a `Reviewed-at: <head sha>`
   comment (`notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md`).
