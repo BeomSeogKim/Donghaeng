@@ -67,8 +67,9 @@ and there are three machines.
 
 The founder stops seeing each merge. What replaces that is a reviewer verdict
 the founder does not read and a check the founder does not watch — so the honest
-statement is that **the blast radius of a bad review just grew**, and the two
-things holding it are `merge-gate.sh` and the reviewer's independence.
+statement is that **the blast radius of a bad review just grew**, and the three
+things holding it are `merge-gate.sh`, the carve-out below, and the reviewer's
+independence.
 
 That independence is weaker than the root `AGENTS.md` claimed. It said the
 reviewers *cannot* write; they hold `Bash`, so they can. The line now says they
@@ -79,12 +80,34 @@ taken today.
 Reversal is one line: put `Bash(gh pr merge*)` back under `ask` in
 `.claude/settings.json`.
 
+## Four surfaces stay the founder's
+
+Decided the same day, on the second pass. **Auth, sessions, tokens and
+migrations are carved out of agent merging.** Everywhere else a bad merge
+announces itself — a wrong screen is visible, a wrong endpoint fails a test. On
+these four it does not: a session bug is a quiet leak, a bad migration is quiet
+data, and both are the shape the product values name outright (정직함·믿음직함 —
+a wrong number, a lost edit, a leaked contact).
+
+The list is `reserved-surfaces.sh`, not prose and not a regex buried in
+`merge-gate.sh`: one home, and a suite that exercises it without needing a live
+green PR. It reads paths on stdin and refuses `api/`'s `auth/` tree, every file
+under `db/migration/`, and `InviteToken`. It is scoped to `api/` deliberately —
+the client being wrong about a token costs a failed request; the server being
+wrong about one costs the token.
+
+A PR that touches one of them is not split up. The whole PR goes to the founder.
+
 ## Still open
 
 - **Billing.** Until the Actions spending limit is raised, `gh pr checks` cannot
-  come back green, so `merge-gate.sh` refuses every merge. Auto-merge is inert
-  and correctly so. This is the launch's first blocker, not this repo's.
-- **Whether a carve-out is wanted** — auth, sessions, tokens and migrations are
-  the surfaces where a wrong merge is expensive and quiet, which is the shape the
-  product values single out. Nothing here carves them out; the founder asked for
-  merging to move and that is what moved. Say so and it becomes one line.
+  come back green, so `merge-gate.sh` refuses every merge — including the one
+  that introduces this policy. Auto-merge is inert, and correctly so. There is no
+  API for raising it: `PATCH`-ing a spending limit does not exist, and reading
+  usage needs an interactive `gh auth refresh -s user`. It is a browser action.
+- **Branch protection is still the honest fix.** GitHub answers the protection
+  endpoint with *"Upgrade to GitHub Pro or make this repository public."* Both
+  routes also solve the minutes problem — public repos run Actions free, Pro
+  raises the allowance — and either would retire `.githooks/pre-push` and half of
+  `merge-gate.sh`. Not decided here: publishing a commercial product's source
+  seven days before launch is not a build-workflow question.

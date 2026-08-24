@@ -148,6 +148,7 @@ jobs:
       - run: bash .claude/hooks/merge-gate.test.sh
       - run: bash .claude/hooks/db-guard.test.sh
       - run: bash .claude/hooks/closes-guard.test.sh
+      - run: bash .claude/hooks/reserved-surfaces.test.sh
       - run: bash .githooks/pre-push.test.sh
 
       # Not a suite — the check itself. The budget was written into AGENTS.md

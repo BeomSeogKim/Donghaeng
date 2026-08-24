@@ -117,26 +117,55 @@ fi
 behind=$(gh api "repos/$repo/compare/$base...$head" -q '.behind_by' 2>/dev/null)
 
 case "$behind" in
-  0) exit 0 ;;
+  0) ;;
   ''|*[!0-9]*)
     {
       echo "Merge blocked: could not compare $head against $base."
       echo "Whether this branch is stale is unknown, and unknown is refused."
     } >&2
     exit 2 ;;
+  *)
+    {
+      echo "Merge blocked: this branch is $behind commit(s) behind $base."
+      echo
+      echo "Its green check ran against a $base that no longer exists, and nothing"
+      echo "re-checks a PR when the base moves under it. Re-running the check does"
+      echo "not help — it replays the recorded merge SHA."
+      echo
+      echo "Rebase and push, let the check run again, then merge:"
+      echo "    git fetch origin && git rebase origin/$base && git push --force-with-lease"
+      echo
+      echo "(notes/2026-08-20-decision-merge-order-gate.md)"
+    } >&2
+    exit 2 ;;
 esac
 
+# Green, and green against today's `main`. Last question: is this a diff the
+# agent may merge at all? Four surfaces stay the founder's, and the list lives
+# in reserved-surfaces.sh rather than here so it has one home and a suite.
+files=$(gh pr view ${pr:+"$pr"} --json files -q '.files[].path' 2>/dev/null)
+
+if [ -z "$files" ]; then
+  {
+    echo "Merge blocked: could not list this PR's files, so whether it touches a"
+    echo "reserved surface is unknown. Unknown is refused, not assumed ordinary."
+  } >&2
+  exit 2
+fi
+
+reserved=$(printf '%s\n' "$files" | "$(dirname "$0")/reserved-surfaces.sh")
+status=$?
+[ "$status" -eq 0 ] && exit 0
+
 {
-  echo "Merge blocked: this branch is $behind commit(s) behind $base."
+  echo "Merge blocked: this PR touches a surface the founder merges personally —"
+  printf '%s\n' "$reserved" | sed 's/^/  /'
   echo
-  echo "Its green check ran against a $base that no longer exists, and nothing"
-  echo "re-checks a PR when the base moves under it. Re-running the check does"
-  echo "not help — it replays the recorded merge SHA."
+  echo "Auth, sessions, tokens and migrations are carved out of agent merging"
+  echo "because a mistake there is expensive and quiet. Everything else on this"
+  echo "PR is fine; hand it over rather than splitting the change."
   echo
-  echo "Rebase and push, let the check run again, then merge:"
-  echo "    git fetch origin && git rebase origin/$base && git push --force-with-lease"
-  echo
-  echo "(notes/2026-08-20-decision-merge-order-gate.md)"
+  echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
 } >&2
 
 exit 2

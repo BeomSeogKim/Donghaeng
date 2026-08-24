@@ -99,9 +99,9 @@ what that costs. Everything below still binds.
   hides it.
 - **An agent merges its own PR once a reviewer has cleared it and the check is
   green** (2026-08-24, taken for speed to launch and reversible in one line).
-  `merge-gate.sh` refuses a red check *and* a branch behind `main`, so
-  rebase-before-merge is now a gate rather than a habit
-  (`notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md`).
+  `merge-gate.sh` holds every exception — it refuses a red check, a branch behind
+  `main`, and any diff touching auth, sessions, tokens or a migration, which stay
+  yours (`notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md`).
 - **Two milestones** (`v1`, `post-v1` — deferred, never cancelled) and **four
   labels** (`api`, `web`, `infra`, `open-question`); don't add more, labels stop
   meaning anything once they multiply. **`open-question` closes only by writing
