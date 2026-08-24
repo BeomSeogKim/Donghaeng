@@ -18,20 +18,30 @@
 
 set -uo pipefail
 
-command=$(jq -r '.tool_input.command // empty')
+command=$(jq -r '.tool_input.command // empty') || {
+  echo "closes-guard: cannot read the tool input, so refusing rather than" >&2
+  echo "assuming this command carries no closing trailer." >&2
+  exit 2
+}
 [ -n "$command" ] || exit 0
 
-# One heredoc IS dropped, against the rule above: the one that writes a FILE.
+# A heredoc that writes a FILE is dropped, against the rule above.
 # `cat > audit.html <<'HTML' … HTML` carries a document, and a document about
-# this rule quotes the broken form on purpose — which blocked the writing of
-# one on 2026-08-24. merge-gate.sh learned the same lesson from its own commit
-# message; this hook did not get the fix.
+# this rule quotes the broken form on purpose — which blocked the writing of one
+# on 2026-08-24. merge-gate.sh learned the same lesson from its own commit
+# message; this hook had not been given the fix.
 #
-# The strip is narrow in both directions. It needs a redirect into a file, and
-# it stands down the moment the same line also names a message-writing command,
-# because `gh pr create --body "$(cat <<EOF … EOF)"` is the shape every PR body
-# in this repo is written with and its heredoc is the message, not a file.
-runnable=$(printf '%s\n' "$command" | awk '
+# But a file can BECOME a message: `cat > /tmp/m.txt <<EOF … EOF` followed by
+# `git commit -F /tmp/m.txt` is a commit message that never appears on a command
+# line. The first cut of this strip was line-scoped and let exactly that through
+# — the #83 failure, reintroduced by the fix for a false positive. So the target
+# of every file-write heredoc is read off its opener, and a target that is later
+# consumed by -F / --body-file / --file is not a document at all.
+consumed=$(printf '%s\n' "$command" |
+  grep -oE '(-F|--file|--body-file)[[:space:]=]+[^[:space:]"'"'"';&|]+' |
+  sed -E 's/^(-F|--file|--body-file)[[:space:]=]+//' | tr '\n' ' ')
+
+runnable=$(printf '%s\n' "$command" | awk -v consumed=" $consumed " '
   BEGIN { delim = ""; strip = 0 }
   {
     if (delim != "") {
@@ -47,20 +57,35 @@ runnable=$(printf '%s\n' "$command" | awk '
       sub(/^<<-?[ \t]*/, "", d)
       gsub(/['"'"'"]/, "", d)
       delim = d
+
+      # A file sink, and not a line that is itself writing a message —
+      # `gh pr create --body "$(cat <<EOF … EOF)"` is how every PR body in this
+      # repo is written and its heredoc IS the message.
       strip = ($0 ~ /(^|[;&|(])[ \t]*(cat|tee)[ \t][^|]*>/) &&
-              ($0 !~ /git[ \t]+commit|gh[ \t]+(pr|issue)[ \t]/) ? 1 : 0
+              ($0 !~ /git[ \t]+commit|gh[ \t]+pr[ \t]/) ? 1 : 0
+
+      # ...and not a file that gets handed to a message flag further along.
+      if (strip && match($0, />>?[ \t]*[^ \t|;&<>]+/)) {
+        target = substr($0, RSTART, RLENGTH)
+        sub(/^>>?[ \t]*/, "", target)
+        if (index(consumed, " " target " ") > 0) strip = 0
+      }
     }
     print
   }')
 
-# Only commands that can actually close an issue. A command position is
-# required, so `grep 'Closes #1, #2' notes/` is a mention and not a commit.
+# Only commands that can actually close an issue, in a command position, so
+# `grep "Closes #1, #2" notes/` is a mention and not a commit.
 #
-# `gh pr edit` and the comment forms are here because a trailer added to a body
-# AFTER the PR exists closes just as silently as one written at creation — and
-# `gh pr edit` is on the allow list, so nothing else stands in front of it.
+# `gh pr edit` is here because a trailer added to a PR body AFTER the PR exists
+# closes just as silently as one written at creation, and `gh pr edit` is on the
+# allow list so nothing else stands in front of it. The issue and comment forms
+# are NOT here: GitHub closes issues from a PR description and from commit
+# messages only, so an issue body or a comment closes nothing — blocking them
+# would only refuse legitimate prose, and this repo's issues discuss this very
+# rule.
 if ! printf '%s\n' "$runnable" | grep -Eq \
-  '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+(pr|issue)[[:space:]]+(create|edit|comment))\b'; then
+  '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+pr[[:space:]]+(create|edit))\b'; then
   exit 0
 fi
 

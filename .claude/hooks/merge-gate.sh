@@ -12,7 +12,15 @@
 
 set -uo pipefail
 
-command=$(jq -r '.tool_input.command // empty')
+# A gate that waves everything through when its own dependency is missing is
+# pointed the wrong way; db-guard.sh has said so since it was written.
+command=$(jq -r '.tool_input.command // empty') || {
+  echo "merge-gate: cannot read the tool input. Refusing rather than assuming" >&2
+  echo "this command is not a merge." >&2
+  exit 2
+}
+
+GH=${GH:-gh}
 
 # Match the invocation, not the words. A plain substring test blocked this
 # hook's own commit, because the message *described* the rule — and every
@@ -59,22 +67,60 @@ runnable=$(printf '%s\n' "$command" | awk '
 # for that walked straight through this hook until 2026-08-24 — matched against
 # a live PR it returned 0 without ever asking about a check. db-guard.sh had
 # already written the lesson down: matching a spelling is not matching an act.
-if printf '%s\n' "$runnable" |
-  grep -Eq '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b'; then
-  # `gh pr merge 42` targets a specific PR; a bare `gh pr merge` targets the
-  # current branch's. Ask about the same PR the command would merge, not
-  # whichever one the branch happens to point at.
-  pr=$(printf '%s' "$runnable" | sed -n 's/.*gh pr merge[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' | head -1)
+#
+# The limit is honest and stated: `gh api --method PUT "$url"` names no path
+# this hook can read. `gh api` is deliberately absent from the allow list, so
+# that shape still stops at a permission prompt.
+merges=$(printf '%s\n' "$runnable" |
+  grep -Eco '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b')
+
+if [ "$merges" -gt 1 ]; then
+  {
+    echo "Merge blocked: this command merges more than one PR."
+    echo "Only the first can be checked, so the rest would go unexamined."
+    echo "Run them one at a time."
+  } >&2
+  exit 2
+fi
+
+pr=""
+if [ "$merges" -eq 1 ]; then
+  # The positional argument is not necessarily first: `gh pr merge --squash 220`
+  # is the same command as `gh pr merge 220 --squash`, and reading "digits
+  # immediately after merge" found nothing in that form — then silently fell
+  # back to whatever PR the CURRENT branch points at. This repo runs worktrees,
+  # so that is routinely a different, greener PR (found in review, 2026-08-24).
+  seg=$(printf '%s\n' "$runnable" | grep -o 'gh[[:space:]]\{1,\}pr[[:space:]]\{1,\}merge.*' | head -1)
+  seg=${seg%%;*}; seg=${seg%%&*}; seg=${seg%%|*}
+  for tok in $seg; do
+    case "$tok" in
+      gh|pr|merge|-*) continue ;;
+      *[!0-9]*)       break ;;
+      *)              pr=$tok; break ;;
+    esac
+  done
+  # An empty $pr here is the bare `gh pr merge`, which really does mean the
+  # current branch's PR. Both `checks` and `view` below resolve it the same way.
 elif printf '%s\n' "$runnable" | grep -Eq '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*gh[[:space:]]+api\b' &&
-     printf '%s\n' "$runnable" | grep -Eq 'pulls/[0-9]+/merge'; then
-  pr=$(printf '%s' "$runnable" | sed -n 's|.*pulls/\([0-9]\{1,\}\)/merge.*|\1|p' | head -1)
+     printf '%s\n' "$runnable" | grep -Eq -- '(-X|--method)[[:space:]=]+PUT' &&
+     printf '%s\n' "$runnable" | grep -Eq '/merge\b'; then
+  pr=$(printf '%s\n' "$runnable" | grep -o 'pulls/[0-9]\{1,\}/merge' | head -1 |
+       sed 's|pulls/||; s|/merge||')
+  if [ -z "$pr" ]; then
+    {
+      echo "Merge blocked: this is a merge call whose PR number this hook cannot"
+      echo "read, so it cannot ask whether that PR's checks are green."
+      echo "Use \`gh pr merge <n>\`, which it can."
+    } >&2
+    exit 2
+  fi
 else
   exit 0
 fi
 
 # `gh pr checks` exits 0 only when every check has concluded successfully; 8
 # means some are still pending, anything else means failing or absent.
-checks=$(gh pr checks ${pr:+"$pr"} 2>&1)
+checks=$("$GH" pr checks ${pr:+"$pr"} 2>&1)
 status=$?
 
 if [ "$status" -ne 0 ]; then
@@ -100,8 +146,8 @@ fi
 # 2026-08-20 (#138); the rule was written the same day and three of the next
 # eight merges went in stale anyway. AGENTS.md says a mechanically checkable
 # rule belongs in a hook rather than in prose — this is the hook.
-repo=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
-refs=$(gh pr view ${pr:+"$pr"} --json baseRefName,headRefName 2>/dev/null)
+repo=$("$GH" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
+refs=$("$GH" pr view ${pr:+"$pr"} --json baseRefName,headRefName 2>/dev/null)
 base=$(printf '%s' "$refs" | jq -r '.baseRefName // empty' 2>/dev/null)
 head=$(printf '%s' "$refs" | jq -r '.headRefName // empty' 2>/dev/null)
 
@@ -114,7 +160,7 @@ if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head" ]; then
   exit 2
 fi
 
-behind=$(gh api "repos/$repo/compare/$base...$head" -q '.behind_by' 2>/dev/null)
+behind=$("$GH" api "repos/$repo/compare/$base...$head" -q '.behind_by' 2>/dev/null)
 
 case "$behind" in
   0) ;;
@@ -143,7 +189,7 @@ esac
 # Green, and green against today's `main`. Last question: is this a diff the
 # agent may merge at all? Four surfaces stay the founder's, and the list lives
 # in reserved-surfaces.sh rather than here so it has one home and a suite.
-files=$(gh pr view ${pr:+"$pr"} --json files -q '.files[].path' 2>/dev/null)
+files=$("$GH" pr view ${pr:+"$pr"} --json files -q '.files[].path' 2>/dev/null)
 
 if [ -z "$files" ]; then
   {

@@ -63,6 +63,45 @@ exercised at all. It has both now. What CI still cannot see is whether a given
 clone ran `git config core.hooksPath .githooks`; that stays a per-machine fact
 and there are three machines.
 
+## What the review sent back
+
+The first cut of these repairs went to `reviewer` before merging, which is the
+policy this record introduces, applied to itself. It came back with a
+**regression in the fix**, which is the finding worth keeping:
+
+The heredoc strip that stopped `closes-guard.sh` refusing documents was
+line-scoped — it decided by looking at the heredoc's opener. But a file can
+*become* a message. `cat > /tmp/m.txt <<EOF … EOF` followed by `git commit -F
+/tmp/m.txt` is a commit message that never appears on a command line, and the
+strip dropped it: the exact `#83` failure, reintroduced by the fix for a false
+positive. The strip now reads the redirect target off the opener and stands down
+if that path is later handed to `-F`, `--body-file` or `--file`. Both shapes are
+in the suite.
+
+Four more, all fail-open, all now closed: a flag-first `gh pr merge --squash 220`
+extracted no number and fell back to *the current branch's* PR — with worktrees
+that is routinely a different, greener one; two merges in one command left the
+second unchecked; `gh api -X PUT "repos/$R/pulls/$N/merge"` still passed because
+the new branch wanted literal digits; and a failed `jq` turned the whole gate off
+silently.
+
+And the observation behind all of them: **the suite could not have caught any of
+it.** Every "expected 2" case reached 2 through `gh` being unauthenticated in
+CI, so the entire staleness and reserved-surface path could have been deleted
+with the suite still green. The calls now route through `GH=${GH:-gh}` and the
+suite drives a stub — green-and-current, green-and-behind, unreadable base,
+non-numeric `behind_by`, unreadable file list, a reserved path, and which PR
+number each invocation actually asks about. The `pre-push` suite had the same
+disease in a different form: it ran against the real repo, whose root
+`AGENTS.md` sits at exactly 220/220, so adding one line there would have turned
+four ref-check cases red for the wrong reason. It builds its own tree now.
+
+One finding stands unresolved by agreement: the reviewer holds that this should
+have been two PRs — repairs first, green, then the policy — and by the repo's
+own one-issue-one-requirement rule it is right. The counter, recorded rather
+than argued: the policy is inert until Actions can run at all, so landing the
+repairs "first and green" is not available to buy. The founder settles it.
+
 ## What this costs
 
 The founder stops seeing each merge. What replaces that is a reviewer verdict
