@@ -139,11 +139,32 @@ A PR that touches one of them is not split up. The whole PR goes to the founder.
 
 ## Still open
 
-- **Billing.** Until the Actions spending limit is raised, `gh pr checks` cannot
-  come back green, so `merge-gate.sh` refuses every merge — including the one
-  that introduces this policy. Auto-merge is inert, and correctly so. There is no
-  API for raising it: `PATCH`-ing a spending limit does not exist, and reading
-  usage needs an interactive `gh auth refresh -s user`. It is a browser action.
+- **The Actions block is a quota, not a failed payment.** GitHub's annotation
+  offers both readings; the billing usage says which. `Donghaeng` consumed
+  **exactly 2,000 minutes** in August — the Free plan's private-repo allowance to
+  the minute — and stopped dead on 2026-08-23, the same hour `seam` on `c548171`
+  was refused. Every run since has been turned away at zero minutes.
+
+  The burn is recent and steep: ~50–100 minutes a day until 2026-08-19, then 299
+  / 376 / 516 across 08-20 to 08-22. Roughly **10 billable minutes per run**
+  across the six jobs, and 20–46 runs a day. `Partitur` shows 21,267 minutes in
+  the same account and consumes none of the allowance — it is public, and public
+  repos run free. That is the whole difference.
+
+  **Included minutes reset on the 1st, which is after the 2026-08-31 launch.**
+  Waiting is not one of the options. At ~30 runs a day for seven days the
+  overage is about 2,100 minutes — **roughly $13** at the Linux rate. Raising the
+  spending limit is the cheap, boring answer, and it is a browser action: there
+  is no API for it, and reading usage at all needs `gh auth refresh -s user`.
+
+- **Not trimming CI to save it.** The obvious lever is the `edited` trigger,
+  which re-runs the whole pipeline when a PR title or body changes. It is not
+  being pulled. It exists because a retargeted PR shows a green merge button with
+  *zero* checks, which reads as passed at a glance — it cost a red `main` on
+  2026-08-20 — and `merge-gate.sh` only covers that for an agent's merge, not for
+  a human's in the web UI. Trading a safety trigger for two dollars is the wrong
+  side of "green means deployable".
+
 - **Branch protection is still the honest fix.** GitHub answers the protection
   endpoint with *"Upgrade to GitHub Pro or make this repository public."* Both
   routes also solve the minutes problem — public repos run Actions free, Pro
