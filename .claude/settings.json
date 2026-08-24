@@ -1,9 +1,7 @@
 {
   "permissions": {
-    "ask": [
-      "Bash(gh pr merge*)"
-    ],
     "allow": [
+      "Bash(gh pr merge*)",
       "Bash(./gradlew *)",
       "Bash(npm run *)",
       "Bash(npm ci*)",
