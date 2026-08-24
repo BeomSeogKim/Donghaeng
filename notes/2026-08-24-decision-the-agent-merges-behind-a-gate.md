@@ -137,6 +137,110 @@ wrong about one costs the token.
 
 A PR that touches one of them is not split up. The whole PR goes to the founder.
 
+## The fourth condition, added after the first merge
+
+The gate as first written enforced three things — green, not behind `main`, not
+a reserved surface — and **all three were already mechanical before the agent
+started merging.** The one condition that actually replaced the founder, "a
+reviewer has cleared it", was the one left as prose. The reviewer said so; this
+record's own quotation of `AGENTS.md` says so.
+
+So the gate now also asks the PR. A comment or a review carrying a line of its
+own that reads `Reviewed-at: <sha>`, plus at least one more line saying what was
+found, must name the current head.
+
+**And the reviewer writes it, not the implementor.** As first delivered nothing
+said who produces the artifact, so the default was: the implementor attempts a
+merge, is blocked, and pastes the suggested line itself — the same hand signing
+that its own work was read. `reviewer.md` now owns it, and is told to record the
+sha it diffed rather than re-reading the head at post time, which would sign a
+commit it never opened.
+
+## The key: the commit, argued twice
+
+The first cut keyed to the commit id. Review objected, correctly, that the
+merge-order rule four days earlier mandates a rebase of every open PR after
+every merge; a rebase always yields a new commit id; so the gate would demand a
+fresh review of a byte-identical patch several times a day, with the block
+message handing over the exact line to paste. **A control everyone learns to
+satisfy without performing is worse than a documented absence, because it reads
+as coverage.**
+
+The second cut keyed to the head's **tree**, and that was simply wrong. A rebase
+changes the tree — the tree is the whole snapshot, so it carries whatever else
+landed on `main`. Verified in a scratch repo: tree before `a259b10`, after
+`89f5f19`. `git patch-id` is the primitive that does survive (`697697f` both
+sides), and it is what "the diff had not changed by one byte" actually means.
+
+It keys to the commit anyway. The reason is `#138`: two independently green PRs
+whose *combination* was broken. **A change replayed onto a `main` that moved is
+not the change that was read.** CI re-runs after a rebase for exactly that
+reason, and between CI and the reviewer, the reviewer is the half that can see a
+semantic collision rather than a compile error. The re-review a rebase forces is
+the point, not the cost — and it is affordable precisely because the verdict is
+an agent's output, not a person's afternoon.
+
+That is a rejection of a finding the implementor had already accepted once, so
+it is written down rather than argued: the reviewer weighed re-review as pure
+ceremony, and `#138` is the case where it is not.
+
+## What it is worth, stated plainly
+
+The line asserts a commit, not an act. Whoever writes it could have skipped the
+review, and every agent here shares one `gh` identity, so no author check can
+tell. What the gate buys is that the claim is **on the PR** — durable past the
+session that made it, and stale the moment anything is pushed. It does not make
+skipping impossible; it makes skipping something you can look up.
+
+`AGENTS.md` was corrected to match: it said a reviewer "cleared" the PR, and
+nothing checks clearance. It says "reported on" now. Whether open findings are
+answered is a judgement the gate does not make.
+
+No label was added: `AGENTS.md` caps them at four and means it.
+
+## Four parsing bugs the review caught in the checker itself
+
+Worth keeping because they are all the same bug — a rule about text applied to
+text that was not what it looked like.
+
+- **A marker inside a fence is a quotation.** `merge-gate.sh` has stripped
+  heredoc bodies since it was written, for exactly this reason; the new check
+  did not get the lesson, and this record contains a fenced example. Fixed for
+  backticks, then found still open for `~~~`.
+- **Only the last marker in a body survived**, so a comment reading
+  "all fixed, the previous pass said: `Reviewed-at: <old>`" blocked its own PR.
+- **Bodies were separated by a printable sentinel**, which a comment can
+  contain. Moving to NUL looked like the fix and was worse: `awk RS="\0"` keeps
+  only the first record, because an awk string ends at the NUL and an empty `RS`
+  means paragraph mode — so every comment after the first was invisible.
+  Verified: `printf 'a\0b\0' | awk 'BEGIN{RS="\0"}'` prints one record.
+  Bodies are now base64-encoded one per line and decoded one at a time, so there
+  is no separator inside the data at all.
+- **And then the fence rule went too far the other way.** Disqualifying a marker
+  inside a fence also dropped fenced lines from the count of whether the body
+  said anything — so a verdict whose findings were all in a code block, which is
+  what a review that quotes the offending line looks like, came back as "no
+  review recorded". The right refusal reported as the wrong defect. Fenced lines
+  are disqualified as markers and still count as prose.
+
+## How the slice disagreement was settled
+
+The reviewer held that `#228` should have been two PRs — the gate repairs first,
+green, then the policy — and by the one-issue-one-requirement rule it was right.
+The counter offered at the time was that the policy is inert while Actions cannot
+run, so "repairs first and green" was not available to buy. Actions came back
+before the merge, which took that counter away.
+
+Settled by merging `#228` whole anyway, for a reason that is about cost and not
+about principle: the review had already run against the whole thing and produced
+seven findings, all fixed, so splitting afterwards does not un-review anything.
+What it would cost is reconstructing five commits by hand — `rebase -i` is
+unavailable in the agent environment — seven days before launch.
+
+**The principle was taken prospectively instead**, which is why this fourth
+condition arrived as its own issue and its own PR rather than as another commit
+on that branch.
+
 ## Still open
 
 - **The Actions block is a quota, not a failed payment.** GitHub's annotation

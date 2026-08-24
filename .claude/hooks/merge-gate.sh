@@ -138,29 +138,33 @@ if [ "$status" -ne 0 ]; then
   exit 2
 fi
 
-# Green. Now the second question, which the green cannot answer:
-# was it green against today's `main`?
+# Green. Everything left is one question with three parts, and one `gh pr view`
+# answers all of them. It used to be four separate calls for fields a single
+# call returns — seven network round trips before a merge.
+meta=$("$GH" pr view ${pr:+"$pr"} \
+  --json baseRefName,headRefName,headRefOid,files,comments,reviews 2>/dev/null)
+
+base=$(printf '%s' "$meta" | jq -r '.baseRefName // empty' 2>/dev/null)
+head=$(printf '%s' "$meta" | jq -r '.headRefName // empty' 2>/dev/null)
+head_oid=$(printf '%s' "$meta" | jq -r '.headRefOid // empty' 2>/dev/null | tr 'A-Z' 'a-z')
+
+# -- 1. Was the green against today's `main`?
 #
 # Nothing re-checks an open PR when `main` moves under it, and re-running is a
 # trap because it replays the recorded merge SHA. It cost a red `main` on
 # 2026-08-20 (#138); the rule was written the same day and three of the next
 # eight merges went in stale anyway. AGENTS.md says a mechanically checkable
 # rule belongs in a hook rather than in prose — this is the hook.
-repo=$("$GH" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
-refs=$("$GH" pr view ${pr:+"$pr"} --json baseRefName,headRefName 2>/dev/null)
-base=$(printf '%s' "$refs" | jq -r '.baseRefName // empty' 2>/dev/null)
-head=$(printf '%s' "$refs" | jq -r '.headRefName // empty' 2>/dev/null)
-
-if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head" ]; then
+if [ -z "$base" ] || [ -z "$head" ]; then
   {
     echo "Merge blocked: cannot read this PR's base and head branches, so"
-    echo "whether it is behind $([ -n "$base" ] && printf '%s' "$base" || printf 'main') is unknown."
+    echo "whether it is behind ${base:-main} is unknown."
     echo "Unknown is refused, not assumed current."
   } >&2
   exit 2
 fi
 
-behind=$("$GH" api "repos/$repo/compare/$base...$head" -q '.behind_by' 2>/dev/null)
+behind=$("$GH" api "repos/{owner}/{repo}/compare/$base...$head" -q '.behind_by' 2>/dev/null)
 
 case "$behind" in
   0) ;;
@@ -186,10 +190,8 @@ case "$behind" in
     exit 2 ;;
 esac
 
-# Green, and green against today's `main`. Last question: is this a diff the
-# agent may merge at all? Four surfaces stay the founder's, and the list lives
-# in reserved-surfaces.sh rather than here so it has one home and a suite.
-files=$("$GH" pr view ${pr:+"$pr"} --json files -q '.files[].path' 2>/dev/null)
+# -- 2. Is this a diff the agent may merge at all?
+files=$(printf '%s' "$meta" | jq -r '.files[]?.path // empty' 2>/dev/null)
 
 if [ -z "$files" ]; then
   {
@@ -201,15 +203,131 @@ fi
 
 reserved=$(printf '%s\n' "$files" | "$(dirname "$0")/reserved-surfaces.sh")
 status=$?
-[ "$status" -eq 0 ] && exit 0
+
+if [ "$status" -ne 0 ]; then
+  {
+    echo "Merge blocked: this PR touches a surface the founder merges personally —"
+    printf '%s\n' "$reserved" | sed 's/^/  /'
+    echo
+    echo "Auth, sessions, tokens and migrations are carved out of agent merging"
+    echo "because a mistake there is expensive and quiet. Everything else on this"
+    echo "PR is fine; hand it over rather than splitting the change."
+    echo
+    echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
+  } >&2
+  exit 2
+fi
+
+# -- 3. Did a reviewer look at THIS, and say something about it?
+#
+# The other two were mechanical before the agent started merging. The condition
+# that replaced the founder — "a reviewer has reported on it" — was the one left
+# as prose, which AGENTS.md says is where a checkable rule goes to die.
+#
+# Keyed to the head commit, so a rebase stales the verdict. That was argued both
+# ways before it landed: keying to the commit means the rebase this hook itself
+# mandates costs a fresh review of a byte-identical patch, and a control people
+# learn to satisfy without performing is worse than a documented absence.
+#
+# The counter, which is why it stands: `#138` was two independently green PRs
+# whose *combination* was broken. A change replayed onto a `main` that moved is
+# not the change that was read — CI re-runs for exactly that reason, and the
+# reviewer is the half of that pair that can see a semantic collision rather
+# than a compile error. So the re-review a rebase forces is the point, not the
+# cost. `git patch-id` would carry a verdict across a rebase and is deliberately
+# not used; neither is the head's tree, which does not survive a rebase anyway.
+#
+# What makes it cheap enough to mean it: the verdict is written by `reviewer`,
+# not by the hand that wrote the code, and running it again is an agent
+# invocation rather than somebody's afternoon.
+if [ -z "$head_oid" ]; then
+  {
+    echo "Merge blocked: cannot read this PR's head commit, so whether the"
+    echo "review on it is current is unknown. Unknown is refused."
+  } >&2
+  exit 2
+fi
+
+# Reviews as well as comments: a verdict left through `gh pr review` or the web
+# UI's Files-changed flow lands in a different list, and reporting "none" beside
+# a review visibly sitting on the PR is a lie the hook can avoid. That path is
+# also the one that submits CRLF, which is what the `tr -d` is for.
+#
+# Each body is judged whole and on its own. Judged whole because two things
+# about it matter: a marker inside a fence is a quotation, not a verdict — this
+# file has stripped heredoc bodies since it was written for exactly that reason
+# — and a body that is ONLY the marker states a sha and says nothing about a
+# review.
+#
+# Fenced lines are disqualified as markers but still count as having *said*
+# something. Quoting the offending line in a fence is what a review normally
+# looks like, and the earlier arm skipped those lines entirely, so a verdict
+# whose findings were all in a code block came back as "no review recorded" —
+# the right refusal reported as the wrong defect.
+#
+# On its own because separating them is where this went wrong twice. A printable
+# sentinel can appear inside a comment and cut it in half; NUL cannot, but
+# `awk RS="\0"` silently keeps only the first record, because an awk string ends
+# at the NUL and the empty RS means paragraph mode. Both were caught before this
+# shipped. base64 has neither problem: one body per line, decoded one at a time,
+# no separator inside the data at all.
+#
+# `--json comments` is `comments(first: 100)`, so past a hundred issue comments
+# the newest verdict stops being visible. That fails closed, and at this repo's
+# PR size it is theoretical — recorded so it is a known limit rather than a
+# mystery the day it bites.
+markers=""
+while IFS= read -r encoded; do
+  [ -n "$encoded" ] || continue
+  found=$(printf '%s' "$encoded" | base64 -d 2>/dev/null |
+    tr -d '\r' | tr 'A-Z' 'a-z' |
+    awk '
+      /^[ \t]*(```|~~~)/ { fenced = !fenced; next }
+      fenced             { if ($0 ~ /[^ \t]/) said++; next }
+      /^reviewed-at:[ \t]*[0-9a-f]{7,40}[ \t]*$/ {
+        line = $0
+        sub(/^reviewed-at:[ \t]*/, "", line)
+        sub(/[ \t]*$/, "", line)
+        shas = shas " " line
+        next
+      }
+      /[^ \t]/ { said++ }
+      END { if (shas != "" && said > 0) print shas }
+    ')
+  markers="$markers$found"
+done <<EOF
+$(printf '%s' "$meta" |
+  jq -r '[(.comments[]?.body // ""), (.reviews[]?.body // "")] | .[] | @base64' 2>/dev/null)
+EOF
+
+cleared=""
+for v in $markers; do
+  case "$head_oid" in "$v"*) cleared=$v; break ;; esac
+done
+
+[ -n "$cleared" ] && exit 0
 
 {
-  echo "Merge blocked: this PR touches a surface the founder merges personally —"
-  printf '%s\n' "$reserved" | sed 's/^/  /'
+  echo "Merge blocked: no review is recorded against this PR's head."
   echo
-  echo "Auth, sessions, tokens and migrations are carved out of agent merging"
-  echo "because a mistake there is expensive and quiet. Everything else on this"
-  echo "PR is fine; hand it over rather than splitting the change."
+  echo "  head       $head_oid"
+  if [ -n "$markers" ]; then
+    echo "  recorded  $markers"
+    echo
+    echo "None of those name this head. A review does not carry across a push —"
+    echo "the rebase this hook asks for when the base has moved included, because"
+    echo "a change replayed onto a different main is not the change that was read."
+  else
+    echo "  recorded   (none)"
+    echo
+    echo "A verdict is a comment or a review with a line of its own reading"
+    echo "Reviewed-at: <sha>, plus at least one more line saying what was found."
+    echo "A marker inside a fence is a quotation and does not count."
+  fi
+  echo
+  echo "Run the reviewer against this head. It records the verdict itself"
+  echo "(.claude/agents/reviewer.md) — that line written by hand is the same"
+  echo "hand signing that its own work was read."
   echo
   echo "(notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md)"
 } >&2
