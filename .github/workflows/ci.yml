@@ -37,9 +37,14 @@ on:
     types: [opened, synchronize, reopened, edited]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Never on `main`: this pipeline exists to certify `main`, and two quick
-  # merges would cancel the first run. A cancelled run is not green.
+  # On `main` every commit gets a group of its own, so no run can evict another.
+  # `cancel-in-progress: false` was believed to be enough and is not: it only
+  # protects a run that has already STARTED, while GitHub keeps at most one
+  # QUEUED run per group and cancels the older one when the next arrives. Three
+  # merges inside 47 seconds on 2026-08-23 left 7c76831 and 93cc2b6 with zero
+  # jobs — not red, never looked at. A cancelled run is not green, and neither
+  # is a run that never existed.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'branch' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # No repository secret is used anywhere in this file. The only credentials are
@@ -132,10 +137,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # These shell suites guard rules the repo cannot otherwise enforce: what may
-    # be merged, what may reach a database, what a closing trailer may name, and
-    # how large the rule files may get. All were hand-run until a review found
-    # seven bypasses in the db guard at once — a control nothing exercises is a
-    # control nobody knows the shape of.
+    # be merged, what may be pushed, what may reach a database, what a closing
+    # trailer may name, and how large the rule files may get. All were hand-run
+    # until a review found seven bypasses in the db guard at once — a control
+    # nothing exercises is a control nobody knows the shape of.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -143,6 +148,7 @@ jobs:
       - run: bash .claude/hooks/merge-gate.test.sh
       - run: bash .claude/hooks/db-guard.test.sh
       - run: bash .claude/hooks/closes-guard.test.sh
+      - run: bash .githooks/pre-push.test.sh
 
       # Not a suite — the check itself. The budget was written into AGENTS.md
       # and run by nobody, which is the same shape as the 908-line file it was
@@ -167,6 +173,19 @@ jobs:
               || { echo "::error::$hook.sh is not registered as a Bash PreToolUse hook"; exit 1; }
             echo "wired: $hook.sh"
           done
+
+      # The push guard has no settings.json to be registered in — it is wired by
+      # `git config core.hooksPath .githooks`, which is per-clone local state CI
+      # cannot see. So this checks the half that IS checkable: the file exists
+      # and is executable. Installation stays a per-machine fact; run
+      # `git config --get core.hooksPath` on any clone that has not been used
+      # for a push yet.
+      - name: The push guard is present and executable
+        run: |
+          set -euo pipefail
+          test -x .githooks/pre-push \
+            || { echo "::error::.githooks/pre-push is missing or not executable"; exit 1; }
+          echo "present: .githooks/pre-push"
 
   web:
     name: web · typecheck + test + build

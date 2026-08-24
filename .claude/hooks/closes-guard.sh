@@ -21,10 +21,46 @@ set -uo pipefail
 command=$(jq -r '.tool_input.command // empty')
 [ -n "$command" ] || exit 0
 
+# One heredoc IS dropped, against the rule above: the one that writes a FILE.
+# `cat > audit.html <<'HTML' … HTML` carries a document, and a document about
+# this rule quotes the broken form on purpose — which blocked the writing of
+# one on 2026-08-24. merge-gate.sh learned the same lesson from its own commit
+# message; this hook did not get the fix.
+#
+# The strip is narrow in both directions. It needs a redirect into a file, and
+# it stands down the moment the same line also names a message-writing command,
+# because `gh pr create --body "$(cat <<EOF … EOF)"` is the shape every PR body
+# in this repo is written with and its heredoc is the message, not a file.
+runnable=$(printf '%s\n' "$command" | awk '
+  BEGIN { delim = ""; strip = 0 }
+  {
+    if (delim != "") {
+      line = $0
+      sub(/^[ \t]+/, "", line)
+      if (line == delim) { delim = ""; strip = 0; next }
+      if (strip) next
+      print
+      next
+    }
+    if (match($0, /<<-?[ \t]*['"'"'"]?[A-Za-z_][A-Za-z0-9_]*['"'"'"]?/)) {
+      d = substr($0, RSTART, RLENGTH)
+      sub(/^<<-?[ \t]*/, "", d)
+      gsub(/['"'"'"]/, "", d)
+      delim = d
+      strip = ($0 ~ /(^|[;&|(])[ \t]*(cat|tee)[ \t][^|]*>/) &&
+              ($0 !~ /git[ \t]+commit|gh[ \t]+(pr|issue)[ \t]/) ? 1 : 0
+    }
+    print
+  }')
+
 # Only commands that can actually close an issue. A command position is
 # required, so `grep 'Closes #1, #2' notes/` is a mention and not a commit.
-if ! printf '%s\n' "$command" | grep -Eq \
-  '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+pr[[:space:]]+create)\b'; then
+#
+# `gh pr edit` and the comment forms are here because a trailer added to a body
+# AFTER the PR exists closes just as silently as one written at creation — and
+# `gh pr edit` is on the allow list, so nothing else stands in front of it.
+if ! printf '%s\n' "$runnable" | grep -Eq \
+  '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+(pr|issue)[[:space:]]+(create|edit|comment))\b'; then
   exit 0
 fi
 
@@ -35,7 +71,7 @@ fi
 # The test is not "more than one issue on the line" — `Closes #33, closes #35`
 # is the correct fix and must pass. It is "more issue references than closing
 # keywords", which is exactly what GitHub drops on the floor.
-offenders=$(printf '%s\n' "$command" | awk '
+offenders=$(printf '%s\n' "$runnable" | awk '
   {
     line = $0
     sub(/^[ \t]+/, "", line)

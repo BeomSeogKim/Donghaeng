@@ -54,35 +54,89 @@ runnable=$(printf '%s\n' "$command" | awk '
     print out line
   }')
 
-if ! printf '%s\n' "$runnable" |
+# Two spellings of one act. `gh pr merge` is the one anybody types; the REST
+# call underneath it is `PUT /repos/{owner}/{repo}/pulls/{n}/merge`, and reaching
+# for that walked straight through this hook until 2026-08-24 — matched against
+# a live PR it returned 0 without ever asking about a check. db-guard.sh had
+# already written the lesson down: matching a spelling is not matching an act.
+if printf '%s\n' "$runnable" |
   grep -Eq '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b'; then
+  # `gh pr merge 42` targets a specific PR; a bare `gh pr merge` targets the
+  # current branch's. Ask about the same PR the command would merge, not
+  # whichever one the branch happens to point at.
+  pr=$(printf '%s' "$runnable" | sed -n 's/.*gh pr merge[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' | head -1)
+elif printf '%s\n' "$runnable" | grep -Eq '(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)[[:space:]]*gh[[:space:]]+api\b' &&
+     printf '%s\n' "$runnable" | grep -Eq 'pulls/[0-9]+/merge'; then
+  pr=$(printf '%s' "$runnable" | sed -n 's|.*pulls/\([0-9]\{1,\}\)/merge.*|\1|p' | head -1)
+else
   exit 0
 fi
-
-# `gh pr merge 42` targets a specific PR; a bare `gh pr merge` targets the
-# current branch's. Ask about the same PR the command would merge, not whichever
-# one the branch happens to point at.
-pr=$(printf '%s' "$runnable" | sed -n 's/.*gh pr merge[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' | head -1)
 
 # `gh pr checks` exits 0 only when every check has concluded successfully; 8
 # means some are still pending, anything else means failing or absent.
 checks=$(gh pr checks ${pr:+"$pr"} 2>&1)
 status=$?
 
-if [ "$status" -eq 0 ]; then
-  exit 0
+if [ "$status" -ne 0 ]; then
+  {
+    echo "Merge blocked: this PR's checks are not green."
+    echo
+    echo "$checks"
+    echo
+    if [ "$status" -eq 8 ]; then
+      echo "Some checks are still running. Wait for them rather than merging."
+    fi
+    echo "A red check is never merged — not 'unrelated', not 'fix it after'."
+    echo "(notes/2026-08-08-decision-build-workflow.md)"
+  } >&2
+  exit 2
 fi
 
+# Green. Now the second question, which the green cannot answer:
+# was it green against today's `main`?
+#
+# Nothing re-checks an open PR when `main` moves under it, and re-running is a
+# trap because it replays the recorded merge SHA. It cost a red `main` on
+# 2026-08-20 (#138); the rule was written the same day and three of the next
+# eight merges went in stale anyway. AGENTS.md says a mechanically checkable
+# rule belongs in a hook rather than in prose — this is the hook.
+repo=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
+refs=$(gh pr view ${pr:+"$pr"} --json baseRefName,headRefName 2>/dev/null)
+base=$(printf '%s' "$refs" | jq -r '.baseRefName // empty' 2>/dev/null)
+head=$(printf '%s' "$refs" | jq -r '.headRefName // empty' 2>/dev/null)
+
+if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head" ]; then
+  {
+    echo "Merge blocked: cannot read this PR's base and head branches, so"
+    echo "whether it is behind $([ -n "$base" ] && printf '%s' "$base" || printf 'main') is unknown."
+    echo "Unknown is refused, not assumed current."
+  } >&2
+  exit 2
+fi
+
+behind=$(gh api "repos/$repo/compare/$base...$head" -q '.behind_by' 2>/dev/null)
+
+case "$behind" in
+  0) exit 0 ;;
+  ''|*[!0-9]*)
+    {
+      echo "Merge blocked: could not compare $head against $base."
+      echo "Whether this branch is stale is unknown, and unknown is refused."
+    } >&2
+    exit 2 ;;
+esac
+
 {
-  echo "Merge blocked: this PR's checks are not green."
+  echo "Merge blocked: this branch is $behind commit(s) behind $base."
   echo
-  echo "$checks"
+  echo "Its green check ran against a $base that no longer exists, and nothing"
+  echo "re-checks a PR when the base moves under it. Re-running the check does"
+  echo "not help — it replays the recorded merge SHA."
   echo
-  if [ "$status" -eq 8 ]; then
-    echo "Some checks are still running. Wait for them rather than merging."
-  fi
-  echo "A red check is never merged — not 'unrelated', not 'fix it after'."
-  echo "(notes/2026-08-08-decision-build-workflow.md)"
+  echo "Rebase and push, let the check run again, then merge:"
+  echo "    git fetch origin && git rebase origin/$base && git push --force-with-lease"
+  echo
+  echo "(notes/2026-08-20-decision-merge-order-gate.md)"
 } >&2
 
 exit 2

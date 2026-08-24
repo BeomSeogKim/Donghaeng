@@ -94,14 +94,14 @@ what that costs. Everything below still binds.
 - **One issue = one requirement.** Branch off `main`, PR back into it.
 - **A red check is never merged.** Not "unrelated", not "fix it after". Green
   means *deployable* — `prod-boot` boots the real config, `docker` asserts the
-  shipped image answers 404 on `/v3/api-docs`, `/swagger-ui`, `/actuator`.
-  **Merging is the founder's, never an agent's.**
-- **A green check is not a check that ran against today's `main`.** Nothing
-  re-checks an open PR when `main` moves under it, and **re-running is a trap —
-  it replays the recorded merge SHA.** After every merge, **rebase and push** the
-  open PRs before merging the next one. And a *skipped* job is unknown, never
-  passed: `seam` is `needs: api`, so a red `api` hides it
-  (`notes/2026-08-20-decision-merge-order-gate.md`).
+  shipped image answers 404 on `/v3/api-docs`, `/swagger-ui`, `/actuator`. And a
+  *skipped* job is unknown, never passed: `seam` is `needs: api`, so a red `api`
+  hides it.
+- **An agent merges its own PR once a reviewer has cleared it and the check is
+  green** (2026-08-24, taken for speed to launch and reversible in one line).
+  `merge-gate.sh` refuses a red check *and* a branch behind `main`, so
+  rebase-before-merge is now a gate rather than a habit
+  (`notes/2026-08-24-decision-the-agent-merges-behind-a-gate.md`).
 - **Two milestones** (`v1`, `post-v1` — deferred, never cancelled) and **four
   labels** (`api`, `web`, `infra`, `open-question`); don't add more, labels stop
   meaning anything once they multiply. **`open-question` closes only by writing
@@ -186,8 +186,8 @@ tokens, native SQL or wedding-scoped queries it does.
   spawning agents unprompted.
 - **Every agent reads this file plus its tree's `AGENTS.md`.** Prompts carry
   role and *own-behavior* rules only — never a copy of a tree file's rule.
-- **The reviewers cannot write.** No `Edit`, no `Write` — that is what makes
-  their verdict worth reading.
+- **The reviewers do not write.** They hold `Bash`, so this is a rule and not a
+  wall — a reviewer that quietly fixes what it found reports nothing worth reading.
 - **The guards in `.claude/hooks/` fail closed and are tested in CI**, along
   with an assertion that they are still *wired* — a passing suite says the hook
   works, not that anything runs it.

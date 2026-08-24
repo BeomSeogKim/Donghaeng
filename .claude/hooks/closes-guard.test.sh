@@ -78,4 +78,36 @@ the form Closes #33, #35 is wrong"' 0
 
 run "unrelated command" 'git status' 0
 
+# --- a trailer added after the fact closes just as silently (2026-08-24)
+run "gh pr edit body" 'gh'' pr edit 12 --body "Closes #40, #41"' 2
+run "gh pr comment" 'gh'' pr comment 12 --body "Closes #40, #41"' 2
+run "gh issue comment" 'gh'' issue comment 12 --body "Closes #40, #41"' 2
+run "gh issue edit body" 'gh'' issue edit 12 --body "Closes #40, #41"' 2
+run "gh pr edit, correct form" 'gh'' pr edit 12 --body "Closes #40, closes #41"' 0
+
+# --- a heredoc that writes a FILE is a document, not a message (2026-08-24)
+run "file write quoting the rule" "cat > audit.html <<'HTML'
+<div>Closes #33, #35 는 #33만 닫는다</div>
+HTML" 0
+
+run "file write after cd &&" "cd /tmp && cat > note.md <<'MD'
+Closes #33, #35
+MD" 0
+
+run "tee is a file sink too" "tee notes/x.md > /dev/null <<'MD'
+Closes #33, #35
+MD" 0
+
+# ...but the message heredoc must survive the strip, or the hook is decorative.
+run "pr body via cat substitution" "gh"" pr create --body \"\$(cat <<'EOF'
+Closes #33, #35
+EOF
+)\"" 2
+
+run "commit heredoc still read" "git commit -F - <<'MSG'
+t
+
+Closes #33, #35
+MSG" 2
+
 exit $fail
